@@ -1,0 +1,87 @@
+name: ARIA — Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  RESOURCE_GROUP: aria-rg
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: ACR Login
+        run: az acr login --name $ACR_NAME
+
+      - name: Build API image
+        run: |
+          docker build \
+            -f docker/api.prod.Dockerfile \
+            -t $ACR_NAME.azurecr.io/aria-api:$IMAGE_TAG \
+            -t $ACR_NAME.azurecr.io/aria-api:latest \
+            .
+
+      - name: Build Worker image
+        run: |
+          docker build \
+            -f docker/worker.prod.Dockerfile \
+            -t $ACR_NAME.azurecr.io/aria-worker:$IMAGE_TAG \
+            -t $ACR_NAME.azurecr.io/aria-worker:latest \
+            .
+
+      - name: Push API image
+        run: |
+          docker push $ACR_NAME.azurecr.io/aria-api:$IMAGE_TAG
+          docker push $ACR_NAME.azurecr.io/aria-api:latest
+
+      - name: Push Worker image
+        run: |
+          docker push $ACR_NAME.azurecr.io/aria-worker:$IMAGE_TAG
+          docker push $ACR_NAME.azurecr.io/aria-worker:latest
+
+  deploy:
+    name: Deploy to Azure Container Apps
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy API
+        run: |
+          az containerapp update \
+            --name aria-api \
+            --resource-group $RESOURCE_GROUP \
+            --image $ACR_NAME.azurecr.io/aria-api:$IMAGE_TAG
+
+      - name: Deploy Worker
+        run: |
+          az containerapp update \
+            --name aria-worker \
+            --resource-group $RESOURCE_GROUP \
+            --image $ACR_NAME.azurecr.io/aria-worker:$IMAGE_TAG
+
+      - name: Health Check
+        run: |
+          API_URL=$(az containerapp show \
+            --name aria-api \
+            --resource-group $RESOURCE_GROUP \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          curl --fail https://$API_URL/health

@@ -1,0 +1,73 @@
+---
+id: e9b3365a-26c9-432f-86e9-77deaef3dd5a
+---
+architecture-beta
+    group client_grp[Client]
+    group api_grp[FastAPI  aria-api  8000]
+    group redis_grp[Redis  6379]
+    group worker_grp[Celery Worker  HAR Pipeline]
+    group ai_grp[AI  Intelligence Layer]
+    group db_grp[PostgreSQL  pgvector  5432]
+    group obs_grp[Observability]
+
+    service user(internet)[User] in client_grp
+
+    service upload(server)[upload  har] in api_grp
+    service jobs(server)[jobs  job_id] in api_grp
+    service rag_api(server)[rag] in api_grp
+    service auto(server)[automation] in api_grp
+    service registry(server)[registry  openapi] in api_grp
+
+    service queue(disk)[Task Queue] in redis_grp
+    service job_store(disk)[Job Status Store] in redis_grp
+
+    service ingestion(server)[1 Ingestion] in worker_grp
+    service normalization(server)[2 Normalization] in worker_grp
+    service schema(server)[3 Schema Inference] in worker_grp
+    service wf(server)[4 Workflow Clustering] in worker_grp
+
+    service llm(cloud)[Azure OpenAI  GPT-4o] in ai_grp
+    service embed(cloud)[Embeddings] in ai_grp
+    service rag_svc(server)[RAG Service] in ai_grp
+    service planner(server)[Planner] in ai_grp
+
+    service db(database)[Runs  Endpoints  Workflows] in db_grp
+    service pgvec(database)[pgvector Index] in db_grp
+    service users(database)[Users  Audit] in db_grp
+
+    service prom(server)[Prometheus  9090] in obs_grp
+    service grafana(server)[Grafana  3000] in obs_grp
+
+    service ext(internet)[External APIs]
+
+    user:R --> upload:L
+    user:R --> jobs:L
+    user:R --> rag_api:L
+    user:R --> auto:L
+
+    upload:R --> queue:L
+    upload:B --> job_store:T
+    jobs:R --> job_store:L
+
+    queue:R --> ingestion:L
+    ingestion:R --> normalization:L
+    normalization:R --> schema:L
+    schema:R --> wf:L
+
+    ingestion:T --> llm:B
+    normalization:T --> llm:B
+    schema:T --> llm:B
+
+    rag_api:R --> rag_svc:L
+    rag_svc:T --> embed:B
+    embed:B --> pgvec:T
+    rag_svc:R --> llm:L
+
+    auto:B --> planner:T
+    planner:R --> ext:L
+
+    wf:B --> db:T
+    registry:B --> db:T
+    users:R --> users:R
+
+    prom:R --> grafana:L

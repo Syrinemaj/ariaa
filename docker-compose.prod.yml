@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.prod.Dockerfile
+    image: ${ACR_NAME}.azurecr.io/aria-api:${IMAGE_TAG:-latest}
+    container_name: aria-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.prod
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker.prod.Dockerfile
+    image: ${ACR_NAME}.azurecr.io/aria-worker:${IMAGE_TAG:-latest}
+    container_name: aria-worker
+    env_file:
+      - .env.prod
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aria-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7
+    container_name: aria-redis
+    restart: always
+
+volumes:
+  postgres_data:

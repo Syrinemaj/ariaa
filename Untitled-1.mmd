@@ -1,0 +1,57 @@
+---
+id: 6b3505b2-1cb7-4a15-8abf-8acbf2621527
+---
+sequenceDiagram
+    actor User
+    participant API as FastAPI /upload/har/analyze
+    participant Redis
+    participant Celery as Celery Worker
+    participant Ingestion as Ingestion Service
+    participant Normalization as Normalization Service
+    participant SchemaInf as Schema Inference
+    participant Workflows as Workflow Clustering
+    participant DB as PostgreSQL
+
+    User->>API: POST /upload/har/analyze (fichier .har)
+    API->>API: Valider le fichier + sauvegarder sur disque
+    API->>Redis: setex job:{job_id} → status: "queued"
+    API-->>User: HTTP 202 Accepted { job_id }
+
+    API->>Celery: process_har_pipeline.apply_async(job_id, file_path, ...)
+
+    Celery->>Redis: setex job:{job_id} → status: "processing"
+
+    Note over Celery,Ingestion: Étape 1 — Ingestion
+    Celery->>Ingestion: process_har_file(file_path)
+    Ingestion->>Ingestion: parse_har_file() → raw entries
+    Ingestion->>Ingestion: clean_traffic() → supprime bruit
+    Ingestion->>Ingestion: score_entries() (LLM AI) → filtre candidats API
+    Ingestion-->>Celery: cleaned_entries[]
+
+    Note over Celery,Normalization: Étape 2 — Normalisation
+    Celery->>Normalization: normalize_entries(cleaned_entries)
+    Normalization->>Normalization: normalize_path() → URLs normalisées
+    Normalization->>Normalization: build_canonical_key()
+    Normalization->>Normalization: deduplicate_endpoints()
+    Normalization-->>Celery: normalized_endpoints[]
+
+    Note over Celery,SchemaInf: Étape 3 — Inférence de schéma
+    Celery->>SchemaInf: infer_schemas_for_endpoints(normalized_endpoints)
+    SchemaInf->>SchemaInf: Analyser request/response bodies
+    SchemaInf-->>Celery: schema_results[]
+
+    Note over Celery,Workflows: Étape 4 — Clustering workflows
+    Celery->>Workflows: discover_workflows(normalized_endpoints)
+    Workflows->>Workflows: Classifier + détecter dépendances
+    Workflows-->>Celery: workflows[]
+
+    Note over Celery,DB: Étape 5 — Persistance
+    Celery->>DB: save_registry_results(run, endpoints, workflows)
+    DB-->>Celery: run_id, saved_endpoints, saved_workflows
+
+    Celery->>Redis: setex job:{job_id} → status: "completed", result: {...}
+
+    User->>API: GET /jobs/{job_id}
+    API->>Redis: getex job:{job_id}
+    Redis-->>API: { status, result }
+    API-->>User: { run_id, normalized_endpoints, saved_workflows, ... }

@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Index, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,7 +40,7 @@ class EndpointEmbedding(TimestampMixin, Base):
         String, primary_key=True, default=lambda: str(uuid4())
     )
     endpoint_id: Mapped[str] = mapped_column(
-        String, nullable=False, index=True
+        String, ForeignKey("endpoints.id"), nullable=False, index=True
     )
     embedding_text: Mapped[str] = mapped_column(String, nullable=False)
     embedding = mapped_column(

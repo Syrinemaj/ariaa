@@ -1,13 +1,23 @@
+"""
+HAR file parser — converts raw HAR JSON into TrafficEntry objects.
+
+Fix 12.2: query parameters are now extracted from the URL and stored in
+TrafficEntry.query_params. Previously only path was kept, causing
+GET /reports?type=monthly and GET /reports?type=annual to be treated as
+identical endpoints.
+"""
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from app.ingestion.models import TrafficEntry
 
 
 def _headers_to_dict(headers: List[Dict[str, str]]) -> Dict[str, str]:
-    result = {}
+    result: Dict[str, str] = {}
     for header in headers or []:
         name = header.get("name")
         value = header.get("value")
@@ -42,7 +52,22 @@ def _extract_mime_type(response: Dict[str, Any]) -> Optional[str]:
     return mime_type.lower() if mime_type else None
 
 
+def _extract_query_params(query_string: str) -> Dict[str, str]:
+    """
+    Parse a URL query string into a flat {name: first_value} dict.
+
+    Uses the first observed value per key; HAR entries represent single
+    HTTP calls so multi-value params are rare and the first value suffices
+    for endpoint fingerprinting.
+    """
+    if not query_string:
+        return {}
+    parsed = parse_qs(query_string, keep_blank_values=True)
+    return {k: v[0] for k, v in parsed.items() if v}
+
+
 def parse_har_file(file_path: str | Path) -> List[TrafficEntry]:
+    """Parse a HAR file and return one TrafficEntry per HTTP entry."""
     path = Path(file_path)
 
     if not path.exists():
@@ -70,6 +95,7 @@ def parse_har_file(file_path: str | Path) -> List[TrafficEntry]:
             method=method,
             url=url,
             path=parsed_url.path or "/",
+            query_params=_extract_query_params(parsed_url.query),
             status=response.get("status"),
             mime_type=_extract_mime_type(response),
             request_headers=_headers_to_dict(request.get("headers", [])),

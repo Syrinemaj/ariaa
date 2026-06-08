@@ -42,7 +42,10 @@ class Settings(BaseSettings):
     AZURE_OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     AZURE_OPENAI_API_VERSION: str = "2024-08-01-preview"
 
-    EMBEDDING_DIMENSIONS: int = 1536
+    # Dimensions produced by LOCAL_EMBEDDING_MODEL (BAAI/bge-small-en → 384).
+    # Must match the vector(N) column in endpoint_embeddings (migration 011).
+    EMBEDDING_DIMENSIONS: int = 384
+    LOCAL_EMBEDDING_MODEL: str = "BAAI/bge-small-en"
 
     # ── Auth ────────────────────────────────────────────────────────────────
     JWT_SECRET_KEY: str
@@ -87,9 +90,16 @@ class Settings(BaseSettings):
     UPLOAD_FAILED_FILE_TTL_HOURS: int = 24
     CLEANUP_DRY_RUN: bool = False
 
-    OTEL_ENABLED: bool = False
-    OTEL_SERVICE_NAME: str = "aria-backend"
-    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://localhost:4317"
+    # ── AI provider selection ────────────────────────────────────────────────
+    # "azure" (default) → AzureOpenAIClient (embeddings + structured outputs)
+    # "groq"            → GroqClient (no embeddings, json_object fallback)
+    AI_PROVIDER: str = "groq"
+    GROQ_API_KEY: str | None = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    OTEL_ENABLED: bool = True
+    OTEL_SERVICE_NAME: str = "aria-api"
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://otel-collector:4317"
     PROMETHEUS_METRICS_ENABLED: bool = True
 
     # /metrics endpoint — IP whitelist (comma-separated) OR Bearer token auth

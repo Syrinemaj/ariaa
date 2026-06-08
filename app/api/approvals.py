@@ -4,9 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.approval.approval_service import approve_automation, create_approval_request
 from app.audit.events import AuditEvent
-from app.audit.service import log_audit_event
 from app.auth.dependencies import require_admin_or_operator
-from app.db.session import get_db
+from app.db.session import get_sync_db
 from app.models.approval import AutomationApproval
 from app.models.automation import AutomationRun
 from app.models.user import User
@@ -25,7 +24,7 @@ class RejectRequest(BaseModel):
 @router.get("")
 def list_approvals(
     status: str = "pending",
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     approvals = (
@@ -66,7 +65,7 @@ def list_approvals(
 def approve(
     automation_run_id: str,
     payload: ApproveRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     result = approve_automation(
@@ -76,15 +75,7 @@ def approve(
         comment=payload.comment,
     )
 
-    log_audit_event(
-        db=db,
-        user=current_user,
-        action=AuditEvent.EXECUTION_APPROVED,
-        resource_type="automation_run",
-        resource_id=automation_run_id,
-        metadata={"comment": payload.comment},
-    )
-
+    db.commit()
     return {"id": result.id, "status": result.status, "approved_by": result.approved_by}
 
 
@@ -92,7 +83,7 @@ def approve(
 def reject(
     automation_run_id: str,
     payload: RejectRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     approval = (
@@ -108,14 +99,5 @@ def reject(
     approval.comment = payload.comment
     db.commit()
     db.refresh(approval)
-
-    log_audit_event(
-        db=db,
-        user=current_user,
-        action=AuditEvent.EXECUTION_REJECTED,
-        resource_type="automation_run",
-        resource_id=automation_run_id,
-        metadata={"comment": payload.comment},
-    )
 
     return {"id": approval.id, "status": approval.status, "approved_by": approval.approved_by}

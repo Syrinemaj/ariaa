@@ -16,7 +16,7 @@ from app.bulk_validation.service import validate_bulk_data
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.data_input.service import save_uploaded_data_file
-from app.db.session import get_db
+from app.db.session import get_sync_db
 from app.dry_run.service import run_bulk_dry_run
 from app.mapping.service import suggest_and_save_mappings
 from app.models.user import User, UserRole
@@ -88,7 +88,7 @@ class BulkExecuteResponse(BaseModel):
 async def upload_data_file(
     analysis_run_id: str = Query(...),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     if not file.filename:
@@ -121,7 +121,7 @@ async def upload_data_file(
 @router.post("/mapping/suggest")
 async def suggest_mapping(
     request: MappingSuggestRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     try:
@@ -148,7 +148,7 @@ async def suggest_mapping(
 @router.post("/validate")
 async def validate_bulk(
     request: BulkValidationRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     result = validate_bulk_data(
@@ -173,7 +173,7 @@ async def validate_bulk(
 @router.post("/dry-run")
 async def dry_run_bulk(
     request: BulkDryRunRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     log_audit_event(
@@ -199,9 +199,9 @@ async def dry_run_bulk(
 )
 @limiter.limit(settings.RATE_LIMIT_EXECUTE)
 async def execute_bulk(
-    http_request: Request,
-    request: BulkExecuteRequest,
-    db: Session = Depends(get_db),
+    request: Request,
+    body: BulkExecuteRequest,
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     """
@@ -211,15 +211,15 @@ async def execute_bulk(
     Previously this endpoint blocked for hours on large datasets.
     Now it returns in < 500ms regardless of dataset size.
     """
-    validate_target_url(request.base_url)
+    validate_target_url(body.base_url)
 
-    if not request.dry_run and current_user.role != UserRole.ADMIN:
+    if not body.dry_run and current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=403,
             detail="Only admin users can run real (non-dry) bulk execution.",
         )
 
-    if not request.dry_run and not request.approval_granted:
+    if not body.dry_run and not body.approval_granted:
         raise HTTPException(
             status_code=400,
             detail="Real execution requires approval_granted=true.",
@@ -230,24 +230,24 @@ async def execute_bulk(
         user=current_user,
         action=AuditEvent.BULK_EXECUTION_STARTED,
         resource_type="data_file",
-        resource_id=request.data_file_id,
-        metadata={"dry_run": request.dry_run, "batch_size": request.batch_size},
+        resource_id=body.data_file_id,
+        metadata={"dry_run": body.dry_run, "batch_size": body.batch_size},
     )
 
     try:
         result = await execute_valid_rows_in_batches(
             db=db,
-            plan=request.plan,
-            data_file_id=request.data_file_id,
-            base_url=request.base_url,
-            auth_headers=request.auth_headers,
-            dry_run=request.dry_run,
-            batch_size=request.batch_size,
-            allow_partial_execution=request.allow_partial_execution,
+            plan=body.plan,
+            data_file_id=body.data_file_id,
+            base_url=body.base_url,
+            auth_headers=body.auth_headers,
+            dry_run=body.dry_run,
+            batch_size=body.batch_size,
+            allow_partial_execution=body.allow_partial_execution,
             org_id=current_user.org_id,
             created_by_user_id=current_user.id,
-            resume=request.resume,
-            existing_automation_run_id=request.existing_automation_run_id,
+            resume=body.resume,
+            existing_automation_run_id=body.existing_automation_run_id,
         )
     except (ValueError, ApprovalRequiredError) as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -263,7 +263,7 @@ async def execute_bulk(
 @router.post("/resume", response_model=dict)
 async def resume_bulk(
     request: BulkResumeRequest,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     """Re-enqueue incomplete batches for a previously started automation run."""
@@ -286,7 +286,7 @@ async def resume_bulk(
 @router.get("/reports/{automation_run_id}")
 async def get_bulk_report(
     automation_run_id: str,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
     try:

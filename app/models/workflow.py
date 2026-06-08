@@ -17,6 +17,7 @@ class WorkflowModel(Base):
     business_domain: Mapped[str | None] = mapped_column(String, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     metadata_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    schema_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     analysis_run = relationship("AnalysisRun", back_populates="workflows")

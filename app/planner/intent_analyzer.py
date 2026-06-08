@@ -1,4 +1,5 @@
-from app.ai.azure_openai_client import AzureOpenAIClient
+from typing import Optional
+
 from app.ai.structured_outputs import BUSINESS_INTENT_SCHEMA
 from app.planner.models import BusinessIntent
 
@@ -19,8 +20,17 @@ Do not invent API endpoints.
 """
 
 
-def analyze_business_intent(instruction: str) -> BusinessIntent:
-    client = AzureOpenAIClient()
+def analyze_business_intent(instruction: str, client=None) -> BusinessIntent:
+    """
+    Analyse an instruction and return a structured BusinessIntent.
+
+    client — an AIClientProtocol instance (GroqClient or AzureOpenAIClient).
+    Falls back to GroqClient() when not provided (Celery / standalone usage).
+    """
+    if client is None:
+        from app.ai.groq_client import GroqClient
+        client = GroqClient()
+
     result = client.structured_chat(
         system_prompt=SYSTEM_PROMPT,
         user_payload={"instruction": instruction},

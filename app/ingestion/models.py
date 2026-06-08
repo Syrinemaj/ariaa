@@ -6,6 +6,7 @@ class TrafficEntry(BaseModel):
     method: str
     url: str
     path: str
+    query_params: Dict[str, str] = Field(default_factory=dict)
 
     status: Optional[int] = None
     mime_type: Optional[str] = None

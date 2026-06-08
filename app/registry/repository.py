@@ -34,6 +34,7 @@ async def create_analysis_run(
     total_schema_results: int,
     org_id: str = "",
     created_by_user_id: Optional[str] = None,
+    status: str = "processing",
 ) -> AnalysisRun:
     run = AnalysisRun(
         file_name=file_name,
@@ -42,6 +43,7 @@ async def create_analysis_run(
         total_schema_results=total_schema_results,
         org_id=org_id,
         created_by_user_id=created_by_user_id,
+        status=status,
     )
     db.add(run)
     await db.flush()
@@ -63,7 +65,7 @@ async def save_endpoint_schema_result(
         source_count=result.examples_count,
         business_domain=result.metadata.get("business_domain"),
         business_action=result.metadata.get("business_action"),
-        path_parameters={},
+        path_parameters=[p.model_dump() for p in result.path_parameters],
         metadata_json=result.metadata,
         org_id=org_id,
     )
@@ -92,6 +94,7 @@ async def save_workflow(
     db: AsyncSession,
     run_id: str,
     workflow: Workflow,
+    org_id: str = "",
 ) -> WorkflowModel:
     workflow_model = WorkflowModel(
         run_id=run_id,
@@ -109,7 +112,7 @@ async def save_workflow(
             step_order=step.order,
             method=step.method,
             path=step.path,
-            canonical_key=step.canonical_key,
+            canonical_key=build_registry_key(org_id, step.method, step.path),
             action=step.action,
             depends_on=step.depends_on,
             metadata_json=step.metadata,
@@ -127,7 +130,10 @@ async def get_run_by_id(db: AsyncSession, run_id: str) -> Optional[AnalysisRun]:
 
 
 async def get_endpoints_by_run_id(db: AsyncSession, run_id: str) -> list[Endpoint]:
+    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(Endpoint).where(Endpoint.run_id == run_id)
+        select(Endpoint)
+        .options(selectinload(Endpoint.schema))
+        .where(Endpoint.run_id == run_id)
     )
     return list(result.scalars().all())

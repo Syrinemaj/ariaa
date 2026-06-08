@@ -36,7 +36,17 @@ async def build_automation_plan(
     instruction: str,
     intent: BusinessIntent,
     top_k: int = 8,
+    embedding_client=None,
+    org_id: Optional[str] = None,
 ) -> AutomationPlan:
+    """
+    embedding_client — an EmbeddingClientProtocol instance (LocalEmbeddingClient).
+    Falls back to LocalEmbeddingClient() when not provided (standalone usage).
+    """
+    if embedding_client is None:
+        from app.ai.local_embedding_client import LocalEmbeddingClient
+        embedding_client = LocalEmbeddingClient()
+
     query = " ".join([
         instruction,
         intent.intent,
@@ -48,7 +58,9 @@ async def build_automation_plan(
     search_results, context = await search_rag_context(
         db=db,
         query=query,
+        client=embedding_client,
         run_id=run_id,
+        org_id=org_id,
         top_k=top_k,
     )
 

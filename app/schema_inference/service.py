@@ -27,6 +27,7 @@ def infer_schema_for_endpoint(endpoint: NormalizedEndpoint) -> EndpointSchemaRes
         response_schema=response_schema,
         status_codes=status_codes,
         auth=auth,
+        path_parameters=endpoint.path_parameters,
         examples_count=endpoint.source_count,
         metadata={
             "original_path": endpoint.original_path,

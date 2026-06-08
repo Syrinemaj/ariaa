@@ -2,10 +2,12 @@
 Tâche Celery — indexation des embeddings pgvector.
 
 Chaîne : process_har_pipeline → index_run_embeddings (automatique).
+Provider : LocalEmbeddingClient (BAAI/bge-small-en, 384 dims) — pas d'appel
+           réseau, modèle chargé en mémoire dans le worker.
 Cache content-addressed : si le texte d'un endpoint n'a pas changé,
-l'embedding n'est pas re-généré (économie Azure OpenAI).
+l'embedding n'est pas re-généré.
 Déduplication : lock Redis sur run_id.
-Queue : "embedding" (concurrency=1 — limité par les quotas Azure OpenAI).
+Queue : "embedding" (concurrency=1 — CPU-bound, un seul modèle chargé).
 """
 from __future__ import annotations
 
@@ -31,30 +33,42 @@ logger = logging.getLogger(__name__)
 def index_run_embeddings(self, run_id: str, org_id: str) -> dict:
     """
     Génère les embeddings pour tous les endpoints d'un run_id
-    et les stocke dans pgvector.
-    Utilise AsyncAzureOpenAI via le client singleton.
+    et les stocke dans pgvector (384 dims, BAAI/bge-small-en).
     """
     try:
         result = asyncio.run(_run_embedding_async(run_id=run_id))
-        logger.info("Embedding indexing done for run=%s: %d vectors", run_id, result["indexed"])
+        logger.info("embedding.indexing.done run_id=%s indexed=%d", run_id, result["indexed"])
         return result
     except Exception as exc:
-        logger.error("Embedding task failed for run=%s: %s", run_id, exc)
+        logger.error("embedding.task.failed run_id=%s error=%s", run_id, exc)
         raise self.retry(exc=exc) if self.request.retries < self.max_retries else exc
 
 
 async def _run_embedding_async(run_id: str) -> dict:
-    from app.ai.azure_openai_client import AzureOpenAIClient
-    from app.db.session import AsyncSessionLocal
+    import re
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from app.ai.local_embedding_client import LocalEmbeddingClient
+    from app.core.config import settings
     from app.rag.vector_store import index_embeddings_for_run
 
-    client = AzureOpenAIClient()
+    def _async_url(url: str) -> str:
+        return re.sub(r"^postgresql(\+\w+)?://", "postgresql+asyncpg://", url)
 
-    async with AsyncSessionLocal() as db:
-        records = await index_embeddings_for_run(db=db, run_id=run_id, client=client)
-        await db.commit()
+    # Fresh engine per asyncio.run() call — avoids "Future attached to different loop"
+    engine = create_async_engine(_async_url(settings.DATABASE_URL), pool_pre_ping=True)
+    session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+    # LocalEmbeddingClient is a class-level singleton — safe to instantiate here.
+    client = LocalEmbeddingClient()
 
-    return {
-        "run_id": run_id,
-        "indexed": len(records),
-    }
+    try:
+        async with session_factory() as db:
+            records = await index_embeddings_for_run(db=db, run_id=run_id, client=client)
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+    return {"run_id": run_id, "indexed": len(records)}

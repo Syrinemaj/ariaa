@@ -5,10 +5,14 @@ Revises: 007
 Create Date: 2026-05-28
 
 Changes:
-1. UPDATE users SET role = UPPER(role) WHERE role IN ('admin','operator')
-2. Drop old CHECK constraint (ck_users_role allows lowercase)
+1. Drop old CHECK constraint FIRST (allows only lowercase — blocks the UPDATE)
+2. UPDATE users SET role = UPPER(role) (safe now, no constraint active)
 3. Add new CHECK constraint allowing uppercase + VIEWER
 4. Update role column default to 'OPERATOR' (uppercase)
+
+Fix: original migration had steps 1 and 2 in wrong order.
+The old ck_users_role constraint (role IN ('admin','operator')) was still
+active when the UPDATE tried to write 'ADMIN', causing CheckViolation.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -20,10 +24,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # 1. Migrate existing role values to uppercase
-    op.execute("UPDATE users SET role = UPPER(role) WHERE role IN ('admin', 'operator')")
-
-    # 2. Drop old CHECK constraint if it exists
+    # 1. Drop old constraint BEFORE updating values — the old constraint only
+    #    allows lowercase ('admin','operator') and would block UPPER() results.
     op.execute("""
         DO $$
         BEGIN
@@ -32,7 +34,12 @@ def upgrade() -> None:
         END$$;
     """)
 
-    # 3. Add new CHECK constraint (uppercase + VIEWER)
+    # 2. Migrate existing lowercase roles to uppercase (constraint-free now)
+    op.execute(
+        "UPDATE users SET role = UPPER(role) WHERE role IN ('admin', 'operator')"
+    )
+
+    # 3. Add new CHECK constraint (uppercase values + VIEWER)
     op.execute("""
         ALTER TABLE users
         ADD CONSTRAINT ck_users_role
@@ -50,10 +57,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("""
-        ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role
-    """)
-    op.execute("UPDATE users SET role = LOWER(role) WHERE role IN ('ADMIN', 'OPERATOR')")
+    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role")
+    op.execute(
+        "UPDATE users SET role = LOWER(role) WHERE role IN ('ADMIN', 'OPERATOR')"
+    )
     op.execute("""
         ALTER TABLE users
         ADD CONSTRAINT ck_users_role

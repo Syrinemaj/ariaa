@@ -101,7 +101,9 @@ def infer_parameter_name(
         request_body=request_body,
         response_body=response_body,
     )
-    if payload_name:
+    # "_id" is produced when the JSON key is the bare word "id" — too generic
+    # to override a resource-context name (employee_id, user_id, etc.)
+    if payload_name and payload_name not in {"_id", "id"}:
         return payload_name, "payload", 0.95
 
     if detected_type in {"invoice_id", "payment_id", "employee_id", "order_id", "customer_id", "contract_id"}:

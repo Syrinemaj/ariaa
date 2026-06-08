@@ -1,0 +1,295 @@
+{
+  "title": "ARIA — Azure OpenAI",
+  "uid": "aria-azure-openai",
+  "description": "Tokens, coûts, latences et erreurs pour le provider Azure OpenAI (gpt-4o-mini + text-embedding-3-small).",
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["aria", "azure", "openai", "llm"],
+  "schemaVersion": 38,
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "📊 Résumé Azure OpenAI", "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+
+    {
+      "id": 1, "title": "Tokens totaux (24h)", "type": "stat",
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 50000 },
+            { "color": "red", "value": 200000 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(increase(aria_llm_tokens_total{provider=\"azure\"}[24h]))",
+        "legendFormat": "Tokens"
+      }]
+    },
+
+    {
+      "id": 2, "title": "Coût estimé (24h)", "type": "stat",
+      "gridPos": { "x": 6, "y": 1, "w": 6, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 4,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red", "value": 5 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(increase(aria_llm_cost_total{provider=\"azure\"}[24h]))",
+        "legendFormat": "Coût USD"
+      }]
+    },
+
+    {
+      "id": 3, "title": "Coût/heure (actuel)", "type": "stat",
+      "gridPos": { "x": 12, "y": 1, "w": 6, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 6,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.5 },
+            { "color": "red", "value": 2 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(rate(aria_llm_cost_total{provider=\"azure\"}[5m])) * 3600",
+        "legendFormat": "USD/h"
+      }]
+    },
+
+    {
+      "id": 4, "title": "Tokens/min (actuel)", "type": "stat",
+      "gridPos": { "x": 18, "y": 1, "w": 6, "h": 4 },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 5000 },
+            { "color": "red", "value": 20000 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(rate(aria_llm_tokens_total{provider=\"azure\"}[1m])) * 60",
+        "legendFormat": "Tokens/min"
+      }]
+    },
+
+    { "id": 200, "type": "row", "title": "📈 Consommation dans le temps", "collapsed": false,
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 } },
+
+    {
+      "id": 5, "title": "Tokens/min — par tâche", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (task_name) (rate(aria_llm_tokens_total{provider=\"azure\"}[1m]) * 60)",
+          "legendFormat": "{{task_name}}"
+        }
+      ]
+    },
+
+    {
+      "id": 6, "title": "Coût/heure", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 6,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (model_name) (rate(aria_llm_cost_total{provider=\"azure\"}[5m]) * 3600)",
+        "legendFormat": "{{model_name}}"
+      }]
+    },
+
+    {
+      "id": 7, "title": "Répartition tokens par tâche", "type": "piechart",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (task_name) (aria_llm_tokens_total{provider=\"azure\"})",
+        "legendFormat": "{{task_name}}"
+      }]
+    },
+
+    { "id": 300, "type": "row", "title": "🌐 HTTP API", "collapsed": false,
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 } },
+
+    {
+      "id": 8, "title": "Requêtes HTTP/s", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 23, "w": 8, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (method) (rate(aria_http_requests_total[1m]))",
+        "legendFormat": "{{method}}"
+      }]
+    },
+
+    {
+      "id": 9, "title": "Taux d'erreurs 5xx", "type": "timeseries",
+      "gridPos": { "x": 8, "y": 23, "w": 8, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "fixedColor": "red", "mode": "fixed" }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(rate(aria_http_requests_total{status=~\"5..\"}[1m])) / sum(rate(aria_http_requests_total[1m]))",
+        "legendFormat": "5xx rate"
+      }]
+    },
+
+    {
+      "id": 10, "title": "Latence P50 / P95 / P99", "type": "timeseries",
+      "gridPos": { "x": 16, "y": 23, "w": 8, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(aria_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aria_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(aria_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+
+    { "id": 400, "type": "row", "title": "⚙️ Bulk Execution", "collapsed": false,
+      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 } },
+
+    {
+      "id": 11, "title": "Batches complétés (succès vs échec)", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 31, "w": 12, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(aria_bulk_batches_total{status=\"completed\"}[5m]) * 60)",
+          "legendFormat": "Succès/min"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(aria_bulk_batches_total{status=\"failed\"}[5m]) * 60)",
+          "legendFormat": "Échecs/min"
+        }
+      ]
+    },
+
+    {
+      "id": 12, "title": "Automation runs actives", "type": "stat",
+      "gridPos": { "x": 12, "y": 31, "w": 6, "h": 7 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 5 },
+            { "color": "red", "value": 20 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "aria_active_automation_runs",
+        "legendFormat": "Runs actives"
+      }]
+    },
+
+    {
+      "id": 13, "title": "Lignes bulk échouées (total)", "type": "stat",
+      "gridPos": { "x": 18, "y": 31, "w": 6, "h": 7 },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 10 },
+            { "color": "red", "value": 100 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "aria_bulk_failed_rows_total",
+        "legendFormat": "Lignes échouées"
+      }]
+    }
+  ]
+}

@@ -52,8 +52,11 @@ def upgrade() -> None:
     """)
 
     # 3. Index on automation_run_id for reporting
+    # No CONCURRENTLY: tables are empty at migration time so the lock is
+    # negligible. CONCURRENTLY requires true autocommit mode which Alembic
+    # does not provide inside its transaction context.
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_idempotency_automation_run
+        CREATE INDEX IF NOT EXISTS idx_idempotency_automation_run
         ON idempotency_records(automation_run_id)
     """)
 
@@ -71,7 +74,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_idempotency_automation_run")
+    op.execute("DROP INDEX IF EXISTS idx_idempotency_automation_run")
     op.execute("""
         ALTER TABLE idempotency_records
         DROP CONSTRAINT IF EXISTS uq_idempotency_key_endpoint

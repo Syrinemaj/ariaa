@@ -133,7 +133,6 @@ def upgrade() -> None:
                 sa.String(),
                 sa.ForeignKey("users.id", ondelete="CASCADE"),
                 nullable=False,
-                index=True,
             ),
             sa.Column("token_hash", sa.String(64), nullable=False, unique=True),
             sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),

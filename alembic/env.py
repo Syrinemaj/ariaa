@@ -10,14 +10,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override sqlalchemy.url from environment variable
 database_url = os.environ.get("DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 
-# Import all models so Alembic can detect schema changes
 from app.db.base import Base  # noqa: E402
-import app.models  # noqa: E402, F401
+import app.models              # noqa: E402, F401
 
 target_metadata = Base.metadata
 

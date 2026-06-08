@@ -1,7 +1,8 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin_or_operator
 from app.db.session import get_db
@@ -14,23 +15,30 @@ router = APIRouter(prefix="/registry", tags=["Registry"])
 
 
 @router.get("/runs")
-def list_runs(
+async def list_runs(
     status: Optional[str] = Query(default=None),
     limit: int = Query(default=20, le=100),
     offset: int = Query(default=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    query = (
-        db.query(AnalysisRun)
-        .filter(AnalysisRun.org_id == current_user.org_id)
+    stmt = (
+        select(AnalysisRun)
+        .where(AnalysisRun.org_id == current_user.org_id)
         .order_by(AnalysisRun.created_at.desc())
     )
     if status:
-        query = query.filter(AnalysisRun.status == status)
+        stmt = stmt.where(AnalysisRun.status == status)
 
-    total = query.count()
-    runs = query.offset(offset).limit(limit).all()
+    total_result = await db.execute(select(AnalysisRun).where(
+        AnalysisRun.org_id == current_user.org_id,
+        *(([AnalysisRun.status == status]) if status else []),
+    ))
+    runs_all = total_result.scalars().all()
+    total = len(runs_all)
+
+    result = await db.execute(stmt.offset(offset).limit(limit))
+    runs = result.scalars().all()
 
     return {
         "total": total,
@@ -50,16 +58,18 @@ def list_runs(
 
 
 @router.get("/runs/{run_id}")
-def get_run(
+async def get_run(
     run_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = (
-        db.query(AnalysisRun)
-        .filter(AnalysisRun.id == run_id, AnalysisRun.org_id == current_user.org_id)
-        .first()
+    result = await db.execute(
+        select(AnalysisRun).where(
+            AnalysisRun.id == run_id,
+            AnalysisRun.org_id == current_user.org_id,
+        )
     )
+    run = result.scalar_one_or_none()
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
@@ -75,28 +85,31 @@ def get_run(
 
 
 @router.get("/runs/{run_id}/endpoints")
-def list_endpoints(
+async def list_endpoints(
     run_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = (
-        db.query(AnalysisRun)
-        .filter(AnalysisRun.id == run_id, AnalysisRun.org_id == current_user.org_id)
-        .first()
+    run_result = await db.execute(
+        select(AnalysisRun).where(
+            AnalysisRun.id == run_id,
+            AnalysisRun.org_id == current_user.org_id,
+        )
     )
-    if not run:
+    if not run_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
-    endpoints = (
-        db.query(Endpoint)
-        .filter(Endpoint.run_id == run_id)
-        .all()
+    from sqlalchemy.orm import selectinload
+    ep_result = await db.execute(
+        select(Endpoint)
+        .options(selectinload(Endpoint.schema))
+        .where(Endpoint.run_id == run_id)
     )
+    endpoints = ep_result.scalars().all()
 
     result = []
     for e in endpoints:
-        schema = e.schema if hasattr(e, "schema") and e.schema else None
+        schema = e.schema
         result.append({
             "id": e.id,
             "method": e.method,
@@ -118,33 +131,31 @@ def list_endpoints(
 
 
 @router.get("/runs/{run_id}/workflows")
-def list_workflows(
+async def list_workflows(
     run_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = (
-        db.query(AnalysisRun)
-        .filter(AnalysisRun.id == run_id, AnalysisRun.org_id == current_user.org_id)
-        .first()
+    run_result = await db.execute(
+        select(AnalysisRun).where(
+            AnalysisRun.id == run_id,
+            AnalysisRun.org_id == current_user.org_id,
+        )
     )
-    if not run:
+    if not run_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
-    workflows = (
-        db.query(WorkflowModel)
-        .filter(WorkflowModel.run_id == run_id)
-        .all()
+    from sqlalchemy.orm import selectinload
+    wf_result = await db.execute(
+        select(WorkflowModel)
+        .options(selectinload(WorkflowModel.steps))
+        .where(WorkflowModel.run_id == run_id)
     )
+    workflows = wf_result.scalars().all()
 
     result = []
     for wf in workflows:
-        steps = (
-            db.query(WorkflowStepModel)
-            .filter(WorkflowStepModel.workflow_id == wf.id)
-            .order_by(WorkflowStepModel.step_order)
-            .all()
-        )
+        steps = sorted(wf.steps, key=lambda s: s.step_order)
         result.append({
             "id": wf.id,
             "name": wf.name,

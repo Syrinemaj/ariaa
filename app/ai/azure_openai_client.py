@@ -196,7 +196,29 @@ class AzureOpenAIClient:
 
     @staticmethod
     def _log_usage(db: Optional[Session], task_name: str, usage) -> None:
-        if db is not None and usage is not None:
+        if usage is None:
+            return
+
+        # Always increment Prometheus counters (no DB required).
+        try:
+            from app.core.config import settings as _s
+            from app.observability.metrics import record_llm_tokens
+            total = (usage.prompt_tokens or 0) + (usage.completion_tokens or 0)
+            cost = (
+                (usage.prompt_tokens or 0) / 1000 * _s.LLM_PROMPT_COST_PER_1K
+                + (usage.completion_tokens or 0) / 1000 * _s.LLM_COMPLETION_COST_PER_1K
+            )
+            record_llm_tokens(
+                task_name=task_name,
+                model_name=settings.AZURE_OPENAI_MODEL,
+                total_tokens=total,
+                estimated_cost=cost,
+                provider="azure",
+            )
+        except Exception:
+            pass
+
+        if db is not None:
             from app.llm_observability.service import log_llm_call_and_print_terminal_summary
             log_llm_call_and_print_terminal_summary(
                 db=db,

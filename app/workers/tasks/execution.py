@@ -96,6 +96,7 @@ def execute_batch_task(
                 base_url=base_url,
                 auth_headers=auth_headers,
                 dry_run=dry_run,
+                org_id=org_id,
             )
         )
 
@@ -132,6 +133,7 @@ async def _run_batch_async(
     base_url: str,
     auth_headers: dict,
     dry_run: bool,
+    org_id: str = "",
 ) -> dict:
     import redis.asyncio as aioredis
 
@@ -188,6 +190,7 @@ async def _run_batch_async(
                 client=client,
                 job_id=job_id,
                 circuit_registry=circuit_registry,
+                org_id=org_id,
             )
 
     return batch_result

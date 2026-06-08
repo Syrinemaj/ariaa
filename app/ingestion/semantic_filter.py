@@ -1,7 +1,6 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from app.ai.azure_openai_client import AzureOpenAIClient
 from app.ingestion.models import TrafficEntry
 
 logger = logging.getLogger(__name__)
@@ -31,19 +30,22 @@ def _build_ai_payload(entry: TrafficEntry) -> Dict[str, Any]:
     }
 
 
-def semantic_filter_with_azure(entry: TrafficEntry) -> TrafficEntry:
+def semantic_filter_with_azure(
+    entry: TrafficEntry,
+    client,  # AIClientProtocol (GroqClient) — typed as Any to avoid circular import
+) -> TrafficEntry:
     try:
-        client = AzureOpenAIClient()
         ai_payload = _build_ai_payload(entry)
         result = client.classify_api_call(ai_payload)
 
-        confidence = float(result.get("confidence", 0.0))
-        should_keep = bool(result.get("should_keep", False))
+        # classify_api_call returns a ClassificationResponse Pydantic object
+        confidence = result.confidence
+        should_keep = result.should_keep
 
         entry.ai_score = confidence
-        entry.business_domain = result.get("business_domain")
-        entry.business_action = result.get("business_action")
-        entry.reason = result.get("reason")
+        entry.business_domain = result.business_domain
+        entry.business_action = result.business_action
+        entry.reason = result.reason
 
         if should_keep:
             entry.is_api_candidate = True
@@ -55,9 +57,23 @@ def semantic_filter_with_azure(entry: TrafficEntry) -> TrafficEntry:
             entry.relevance_score = confidence
 
     except Exception as e:
-        logger.warning("Azure OpenAI unavailable, keeping ambiguous entry: %s", e)
-        entry.is_api_candidate = True
-        entry.decision = "kept_by_fallback"
+        # AI unavailable: reject ambiguous entries rather than silently accepting
+        # them, to avoid flooding the registry with noise.
+        logger.warning(
+            "semantic_filter.ai_unavailable — rejecting ambiguous entry: %s %s | error: %s",
+            entry.method, entry.path, e,
+        )
+        _increment_fallback_counter()
+        entry.is_api_candidate = False
+        entry.decision = "rejected_by_fallback"
         entry.reason = "ai_unavailable"
 
     return entry
+
+
+def _increment_fallback_counter() -> None:
+    try:
+        from app.observability.metrics import aria_semantic_filter_fallback_total
+        aria_semantic_filter_fallback_total.inc()
+    except Exception:
+        pass

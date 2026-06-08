@@ -1,0 +1,296 @@
+{
+  "title": "ARIA — Groq",
+  "uid": "aria-groq",
+  "description": "Tokens, coûts et avertissements d'embedding pour le provider Groq (llama-3.3-70b-versatile). Les embeddings sont non supportés — surveiller aria_llm_embedding_fallback_total pour mesurer l'impact sur la recherche sémantique.",
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["aria", "groq", "llm"],
+  "schemaVersion": 38,
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "📊 Résumé Groq", "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+
+    {
+      "id": 1, "title": "Tokens totaux (24h)", "type": "stat",
+      "gridPos": { "x": 0, "y": 1, "w": 6, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 50000 },
+            { "color": "red", "value": 500000 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(increase(aria_llm_tokens_total{provider=\"groq\"}[24h]))",
+        "legendFormat": "Tokens"
+      }]
+    },
+
+    {
+      "id": 2, "title": "Coût estimé (24h)", "type": "stat",
+      "gridPos": { "x": 6, "y": 1, "w": 6, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 6,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 0.5 },
+            { "color": "red", "value": 2 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(increase(aria_llm_cost_total{provider=\"groq\"}[24h]))",
+        "legendFormat": "Coût USD"
+      }]
+    },
+
+    {
+      "id": 3,
+      "title": "⚠️ Embedding Fallbacks (24h)",
+      "description": "Chaque point = un appel à create_embedding() qui a retourné un vecteur zéro. Un nombre élevé signifie que la recherche sémantique (RAG) est dégradée.",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 1, "w": 6, "h": 4 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["sum"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red", "value": 10 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(increase(aria_llm_embedding_fallback_total{provider=\"groq\"}[24h]))",
+        "legendFormat": "Fallbacks"
+      }]
+    },
+
+    {
+      "id": 4, "title": "Tokens/min (actuel)", "type": "stat",
+      "gridPos": { "x": 18, "y": 1, "w": 6, "h": 4 },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 10000 },
+            { "color": "red", "value": 50000 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(rate(aria_llm_tokens_total{provider=\"groq\"}[1m])) * 60",
+        "legendFormat": "Tokens/min"
+      }]
+    },
+
+    { "id": 200, "type": "row", "title": "📈 Consommation dans le temps", "collapsed": false,
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 } },
+
+    {
+      "id": 5, "title": "Tokens/min — par tâche", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (task_name) (rate(aria_llm_tokens_total{provider=\"groq\"}[1m]) * 60)",
+        "legendFormat": "{{task_name}}"
+      }]
+    },
+
+    {
+      "id": 6, "title": "Coût/heure (Groq)", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 6,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (model_name) (rate(aria_llm_cost_total{provider=\"groq\"}[5m]) * 3600)",
+        "legendFormat": "{{model_name}}"
+      }]
+    },
+
+    {
+      "id": 7, "title": "Répartition tokens par tâche", "type": "piechart",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (task_name) (aria_llm_tokens_total{provider=\"groq\"})",
+        "legendFormat": "{{task_name}}"
+      }]
+    },
+
+    { "id": 300, "type": "row", "title": "🚫 Embedding Fallback — Impact RAG", "collapsed": false,
+      "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 } },
+
+    {
+      "id": 8,
+      "title": "Fallbacks embedding/min (vecteurs zéro retournés)",
+      "description": "Quand Groq est actif, chaque appel create_embedding() retourne [0.0 × 1536] au lieu d'un vrai vecteur. La recherche sémantique et le RAG sont dégradés. Chaque point sur ce graphe = un appel RAG qui n'a pas pu fonctionner correctement.",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 23, "w": 12, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 30
+          },
+          "color": { "fixedColor": "orange", "mode": "fixed" }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(rate(aria_llm_embedding_fallback_total{provider=\"groq\"}[1m]) * 60)",
+        "legendFormat": "Embedding fallbacks/min"
+      }]
+    },
+
+    {
+      "id": 9, "title": "Cumul fallbacks embedding (all time)", "type": "stat",
+      "gridPos": { "x": 12, "y": 23, "w": 6, "h": 7 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "text": {}
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 50 },
+            { "color": "red", "value": 200 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(aria_llm_embedding_fallback_total{provider=\"groq\"})",
+        "legendFormat": "Total fallbacks"
+      }]
+    },
+
+    {
+      "id": 10,
+      "title": "📋 Note — Groq vs Azure pour le RAG",
+      "type": "text",
+      "gridPos": { "x": 18, "y": 23, "w": 6, "h": 7 },
+      "options": {
+        "mode": "markdown",
+        "content": "## ⚠️ Groq + RAG\n\nGroq **ne supporte pas** l'API d'embeddings.\n\nLorsque `AI_PROVIDER=groq` :\n- `create_embedding()` retourne `[0.0] × 1536`\n- La recherche sémantique retourne des scores ≈ 0\n- Les plans générés sont moins précis\n\n**Pour le RAG en production :**\nUtiliser `AI_PROVIDER=azure`\n\nLe compteur `aria_llm_embedding_fallback_total` mesure l'impact."
+      }
+    },
+
+    { "id": 400, "type": "row", "title": "🌐 HTTP API", "collapsed": false,
+      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 1 } },
+
+    {
+      "id": 11, "title": "Requêtes HTTP/s", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 31, "w": 8, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (method) (rate(aria_http_requests_total[1m]))",
+        "legendFormat": "{{method}}"
+      }]
+    },
+
+    {
+      "id": 12, "title": "Taux d'erreurs 5xx", "type": "timeseries",
+      "gridPos": { "x": 8, "y": 31, "w": 8, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "color": { "fixedColor": "red", "mode": "fixed" }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(rate(aria_http_requests_total{status=~\"5..\"}[1m])) / sum(rate(aria_http_requests_total[1m]))",
+        "legendFormat": "5xx rate"
+      }]
+    },
+
+    {
+      "id": 13, "title": "Latence P50 / P95 / P99", "type": "timeseries",
+      "gridPos": { "x": 16, "y": 31, "w": 8, "h": 7 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 5 }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(aria_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aria_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P95"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(aria_http_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "P99"
+        }
+      ]
+    }
+  ]
+}

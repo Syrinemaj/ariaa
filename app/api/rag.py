@@ -1,7 +1,9 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.ai.endpoint_understanding import enrich_endpoint_with_ai
 from app.auth.dependencies import require_admin_or_operator
@@ -20,32 +22,39 @@ router = APIRouter(prefix="/rag", tags=["RAG"])
 @router.post("/index/{run_id}")
 async def index_run_embeddings(
     run_id: str,
-    db: Session = Depends(get_db),
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = get_run_by_id(db, run_id)
+    run = await get_run_by_id(db, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
-    indexed = index_run_for_rag(db=db, run_id=run_id)
+    embedding_client = request.app.state.embedding_client
+    indexed = await index_run_for_rag(db=db, run_id=run_id, client=embedding_client)
     return {"run_id": run_id, "indexed_embeddings": len(indexed)}
 
 
 @router.post("/search")
 async def semantic_search(
-    request: SemanticSearchRequest,
-    db: Session = Depends(get_db),
+    body: SemanticSearchRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    results, context = search_rag_context(
+    embedding_client = request.app.state.embedding_client
+    results, context = await search_rag_context(
         db=db,
-        query=request.query,
-        run_id=request.run_id,
-        top_k=request.top_k,
+        query=body.query,
+        client=embedding_client,
+        run_id=body.run_id,
+        org_id=current_user.org_id,
+        top_k=body.top_k,
+        score_threshold=body.score_threshold,
     )
     return {
-        "query": request.query,
-        "results": [result.model_dump() for result in results],
+        "query": body.query,
+        "results": [r.model_dump() for r in results],
         "context": context,
     }
 
@@ -53,23 +62,42 @@ async def semantic_search(
 @router.post("/enrich/{run_id}")
 async def enrich_run_endpoints(
     run_id: str,
-    db: Session = Depends(get_db),
+    request: Request,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = get_run_by_id(db, run_id)
+    run = await get_run_by_id(db, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
-    endpoints = db.query(Endpoint).filter(Endpoint.run_id == run_id).all()
+    result = await db.execute(
+        select(Endpoint)
+        .options(selectinload(Endpoint.schema))
+        .where(Endpoint.run_id == run_id)
+    )
+    endpoints = list(result.scalars().all())
 
+    ai_client = request.app.state.ai_client
     enrichment_results = {}
     for endpoint in endpoints:
         try:
-            enrichment_results[endpoint.id] = enrich_endpoint_with_ai(endpoint)
+            enrichment_results[endpoint.id] = enrich_endpoint_with_ai(
+                endpoint, client=ai_client
+            )
         except Exception as e:
             logger.warning("Enrichment failed for endpoint %s: %s", endpoint.id, e)
 
-    updated = enrich_endpoints_metadata(db=db, run_id=run_id, enrichment_results=enrichment_results)
+    updated = await enrich_endpoints_metadata(
+        db=db,
+        run_id=run_id,
+        enrichment_results=enrichment_results,
+    )
+
+    # Re-index embeddings so the enriched metadata (business_domain, action)
+    # is reflected in the vectors used for semantic search.
+    if updated > 0:
+        embedding_client = request.app.state.embedding_client
+        await index_run_for_rag(db=db, run_id=run_id, client=embedding_client)
 
     return {
         "run_id": run_id,

@@ -1,7 +1,9 @@
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.local_embedding_client import LocalEmbeddingClient
 from app.models.endpoint import Endpoint
 from app.rag.context_builder import build_rag_context
 from app.rag.models import EndpointSearchResult
@@ -9,29 +11,47 @@ from app.rag.retriever import retrieve_relevant_endpoints
 from app.rag.vector_store import index_embeddings_for_run
 
 
-def index_run_for_rag(db: Session, run_id: str):
-    return index_embeddings_for_run(db=db, run_id=run_id)
+async def index_run_for_rag(
+    db: AsyncSession,
+    run_id: str,
+    client: LocalEmbeddingClient,
+) -> list:
+    return await index_embeddings_for_run(db=db, run_id=run_id, client=client)
 
 
-def search_rag_context(
-    db: Session,
+async def search_rag_context(
+    db: AsyncSession,
     query: str,
+    client: LocalEmbeddingClient,
     run_id: Optional[str] = None,
+    org_id: Optional[str] = None,
     top_k: int = 5,
+    score_threshold: float = 0.0,
 ) -> Tuple[List[EndpointSearchResult], str]:
-    results = retrieve_relevant_endpoints(db=db, query=query, run_id=run_id, top_k=top_k)
+    results = await retrieve_relevant_endpoints(
+        db=db,
+        query=query,
+        client=client,
+        run_id=run_id,
+        org_id=org_id,
+        top_k=top_k,
+        score_threshold=score_threshold,
+    )
     context = build_rag_context(results)
     return results, context
 
 
-def enrich_endpoints_metadata(
-    db: Session,
+async def enrich_endpoints_metadata(
+    db: AsyncSession,
     run_id: str,
     enrichment_results: Dict[str, dict],
 ) -> int:
     updated = 0
     for endpoint_id, enrichment in enrichment_results.items():
-        endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
+        result = await db.execute(
+            select(Endpoint).where(Endpoint.id == endpoint_id)
+        )
+        endpoint = result.scalar_one_or_none()
         if not endpoint:
             continue
 
@@ -46,5 +66,5 @@ def enrich_endpoints_metadata(
         }
         updated += 1
 
-    db.commit()
+    await db.commit()
     return updated

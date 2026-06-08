@@ -91,12 +91,12 @@ def upgrade() -> None:
                 FOR EACH ROW EXECUTE FUNCTION _set_updated_at();
         """)
 
-    # ── 4. HNSW index on endpoint_embeddings (CONCURRENTLY = no table lock) ──
-    # Cannot run inside a transaction — execute raw SQL through the driver.
-    # Alembic's op.create_index doesn't support CONCURRENTLY natively.
-    op.execute("COMMIT")   # end current transaction block
+    # ── 4. HNSW index on endpoint_embeddings ─────────────────────────────────
+    # Regular CREATE INDEX (no CONCURRENTLY): tables are empty at migration
+    # time so the brief lock is negligible. CONCURRENTLY requires running
+    # outside any transaction block, which Alembic cannot guarantee.
     op.execute("""
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_endpoint_embeddings_hnsw
+        CREATE INDEX IF NOT EXISTS idx_endpoint_embeddings_hnsw
         ON endpoint_embeddings
         USING hnsw (embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 64)
@@ -104,8 +104,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("COMMIT")
-    op.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_endpoint_embeddings_hnsw")
+    op.execute("DROP INDEX IF EXISTS idx_endpoint_embeddings_hnsw")
 
     bind = op.get_bind()
     for table in _ADD_UPDATED_AT:

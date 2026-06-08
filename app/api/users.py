@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.events import AuditEvent
 from app.audit.service import log_audit_event
@@ -11,22 +11,22 @@ from app.auth.schemas import CreateUserRequest, CurrentUserResponse
 from app.auth.service import create_user
 from app.auth.token_store import increment_token_version
 from app.db.session import get_db
-from app.models.user import User, UserRole
+from app.models.user import User
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.get("", response_model=dict)
 async def list_users(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    users = (
-        db.query(User)
-        .filter(User.org_id == current_user.org_id)
+    result = await db.execute(
+        select(User)
+        .where(User.org_id == current_user.org_id)
         .order_by(User.created_at.desc())
-        .all()
     )
+    users = result.scalars().all()
 
     return {
         "users": [
@@ -46,11 +46,11 @@ async def list_users(
 @router.post("", response_model=CurrentUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user_route(
     payload: CreateUserRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     try:
-        user = create_user(
+        user = await create_user(
             db=db,
             org_id=current_user.org_id,
             email=payload.email,
@@ -63,7 +63,7 @@ async def create_user_route(
         http_status = status.HTTP_409_CONFLICT if "already exists" in detail else status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=http_status, detail=detail)
 
-    log_audit_event(
+    await log_audit_event(
         db=db,
         user=current_user,
         action=AuditEvent.USER_CREATED,
@@ -85,14 +85,13 @@ async def create_user_route(
 @router.patch("/{user_id}/deactivate", response_model=CurrentUserResponse)
 async def deactivate_user(
     user_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    user = (
-        db.query(User)
-        .filter(User.id == user_id, User.org_id == current_user.org_id)
-        .first()
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.org_id == current_user.org_id)
     )
+    user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -105,12 +104,11 @@ async def deactivate_user(
 
     user.is_active = False
     user.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.flush()
 
-    # Invalidate all existing access tokens for this user immediately
     increment_token_version(user.id)
 
-    log_audit_event(
+    await log_audit_event(
         db=db,
         user=current_user,
         action=AuditEvent.USER_DEACTIVATED,
@@ -132,14 +130,13 @@ async def deactivate_user(
 @router.patch("/{user_id}/activate", response_model=CurrentUserResponse)
 async def activate_user(
     user_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    user = (
-        db.query(User)
-        .filter(User.id == user_id, User.org_id == current_user.org_id)
-        .first()
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.org_id == current_user.org_id)
     )
+    user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -148,9 +145,9 @@ async def activate_user(
     user.failed_login_count = 0
     user.locked_until = None
     user.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    await db.flush()
 
-    log_audit_event(
+    await log_audit_event(
         db=db,
         user=current_user,
         action=AuditEvent.USER_ACTIVATED,

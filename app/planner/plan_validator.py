@@ -1,6 +1,7 @@
 from typing import List
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.endpoint import Endpoint
 from app.planner.models import AutomationPlan, PlanValidationIssue, PlanValidationResult
@@ -9,8 +10,8 @@ from app.planner.models import AutomationPlan, PlanValidationIssue, PlanValidati
 FORBIDDEN_METHODS_BY_DEFAULT = {"DELETE"}
 
 
-def validate_plan(
-    db: Session,
+async def validate_plan(
+    db: AsyncSession,
     plan: AutomationPlan,
     allow_delete: bool = False,
 ) -> PlanValidationResult:
@@ -23,7 +24,10 @@ def validate_plan(
         ))
 
     for step in plan.steps:
-        endpoint = db.query(Endpoint).filter(Endpoint.id == step.endpoint_id).first()
+        result = await db.execute(
+            select(Endpoint).where(Endpoint.id == step.endpoint_id)
+        )
+        endpoint = result.scalar_one_or_none()
 
         if not endpoint:
             issues.append(PlanValidationIssue(

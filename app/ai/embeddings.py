@@ -1,7 +1,10 @@
+from typing import List
+
 from app.models.endpoint import Endpoint
 
 
 def build_endpoint_embedding_text(endpoint: Endpoint) -> str:
+    """Build the text string that is embedded for an endpoint."""
     schema = endpoint.schema
 
     request_schema = schema.request_schema if schema else None
@@ -22,3 +25,14 @@ def build_endpoint_embedding_text(endpoint: Endpoint) -> str:
     ]
 
     return "\n".join(parts)
+
+
+def get_embedding(text: str) -> List[float]:
+    """
+    Embed a single text string using the local sentence-transformers model.
+
+    Uses LocalEmbeddingClient with the class-level singleton — safe to call
+    from both FastAPI routes and Celery workers.
+    """
+    from app.ai.local_embedding_client import LocalEmbeddingClient
+    return LocalEmbeddingClient().create_embedding(text)

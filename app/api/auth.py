@@ -6,11 +6,10 @@ Auth routes — async SQLAlchemy.
 /logout  : révoque le refresh_token + met le JTI en blocklist Redis
 /me      : retourne le profil de l'utilisateur courant
 """
-from __future__ import annotations
-
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -125,12 +124,12 @@ async def refresh(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(oauth2_scheme),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        tok_payload = decode_access_token(token)
+        tok_payload = decode_access_token(credentials.credentials)
         jti = tok_payload.get("jti")
         exp = tok_payload.get("exp")
         if jti and exp:

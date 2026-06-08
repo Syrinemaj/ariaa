@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from app.ingestion.models import TrafficEntry
 from app.ingestion.heuristic_filter import compute_heuristic_score
@@ -10,7 +10,11 @@ LOW_THRESHOLD = 0.30
 HIGH_THRESHOLD = 0.70
 
 
-def score_entry(entry: TrafficEntry, use_ai: bool = True) -> TrafficEntry:
+def score_entry(
+    entry: TrafficEntry,
+    use_ai: bool = True,
+    client=None,  # AIClientProtocol (GroqClient) shared across all entries in the batch
+) -> TrafficEntry:
     heuristic_score = compute_heuristic_score(entry)
     payload_score = compute_payload_score(entry)
 
@@ -37,11 +41,31 @@ def score_entry(entry: TrafficEntry, use_ai: bool = True) -> TrafficEntry:
     entry.is_ambiguous = True
     entry.decision = "ambiguous"
 
-    if use_ai:
-        return semantic_filter_with_azure(entry)
+    if use_ai and client is not None:
+        return semantic_filter_with_azure(entry, client=client)
 
+    # No client available and score is ambiguous: apply conservative rejection.
+    entry.is_api_candidate = False
+    entry.decision = "rejected_no_client"
+    entry.reason = "ambiguous_no_ai_client"
     return entry
 
 
-def score_entries(entries: List[TrafficEntry], use_ai: bool = True) -> List[TrafficEntry]:
-    return [score_entry(entry, use_ai=use_ai) for entry in entries]
+def score_entries(
+    entries: List[TrafficEntry],
+    use_ai: bool = True,
+) -> List[TrafficEntry]:
+    """
+    Score all entries using a single shared AI client instance.
+    One GroqClient is created for the whole batch instead of one per ambiguous
+    entry, avoiding redundant SSL handshakes and connection pools.
+    """
+    client: Optional[object] = None
+    if use_ai:
+        try:
+            from app.ai.groq_client import GroqClient
+            client = GroqClient()
+        except Exception:
+            client = None
+
+    return [score_entry(entry, use_ai=use_ai, client=client) for entry in entries]

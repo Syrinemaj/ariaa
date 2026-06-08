@@ -1,4 +1,5 @@
-from app.ai.azure_openai_client import AzureOpenAIClient
+from typing import Optional
+
 from app.ai.structured_outputs import ENDPOINT_UNDERSTANDING_SCHEMA
 from app.models.endpoint import Endpoint
 
@@ -20,7 +21,17 @@ Use only the provided endpoint data.
 """
 
 
-def enrich_endpoint_with_ai(endpoint: Endpoint) -> dict:
+def enrich_endpoint_with_ai(endpoint: Endpoint, client=None) -> dict:
+    """
+    Enrich an endpoint with AI-generated metadata.
+
+    client — an AIClientProtocol instance (GroqClient or AzureOpenAIClient).
+    Falls back to GroqClient() if not provided (Celery / standalone usage).
+    """
+    if client is None:
+        from app.ai.groq_client import GroqClient
+        client = GroqClient()
+
     schema = endpoint.schema
 
     payload = {
@@ -35,7 +46,6 @@ def enrich_endpoint_with_ai(endpoint: Endpoint) -> dict:
         "metadata": endpoint.metadata_json,
     }
 
-    client = AzureOpenAIClient()
     return client.structured_chat(
         system_prompt=SYSTEM_PROMPT,
         user_payload=payload,

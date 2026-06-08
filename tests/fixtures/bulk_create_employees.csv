@@ -1,0 +1,11 @@
+first_name,last_name,email,department_id,position,salary,start_date
+Alice,Martin,alice.martin@acme.com,10,Software Engineer,62000,2026-07-01
+Bob,Dupont,bob.dupont@acme.com,10,Senior Engineer,78000,2026-07-01
+Clara,Blanc,clara.blanc@acme.com,12,Product Manager,85000,2026-07-15
+David,Leroy,david.leroy@acme.com,12,UX Designer,58000,2026-07-15
+Emma,Bernard,emma.bernard@acme.com,10,DevOps Engineer,72000,2026-08-01
+François,Petit,francois.petit@acme.com,14,Data Analyst,65000,2026-08-01
+Grace,Moreau,grace.moreau@acme.com,14,Data Scientist,80000,2026-08-15
+Hugo,Simon,hugo.simon@acme.com,10,QA Engineer,55000,2026-08-15
+Isabelle,Laurent,isabelle.laurent@acme.com,12,Scrum Master,70000,2026-09-01
+Jules,Michel,jules.michel@acme.com,14,ML Engineer,88000,2026-09-01

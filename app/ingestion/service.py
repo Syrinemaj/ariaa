@@ -3,8 +3,8 @@ from typing import List
 
 from app.ingestion.har_parser import parse_har_file
 from app.ingestion.models import TrafficEntry
-from app.ingestion.traffic_cleaner import clean_traffic
 from app.ingestion.noise_scoring import score_entries
+from app.ingestion.traffic_cleaner import clean_traffic
 
 
 def process_har_file(
@@ -13,8 +13,8 @@ def process_har_file(
     only_candidates: bool = True,
 ) -> List[TrafficEntry]:
     raw_entries = parse_har_file(file_path)
-    cleaned_entries = clean_traffic(raw_entries)
-    scored_entries = score_entries(cleaned_entries, use_ai=use_ai)
+    hard_filtered = clean_traffic(raw_entries)
+    scored_entries = score_entries(hard_filtered, use_ai=use_ai)
 
     if only_candidates:
         return [entry for entry in scored_entries if entry.is_api_candidate]

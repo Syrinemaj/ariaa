@@ -2,6 +2,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from app.normalization.models import PathParameter
+
 
 class InferredSchema(BaseModel):
     type: str = "object"
@@ -28,6 +30,8 @@ class EndpointSchemaResult(BaseModel):
 
     status_codes: List[int] = Field(default_factory=list)
     auth: AuthInfo = Field(default_factory=AuthInfo)
+
+    path_parameters: List[PathParameter] = Field(default_factory=list)
 
     examples_count: int = 1
     metadata: Dict[str, Any] = Field(default_factory=dict)

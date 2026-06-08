@@ -102,3 +102,22 @@ SessionLocal: sessionmaker[Session] = sessionmaker(
 
 # Alias kept for backward compat with existing Celery task imports
 engine = sync_engine
+
+
+from typing import Generator
+
+
+def get_sync_db() -> Generator[Session, None, None]:
+    """
+    FastAPI dependency — yields a synchronous Session.
+    Use for routes that call sync service functions (reports, approvals, bulk).
+    """
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

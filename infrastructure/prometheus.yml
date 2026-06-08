@@ -3,6 +3,13 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: aria
+  - job_name: aria-api
     static_configs:
       - targets: ["api:8000"]
+    metrics_path: /metrics
+    # Bearer token must match METRICS_BEARER_TOKEN in your .env file.
+    # Prometheus runs inside the same Docker network, so IP whitelisting
+    # alone is unreliable (container IPs change on restart).
+    authorization:
+      type: Bearer
+      credentials: aria-metrics-secret

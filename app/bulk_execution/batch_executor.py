@@ -46,6 +46,7 @@ async def execute_batch(
     client: httpx.AsyncClient,
     job_id: str = "",
     circuit_registry=None,
+    org_id: str = "",
 ) -> dict:
     started_at = time.time()
 
@@ -90,11 +91,12 @@ async def execute_batch(
                 })
                 break
 
-            if should_skip_due_to_idempotency(
+            if await should_skip_due_to_idempotency(
                 db=db,
                 workflow_name=plan.workflow_name,
                 endpoint_key=step.canonical_key,
-                row_data=data_row.normalized_data,
+                org_id=org_id,
+                business_fields=data_row.normalized_data,
             ):
                 continue
 
@@ -144,14 +146,15 @@ async def execute_batch(
                 )
 
                 if not dry_run:
-                    save_success_idempotency(
+                    await save_success_idempotency(
                         db=db,
                         automation_run_id=automation_run_id,
                         data_row_id=data_row.id,
                         row_index=data_row.row_index,
                         workflow_name=plan.workflow_name,
                         endpoint_key=step.canonical_key,
-                        row_data=data_row.normalized_data,
+                        org_id=org_id,
+                        business_fields=data_row.normalized_data,
                         response_reference={
                             "status_code": result.status_code,
                             "response_payload": result.response_payload,

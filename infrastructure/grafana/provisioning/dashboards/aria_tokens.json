@@ -1,19 +1,23 @@
 {
-  "title": "ARIA - LLM Token Usage",
+  "title": "ARIA — LLM Token Usage (All Providers)",
   "uid": "aria-tokens",
-  "version": 1,
+  "description": "Vue globale tous fournisseurs IA. Utilisez les dashboards Azure OpenAI et Groq pour le détail par provider.",
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-24h", "to": "now" },
+  "tags": ["aria", "llm", "overview"],
+  "schemaVersion": 38,
   "panels": [
     {
       "id": 1,
-      "title": "Tokens utilisés aujourd'hui (total)",
+      "title": "Tokens totaux (24h)",
       "type": "stat",
       "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
       "options": {
         "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "auto"
+        "graphMode": "area",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["sum"] }
       },
       "fieldConfig": {
         "defaults": {
@@ -31,20 +35,21 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(aria_llm_tokens_total)",
+          "expr": "sum(increase(aria_llm_tokens_total[24h]))",
           "legendFormat": "Tokens"
         }
       ]
     },
     {
       "id": 2,
-      "title": "Coût estimé aujourd'hui (USD)",
+      "title": "Coût estimé (24h)",
       "type": "stat",
       "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
       "options": {
         "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "auto"
+        "graphMode": "area",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["sum"] }
       },
       "fieldConfig": {
         "defaults": {
@@ -63,36 +68,64 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(aria_llm_cost_total)",
+          "expr": "sum(increase(aria_llm_cost_total[24h]))",
           "legendFormat": "Coût USD"
         }
       ]
     },
     {
       "id": 3,
-      "title": "Tokens par tâche",
+      "title": "Azure OpenAI — Tokens (24h)",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 4 },
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
       "options": {
-        "colorMode": "value",
+        "colorMode": "background",
         "graphMode": "none",
         "textMode": "auto",
-        "reduceOptions": { "calcs": ["lastNotNull"] }
+        "reduceOptions": { "calcs": ["sum"] }
       },
       "fieldConfig": {
-        "defaults": { "unit": "short" }
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "blue", "mode": "fixed" }
+        }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (task_name) (aria_llm_tokens_total)",
-          "legendFormat": "{{task_name}}"
+          "expr": "sum(increase(aria_llm_tokens_total{provider=\"azure\"}[24h]))",
+          "legendFormat": "Azure"
         }
       ]
     },
     {
       "id": 4,
-      "title": "Tokens consommés - évolution (par minute)",
+      "title": "Groq — Tokens (24h)",
+      "type": "stat",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["sum"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "orange", "mode": "fixed" }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(aria_llm_tokens_total{provider=\"groq\"}[24h]))",
+          "legendFormat": "Groq"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Tokens/min — par provider",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 4, "w": 24, "h": 8 },
       "options": {
@@ -107,14 +140,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (task_name) (rate(aria_llm_tokens_total[1m]) * 60)",
-          "legendFormat": "{{task_name}}"
+          "expr": "sum by (provider) (rate(aria_llm_tokens_total[1m]) * 60)",
+          "legendFormat": "{{provider}}"
         }
       ]
     },
     {
-      "id": 5,
-      "title": "Coût estimé - évolution (par minute)",
+      "id": 6,
+      "title": "Coût/heure — par provider",
       "type": "timeseries",
       "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
       "options": {
@@ -130,14 +163,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (model_name) (rate(aria_llm_cost_total[1m]) * 60)",
-          "legendFormat": "{{model_name}}"
+          "expr": "sum by (provider) (rate(aria_llm_cost_total[5m]) * 3600)",
+          "legendFormat": "{{provider}}"
         }
       ]
     },
     {
-      "id": 6,
-      "title": "Répartition tokens par tâche (camembert)",
+      "id": 7,
+      "title": "Répartition tokens par tâche (tous providers)",
       "type": "piechart",
       "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
       "options": {
@@ -155,6 +188,5 @@
         }
       ]
     }
-  ],
-  "schemaVersion": 38
+  ]
 }

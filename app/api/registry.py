@@ -125,6 +125,10 @@ async def list_endpoints(
             "risk": (e.metadata_json or {}).get("risk", "low"),
             "confidence": (e.metadata_json or {}).get("confidence", 0.0),
             "tags": (e.metadata_json or {}).get("tags", []),
+            "ai_summary": (e.metadata_json or {}).get("ai_summary"),
+            "ai_description": (e.metadata_json or {}).get("ai_description"),
+            "ai_tags": (e.metadata_json or {}).get("ai_tags", []),
+            "ai_confidence": (e.metadata_json or {}).get("ai_confidence"),
         })
 
     return {"run_id": run_id, "total": len(result), "endpoints": result}

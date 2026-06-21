@@ -30,6 +30,6 @@ class CurrentUserResponse(BaseModel):
     id: str
     org_id: str
     email: str
-    full_name: str
+    full_name: str | None = None
     role: str
     is_active: bool

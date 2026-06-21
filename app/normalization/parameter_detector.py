@@ -13,9 +13,49 @@ from app.normalization.patterns import (
     NUMERIC_ID_PATTERN,
     ORDER_ID_PATTERN,
     PAYMENT_ID_PATTERN,
+    PREFIXED_RESOURCE_ID_PATTERN,
     UUID_PATTERN,
 )
 from app.normalization.payload_analyzer import find_parameter_name_from_payload
+
+# Maps the first underscore-segment of a prefixed ID to a parameter name.
+# e.g. "emp_soph_001" → prefix "emp" → "employee_id"
+_PREFIX_TO_PARAM: dict[str, tuple[str, float]] = {
+    "emp":          ("employee_id",   0.88),
+    "employee":     ("employee_id",   0.88),
+    "ctr":          ("contract_id",   0.88),
+    "cont":         ("contract_id",   0.88),
+    "contract":     ("contract_id",   0.88),
+    "pay":          ("payment_id",    0.85),
+    "payment":      ("payment_id",    0.85),
+    "payroll":      ("payroll_id",    0.85),
+    "ord":          ("order_id",      0.88),
+    "order":        ("order_id",      0.88),
+    "inv":          ("invoice_id",    0.88),
+    "invoice":      ("invoice_id",    0.88),
+    "cus":          ("customer_id",   0.88),
+    "cust":         ("customer_id",   0.88),
+    "customer":     ("customer_id",   0.88),
+    "usr":          ("user_id",       0.88),
+    "user":         ("user_id",       0.88),
+    "dept":         ("department_id", 0.85),
+    "dep":          ("department_id", 0.85),
+    "pos":          ("position_id",   0.60),
+    "position":     ("position_id",   0.85),
+    "badge":        ("badge_id",      0.88),
+    "doc":          ("document_id",   0.88),
+    "document":     ("document_id",   0.88),
+    "job":          ("job_id",        0.85),
+    "tok":          ("token",         0.85),
+    "token":        ("token",         0.85),
+    "notif":        ("notification_id", 0.82),
+    "notification": ("notification_id", 0.82),
+    "batch":        ("batch_id",      0.85),
+    "prod":         ("product_id",    0.85),
+    "product":      ("product_id",    0.85),
+    "ticket":       ("ticket_id",     0.85),
+    "tick":         ("ticket_id",     0.85),
+}
 
 
 RESOURCE_PARAMETER_NAMES = {
@@ -76,6 +116,8 @@ def detect_parameter_type(segment: str) -> Optional[str]:
         return "hash"
     if GENERIC_BUSINESS_ID_PATTERN.match(segment):
         return "business_id"
+    if PREFIXED_RESOURCE_ID_PATTERN.match(segment):
+        return "prefixed_resource_id"
 
     return None
 
@@ -108,6 +150,14 @@ def infer_parameter_name(
 
     if detected_type in {"invoice_id", "payment_id", "employee_id", "order_id", "customer_id", "contract_id"}:
         return detected_type, "rules", 0.95
+
+    if detected_type == "prefixed_resource_id":
+        prefix = raw_value.split("_")[0].lower()
+        if prefix in _PREFIX_TO_PARAM:
+            param_name, confidence = _PREFIX_TO_PARAM[prefix]
+            return param_name, "prefix_rules", confidence
+        # Unknown prefix → low confidence so Groq is called
+        return "resource_id", "prefix_rules_ambiguous", 0.45
 
     if previous_segment:
         normalized_previous = previous_segment.lower().strip()

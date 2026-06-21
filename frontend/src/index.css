@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+/* ── Aria1 Design Tokens ─────────────────────────────────── */
+:root {
+  --brand:  oklch(0.585 0.205 277);
+  --accent: oklch(0.585 0.205 305);
+  --bg:     oklch(0.985 0.005 270);
+  --card:   #ffffff;
+  --ink:    oklch(0.18 0.025 265);
+  --ink-2:  oklch(0.42 0.02 265);
+  --line:   oklch(0.92 0.01 265);
+  --pad:    1rem;
+}
+html.dark {
+  --bg:     oklch(0.16 0.02 265);
+  --card:   oklch(0.21 0.022 265);
+  --ink:    oklch(0.96 0.01 265);
+  --ink-2:  oklch(0.70 0.02 265);
+  --line:   oklch(0.28 0.02 265);
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* ── Aria1 Utility Classes ────────────────────────────────── */
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; }
+.pad  { padding: var(--pad); }
+.hairline { border-color: var(--line) !important; }
+.ink-2 { color: var(--ink-2); }
+.hr-soft { height: 1px; background: var(--line); }
+.nav-active { background: color-mix(in oklch, var(--brand) 12%, transparent); color: var(--brand); }
+.grad-text {
+  background: linear-gradient(90deg, var(--brand), var(--accent));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.grad-bg  { background: linear-gradient(135deg, var(--brand), var(--accent)); }
+/* used by topbar / sections with light brand tint */
+.aria-hero {
+  background: linear-gradient(135deg,
+    color-mix(in oklch, var(--brand) 8%, var(--card)) 0%,
+    color-mix(in oklch, var(--brand) 5%, var(--card)) 50%,
+    color-mix(in oklch, var(--accent) 4%, var(--card)) 100%);
+}
+
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem 0.95rem; border-radius: 0.75rem;
+  color: white; font-weight: 600; font-size: 0.875rem;
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+  box-shadow: 0 1px 0 rgba(255,255,255,0.15) inset, 0 6px 20px -8px color-mix(in oklch, var(--brand) 60%, transparent);
+  transition: transform 150ms ease, filter 200ms ease, opacity 150ms;
+  cursor: pointer;
+}
+.btn-primary:hover  { transform: translateY(-1px); filter: brightness(1.05); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem 0.95rem; border-radius: 0.75rem;
+  border: 1px solid var(--line); background: var(--card);
+  color: var(--ink); font-weight: 500; font-size: 0.875rem;
+  transition: background 150ms ease, transform 150ms ease;
+  cursor: pointer;
+}
+.btn-secondary:hover { background: color-mix(in oklch, var(--ink) 4%, var(--card)); }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.75rem; border-radius: 0.75rem;
+  background: transparent; color: var(--ink-2);
+  font-weight: 500; font-size: 0.875rem;
+  transition: background 150ms, color 150ms;
+  cursor: pointer;
+}
+.btn-ghost:hover { background: color-mix(in oklch, var(--ink) 4%, var(--card)); color: var(--ink); }
+
+.btn-danger {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem 0.95rem; border-radius: 0.75rem;
+  color: white; font-weight: 600; font-size: 0.875rem;
+  background: linear-gradient(135deg, #f43f5e, #e11d48);
+  transition: filter 150ms, transform 150ms;
+  cursor: pointer;
+}
+.btn-danger:hover { filter: brightness(1.05); transform: translateY(-1px); }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.input {
+  width: 100%; padding: 0.55rem 0.85rem;
+  background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 0.75rem;
+  font-size: 0.875rem; font-family: inherit;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.input::placeholder { color: color-mix(in oklch, var(--ink-2) 70%, transparent); }
+.input:focus {
+  outline: none; border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--brand) 22%, transparent);
+}
+.input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.1rem 0.55rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; border: 1px solid;
+  letter-spacing: 0.01em;
+}
+
+/* Thead for tables */
+.aria-thead {
+  background: color-mix(in oklch, var(--ink) 4%, var(--card));
+  font-size: 0.6875rem; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ink-2); font-weight: 600;
+}
+
+.step-line { height: 2px; background: var(--line); border-radius: 2px; transition: background 0.3s; }
+.step-line.done { background: linear-gradient(90deg, var(--brand), var(--accent)); }
+
+.skel {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--ink) 5%, var(--card)) 25%,
+    color-mix(in oklch, var(--ink) 10%, var(--card)) 50%,
+    color-mix(in oklch, var(--ink) 5%, var(--card)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s linear infinite;
+  border-radius: 0.5rem;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--ink-2) 25%, transparent);
+  border-radius: 999px; border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--ink-2) 40%, transparent);
+  background-clip: padding-box;
+}
+
+*:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+::selection { background: color-mix(in oklch, var(--brand) 25%, transparent); }
+
+/* ── Dark mode overrides for Tailwind hardcoded classes ───── */
+/* (legacy fallback for any remaining hardcoded classes) */
+html.dark .bg-white    { background-color: var(--card) !important; }
+html.dark .bg-slate-50 { background-color: color-mix(in oklch, var(--ink) 4%, var(--card)) !important; }
+html.dark .bg-slate-100{ background-color: color-mix(in oklch, var(--ink) 7%, var(--card)) !important; }
+html.dark .border-\[#e2e8f0\] { border-color: var(--line) !important; }
+html.dark .bg-indigo-50  { background-color: color-mix(in oklch, var(--brand) 12%, var(--card)) !important; }
+
+/* Inputs — dark mode */
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.dark textarea, html.dark select {
+  background-color: var(--card) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+}
+html.dark input::placeholder, html.dark textarea::placeholder {
+  color: color-mix(in oklch, var(--ink-2) 60%, transparent) !important;
+}
+html.dark input:-webkit-autofill,
+html.dark input:-webkit-autofill:hover,
+html.dark input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px oklch(0.21 0.022 265) inset !important;
+  -webkit-text-fill-color: oklch(0.96 0.01 265) !important;
+}

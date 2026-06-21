@@ -63,6 +63,8 @@ class Settings(BaseSettings):
             )
         return v
 
+    CORS_ORIGINS: str = "http://localhost:5173"
+
     DEFAULT_ORG_NAME: str = "ARIA Demo Organization"
 
     HAR_MAX_SIZE_MB: int = 50

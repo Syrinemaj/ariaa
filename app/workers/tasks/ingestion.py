@@ -196,6 +196,41 @@ async def _run_ingestion_async(
         await _local_engine.dispose()
         raise
 
+    # ── Step 4 : AI enrichment (endpoint_understanding via Groq) ─────────────
+    enriched_count = 0
+    try:
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        from app.models.endpoint import Endpoint
+        from app.ai.groq_client import GroqClient
+        from app.ai.endpoint_understanding import enrich_endpoint_with_ai
+        from app.rag.service import enrich_endpoints_metadata
+
+        async with AsyncSessionLocal() as db:
+            ep_res = await db.execute(
+                select(Endpoint)
+                .options(selectinload(Endpoint.schema))
+                .where(Endpoint.run_id == run_id)
+            )
+            fresh_endpoints = list(ep_res.scalars().all())
+
+            groq_client = GroqClient()
+            enrichment_results = {}
+            for ep in fresh_endpoints:
+                try:
+                    enrichment_results[ep.id] = await asyncio.to_thread(
+                        enrich_endpoint_with_ai, ep, groq_client
+                    )
+                except Exception as ep_exc:
+                    logger.warning("endpoint_enrichment.failed endpoint=%s error=%s", ep.id, ep_exc)
+
+            if enrichment_results:
+                enriched_count = await enrich_endpoints_metadata(
+                    db=db, run_id=run_id, enrichment_results=enrichment_results
+                )
+    except Exception as enrich_exc:
+        logger.warning("endpoint_enrichment.step_failed run=%s error=%s", run_id, enrich_exc)
+
     await _local_engine.dispose()
     return {
         "run_id": run_id,
@@ -205,4 +240,5 @@ async def _run_ingestion_async(
         "saved_endpoints": len(saved_endpoints),
         "saved_workflows": len(saved_workflows),
         "workflow_names": [wf.name for wf in saved_workflows],
+        "enriched_endpoints": enriched_count,
     }

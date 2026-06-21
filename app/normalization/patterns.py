@@ -55,3 +55,11 @@ GENERIC_BUSINESS_ID_PATTERN = re.compile(
     r"^[A-Z]{2,10}-?\d{2,}$",
     re.IGNORECASE,
 )
+
+# Matches prefix_word_digits style IDs used by many internal systems.
+# e.g. emp_soph_001, ctr_soph_001, pay_soph_001, badge_soph_001, pos_swe_senior_01
+# Pattern: letters_letters..._digits  (underscore separator, ends with numeric suffix)
+PREFIXED_RESOURCE_ID_PATTERN = re.compile(
+    r"^[a-z][a-z0-9]*(?:_[a-z][a-z0-9]*)+_\d+$",
+    re.IGNORECASE,
+)

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -109,6 +110,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ARIA", lifespan=lifespan)
 
+# CORS — allow the Vite dev server and any configured frontend origin.
+# CORS_ORIGINS can be a comma-separated list in settings, e.g.:
+#   CORS_ORIGINS=http://localhost:5173,https://app.example.com
+_cors_origins = [o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Must run before any middleware is added (instrument_app calls add_middleware).
 setup_telemetry(app)
 
@@ -196,3 +209,14 @@ async def health():
 @app.get("/metrics")
 async def metrics():
     return metrics_response()
+
+
+# ── Frontend static files (production) ───────────────────────────────────────
+# Served LAST so all API routes take priority.
+# In development, Vite dev server handles the frontend — this block is a no-op.
+import os
+from fastapi.staticfiles import StaticFiles
+
+_static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+if os.path.isdir(_static_dir):
+    app.mount("/", StaticFiles(directory=_static_dir, html=True), name="frontend")

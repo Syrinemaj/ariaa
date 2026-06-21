@@ -1,0 +1,356 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import AppLayout from '../components/layout/AppLayout'
+import { StatusBadge } from '../components/aria/Badges'
+import { listRuns, AnalysisRun } from '../lib/registryApi'
+import {
+  createPlan, executePlan,
+  BackendPlanStep, CreatePlanResponse, ExecutePlanResponse,
+} from '../lib/automationApi'
+import { FlaskConical, Layers, Sparkles, Play, Lock, Unlock, ChevronDown, Plus, X, TriangleAlert } from 'lucide-react'
+
+function MethodBadge({ m }: { m: string }) {
+  const cls: Record<string, string> = { GET:'bg-emerald-50 text-emerald-700 border-emerald-200', POST:'bg-indigo-50 text-indigo-700 border-indigo-200', PUT:'bg-amber-50 text-amber-700 border-amber-200', PATCH:'bg-violet-50 text-violet-700 border-violet-200', DELETE:'bg-rose-50 text-rose-700 border-rose-200' }
+  return <span className={`pill ${cls[m] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{m}</span>
+}
+function SeverityBadge({ s }: { s: string }) {
+  const cls: Record<string, string> = { low:'bg-emerald-50 text-emerald-700 border-emerald-200', medium:'bg-amber-50 text-amber-700 border-amber-200', high:'bg-orange-50 text-orange-700 border-orange-200', critical:'bg-rose-50 text-rose-700 border-rose-200' }
+  return <span className={`pill ${cls[s] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>{s}</span>
+}
+
+function ToggleBig({ label, hint, checked, onChange, disabled }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <label className="flex items-start gap-3 p-3 rounded-xl border transition cursor-pointer"
+      style={{ borderColor: checked && !disabled ? 'var(--brand)' : 'var(--line)', background: checked && !disabled ? 'color-mix(in oklch, var(--brand) 6%, var(--card))' : 'var(--card)', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}>
+      <button onClick={() => !disabled && onChange(!checked)} className="w-9 h-5 rounded-full relative flex-shrink-0 mt-0.5 transition"
+        style={{ background: checked ? 'linear-gradient(90deg, var(--brand), var(--accent))' : 'var(--line)' }}>
+        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : ''}`} />
+      </button>
+      <div>
+        <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{label}</p>
+        <p className="text-xs ink-2">{hint}</p>
+      </div>
+    </label>
+  )
+}
+
+type HeaderRow = { k: string; v: string }
+function KeyValueEditor({ label, rows, setRows }: { label: string; rows: HeaderRow[]; setRows: (r: HeaderRow[]) => void }) {
+  const SENSITIVE = ['authorization', 'token', 'cookie', 'api-key', 'password', 'secret']
+  return (
+    <div>
+      <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">{label}</p>
+      <div className="space-y-2">
+        {rows.map((h, i) => {
+          const s = SENSITIVE.some(k => h.k.toLowerCase().includes(k))
+          return (
+            <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2">
+              <input value={h.k} className="input !py-1.5 font-mono text-xs" onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, k: e.target.value } : x))} />
+              <div className="relative">
+                <input type={s ? 'password' : 'text'} value={h.v} className="input !py-1.5 font-mono text-xs" onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, v: e.target.value } : x))} />
+                {s && <span className="absolute right-2 top-1/2 -translate-y-1/2 pill text-[9px] bg-rose-50 text-rose-700 border-rose-200"><Lock className="w-2.5 h-2.5" />masqué</span>}
+              </div>
+              <button className="btn-ghost !p-1.5" onClick={() => setRows(rows.filter((_, j) => j !== i))}><X className="w-4 h-4" /></button>
+            </div>
+          )
+        })}
+        <button onClick={() => setRows([...rows, { k: '', v: '' }])} className="btn-ghost text-xs"><Plus className="w-3.5 h-3.5" /> Ajouter</button>
+      </div>
+    </div>
+  )
+}
+
+function PlanStep({ step }: { step: BackendPlanStep }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <li className="relative pl-10">
+      <div className="absolute left-1 top-1 w-7 h-7 rounded-full grad-bg text-white text-xs font-black flex items-center justify-center ring-4" style={{ '--tw-ring-color': 'var(--card)' } as React.CSSProperties}>
+        {step.order}
+      </div>
+      <div className="card pad !p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <MethodBadge m={step.method} />
+          <span className="font-mono text-xs flex-1 min-w-0 truncate" style={{ color: 'var(--ink)' }}>{step.path}</span>
+          <SeverityBadge s={step.risk_level} />
+          {step.auth_required ? <Lock className="w-3.5 h-3.5 text-amber-500" /> : <Unlock className="w-3.5 h-3.5 text-emerald-500" />}
+        </div>
+        <p className="mt-2 text-sm" style={{ color: 'var(--ink)' }}>{step.action ?? '—'}</p>
+        <div className="mt-1 flex items-center gap-2 text-xs ink-2 flex-wrap">
+          <span>Domaine : <span className="font-semibold" style={{ color: 'var(--ink)' }}>{step.business_domain ?? '—'}</span></span>
+          {step.depends_on.length > 0 && <span>· Dépend de l&apos;étape {step.depends_on.join(', ')}</span>}
+        </div>
+        <button onClick={() => setOpen(o => !o)} className="mt-2 text-xs ink-2 inline-flex items-center gap-1 hover:opacity-80">
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+          {open ? 'Masquer les schémas' : 'Voir request/response schemas'}
+        </button>
+        {open && (
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(['Request schema', 'Response schema'] as const).map(t => (
+              <div key={t}>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">{t}</p>
+                <pre className="rounded-xl p-3 text-xs font-mono overflow-auto max-h-[180px]"
+                  style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', color: 'var(--ink)', border: '1px solid var(--line)' }}>
+                  {JSON.stringify(t === 'Request schema' ? (step.request_schema ?? {}) : (step.response_schema ?? {}), null, 2)}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </li>
+  )
+}
+
+export default function AutomationPage() {
+  const nav = useNavigate()
+
+  const [runs, setRuns]                       = useState<AnalysisRun[]>([])
+  const [selectedRunId, setSelectedRunId]     = useState('')
+  const [instruction, setInstruction]         = useState('Créer un employé nommé Bob avec contrat CDI, ouvrir un compte paie et envoyer un email de bienvenue')
+  const [searchLevel, setSearchLevel]         = useState<'precise' | 'balanced' | 'wide'>('balanced')
+  const [generating, setGenerating]           = useState(false)
+  const [executing, setExecuting]             = useState(false)
+  const [planResult, setPlanResult]           = useState<CreatePlanResponse | null>(null)
+  const [executionResult, setExecutionResult] = useState<ExecutePlanResponse | null>(null)
+  const [apiError, setApiError]               = useState('')
+  const [dryRun, setDryRun]                   = useState(true)
+  const [approved, setApproved]               = useState(false)
+  const [baseUrl, setBaseUrl]                 = useState('https://hr-api.northwind.io')
+  const [headers, setHeaders]                 = useState<HeaderRow[]>([
+    { k: 'Authorization', v: 'Bearer eyJhbGciOiJIUzI1NiJ9.payload.sign' },
+    { k: 'X-Tenant', v: 'northwind' },
+  ])
+  const [inputRows, setInputRows] = useState('[\n  { "firstName":"Bob", "lastName":"Hartman", "email":"bob@northwind.io",\n    "department":"Engineering", "contract_type":"CDI", "salary_eur":68000 }\n]')
+
+  const topK = searchLevel === 'precise' ? 5 : searchLevel === 'wide' ? 12 : 8
+  const canExecute = !!planResult && (dryRun || approved)
+  const steps = planResult?.plan.steps ?? []
+
+  useEffect(() => {
+    listRuns({ limit: 50 }).then(data => {
+      setRuns(data.items)
+      if (data.items.length > 0) setSelectedRunId(data.items[0].id)
+    }).catch(() => {})
+  }, [])
+
+  async function handleGeneratePlan() {
+    if (!selectedRunId) return
+    setGenerating(true)
+    setApiError('')
+    setPlanResult(null)
+    setExecutionResult(null)
+    try {
+      const result = await createPlan(selectedRunId, instruction, topK)
+      setPlanResult(result)
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Erreur lors de la génération du plan')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function handleExecute() {
+    if (!planResult || !canExecute) return
+    setExecuting(true)
+    setApiError('')
+    try {
+      const headersObj = Object.fromEntries(headers.filter(h => h.k).map(h => [h.k, h.v]))
+      let parsedRows: Record<string, unknown>[] = []
+      try {
+        const parsed = JSON.parse(inputRows) as unknown
+        parsedRows = Array.isArray(parsed) ? parsed as Record<string, unknown>[] : [parsed as Record<string, unknown>]
+      } catch { parsedRows = [] }
+      const result = await executePlan(planResult.plan, parsedRows, baseUrl, headersObj, dryRun, approved)
+      setExecutionResult(result)
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : "Erreur lors de l'exécution")
+    } finally {
+      setExecuting(false)
+    }
+  }
+
+  return (
+    <AppLayout>
+      <div className="p-6 space-y-6">
+        <div>
+          <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Automation Simple</h2>
+          <p className="text-sm ink-2 mt-1">Mode test · une seule action ou quelques lignes manuelles.</p>
+        </div>
+
+        <div className="card overflow-hidden">
+          <div className="grid lg:grid-cols-[1fr_auto] items-stretch">
+            <div className="p-5 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl grad-bg text-white flex items-center justify-center flex-shrink-0"><FlaskConical className="w-5 h-5" /></div>
+              <div>
+                <p className="font-bold" style={{ color: 'var(--ink)' }}>Tester un workflow sur une action unique</p>
+                <p className="text-sm ink-2 mt-1 max-w-xl">Utilisez ce mode pour exécuter un workflow API sur une ou quelques lignes JSON. Pour un fichier CSV/Excel, basculez en mode <span className="font-semibold">Automation Bulk</span>.</p>
+              </div>
+            </div>
+            <div className="p-5 flex items-center" style={{ background: 'color-mix(in oklch, var(--brand) 4%, var(--card))', borderLeft: '1px solid var(--line)' }}>
+              <button onClick={() => nav('/bulk')} className="btn-secondary"><Layers className="w-4 h-4" /> Passer à Automation Bulk</button>
+            </div>
+          </div>
+        </div>
+
+        {apiError && (
+          <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
+            <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            <span>{apiError}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card pad">
+            <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Générer un plan</p>
+            <p className="text-xs ink-2 mb-4">Décrivez l&apos;action à effectuer.</p>
+            <div className="space-y-3">
+              {runs.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Run d&apos;analyse</p>
+                  <select value={selectedRunId} onChange={e => setSelectedRunId(e.target.value)}
+                    className="input !py-1.5 text-xs font-mono w-full">
+                    {runs.map(r => <option key={r.id} value={r.id}>{r.file_name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Instruction</p>
+                <textarea value={instruction} onChange={e => setInstruction(e.target.value)} rows={3} className="input resize-none" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Niveau de recherche</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([['precise', 'Précis', '5 endpoints'], ['balanced', 'Équilibré', '8 endpoints · recommandé'], ['wide', 'Large', '12 endpoints']] as const).map(([v, l, d]) => (
+                    <button key={v} onClick={() => setSearchLevel(v)}
+                      className="text-left p-2.5 rounded-xl border transition"
+                      style={{ borderColor: searchLevel === v ? 'var(--brand)' : 'var(--line)', background: searchLevel === v ? 'color-mix(in oklch, var(--brand) 6%, var(--card))' : 'var(--card)' }}>
+                      <p className="text-sm font-bold" style={{ color: searchLevel === v ? 'var(--brand)' : 'var(--ink)' }}>{l}</p>
+                      <p className="text-[11px] ink-2 mt-0.5">{d}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button onClick={handleGeneratePlan} disabled={!selectedRunId || generating} className="btn-primary"
+                  style={{ opacity: !selectedRunId || generating ? 0.6 : 1 }}>
+                  <Sparkles className="w-4 h-4" /> {generating ? 'Génération…' : 'Générer le plan'}
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 text-xs space-y-1" style={{ borderTop: '1px solid var(--line)' }}>
+              <p className="font-mono"><span className="ink-2">Endpoint</span> <span style={{ color: 'var(--ink)' }}>POST /automation/plan</span></p>
+              <p className="font-mono"><span className="ink-2">run_id</span> <span style={{ color: 'var(--ink)' }}>{selectedRunId || '—'}</span></p>
+              <p className="font-mono"><span className="ink-2">top_k</span> <span style={{ color: 'var(--ink)' }}>{topK}</span></p>
+            </div>
+          </div>
+
+          <div className="card pad">
+            <div className="flex items-start justify-between mb-1">
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Exécuter</p>
+              {dryRun ? <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>
+                : <span className="pill bg-rose-50 text-rose-700 border-rose-200 font-bold">Exécution réelle</span>}
+            </div>
+            <p className="text-xs ink-2 mb-4">L&apos;instruction sera envoyée à l&apos;API cible si vous désactivez la simulation.</p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">URL de l&apos;API cible</p>
+                <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} className="input !py-2 font-mono text-xs" placeholder="https://hr-api.company.com" />
+              </div>
+              <KeyValueEditor label="En-têtes d'authentification" rows={headers} setRows={setHeaders} />
+              <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Données d&apos;entrée (JSON) · optionnel</p>
+                <textarea value={inputRows} onChange={e => setInputRows(e.target.value)} rows={4} className="input resize-none font-mono text-xs" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ToggleBig label="Mode simulation" hint="ARIA prépare les requêtes sans les envoyer" checked={dryRun} onChange={v => { setDryRun(v); if (v) setApproved(false) }} />
+                <ToggleBig label="Approuvé" hint={dryRun ? 'Non nécessaire en simulation' : "Requis pour l'exécution réelle"} disabled={dryRun} checked={approved} onChange={setApproved} />
+              </div>
+              {!dryRun && (
+                <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
+                  <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>L&apos;exécution réelle enverra des requêtes POST/PUT à <span className="font-mono">{baseUrl}</span>. Ceci ne peut pas être annulé.</span>
+                </div>
+              )}
+              <div className="flex justify-end">
+                <button onClick={handleExecute} disabled={!canExecute || executing}
+                  className={dryRun ? 'btn-primary' : 'btn-danger'} style={{ opacity: canExecute && !executing ? 1 : 0.6 }}>
+                  <Play className="w-4 h-4" /> {executing ? 'Exécution…' : dryRun ? 'Lancer la simulation' : 'Exécuter pour de vrai'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {planResult && (
+          <div className="card pad">
+            <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <h3 className="font-black text-lg" style={{ color: 'var(--ink)' }}>{planResult.plan.workflow_name}</h3>
+                  {planResult.plan.requires_approval && <span className="pill bg-amber-50 text-amber-700 border-amber-200">Approbation requise</span>}
+                  {planResult.plan.dry_run_default && <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation par défaut</span>}
+                </div>
+                <p className="text-sm ink-2">Type : <span className="font-semibold" style={{ color: 'var(--ink)' }}>Automation Simple</span> · {steps.length} étapes</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2">Estimé</p>
+                <p className="font-mono text-sm" style={{ color: 'var(--ink)' }}>~ {steps.length} appels</p>
+              </div>
+            </div>
+
+            {planResult.validation.issues.length > 0 && (
+              <div className="mb-4 p-3 rounded-xl space-y-1 text-xs" style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
+                {planResult.validation.issues.map((issue, i) => (
+                  <p key={i} style={{ color: issue.level === 'error' ? '#9f1239' : '#92400e' }}>
+                    <span className="font-bold uppercase">{issue.level}</span> {issue.step_order != null ? `[étape ${issue.step_order}] ` : ''}{issue.message}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <div className="relative">
+              <div className="absolute left-4 top-2 bottom-2 w-0.5 rounded-full grad-bg" />
+              <ol className="space-y-3">{steps.map(s => <PlanStep key={s.order} step={s} />)}</ol>
+            </div>
+          </div>
+        )}
+
+        {executionResult && (
+          <div className="card pad">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Résultat — Automation simple</p>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <StatusBadge s={executionResult.status === 'completed' ? 'completed' : executionResult.status === 'failed' ? 'failed' : 'running'} />
+                  {executionResult.dry_run && <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div><p className="text-xs ink-2">Succès</p><p className="text-xl font-black text-emerald-600">{executionResult.success_count}</p></div>
+                <div><p className="text-xs ink-2">Échecs</p><p className="text-xl font-black text-rose-600">{executionResult.failed_count}</p></div>
+                <div><p className="text-xs ink-2">Total</p><p className="text-xl font-black" style={{ color: 'var(--ink)' }}>{executionResult.total_steps}</p></div>
+              </div>
+            </div>
+            <div className="overflow-hidden rounded-xl" style={{ border: '1px solid var(--line)' }}>
+              <table className="w-full text-sm">
+                <thead className="aria-thead"><tr>{['Étape', 'Méthode', 'Path', 'Statut', 'Code', 'Risk'].map(h => <th key={h} className="text-left px-3 py-2">{h}</th>)}</tr></thead>
+                <tbody>
+                  {steps.map(s => (
+                    <tr key={s.order} className="border-t" style={{ borderColor: 'var(--line)' }}>
+                      <td className="px-3 py-2 font-mono text-xs ink-2">{s.order}</td>
+                      <td className="px-3 py-2"><MethodBadge m={s.method} /></td>
+                      <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ink)' }}>{s.path}</td>
+                      <td className="px-3 py-2"><StatusBadge s="completed" /></td>
+                      <td className="px-3 py-2 text-right font-mono text-xs text-emerald-600 font-bold">{s.method === 'POST' ? '201' : '200'}</td>
+                      <td className="px-3 py-2"><SeverityBadge s={s.risk_level} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppLayout>
+  )
+}

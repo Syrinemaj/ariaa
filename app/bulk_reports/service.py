@@ -19,19 +19,31 @@ def build_bulk_report(db: Session, automation_run_id: str) -> dict:
     batch_summary = get_batch_summary(db=db, automation_run_id=automation_run_id)
     row_errors = get_failed_rows(db=db, automation_run_id=automation_run_id)
 
-    report = BulkExecutionReport(
-        automation_run_id=automation_run_id,
-        total_requested=automation_run.success_count + automation_run.failed_count,
-        success_count=automation_run.success_count,
-        failed_count=automation_run.failed_count,
-        partial_success_count=0,
-        duration_seconds=automation_run.duration_seconds,
-        row_errors=row_errors,
-        batch_summary=batch_summary,
-        status=automation_run.status,
-    )
+    # BUG-002: upsert — avoid creating N duplicate report records on repeated GETs
+    report = db.query(BulkExecutionReport).filter(
+        BulkExecutionReport.automation_run_id == automation_run_id
+    ).first()
 
-    db.add(report)
+    if report:
+        report.total_requested = automation_run.success_count + automation_run.failed_count
+        report.success_count = automation_run.success_count
+        report.failed_count = automation_run.failed_count
+        report.duration_seconds = automation_run.duration_seconds
+        report.status = automation_run.status
+    else:
+        report = BulkExecutionReport(
+            automation_run_id=automation_run_id,
+            total_requested=automation_run.success_count + automation_run.failed_count,
+            success_count=automation_run.success_count,
+            failed_count=automation_run.failed_count,
+            partial_success_count=0,
+            duration_seconds=automation_run.duration_seconds,
+            row_errors=row_errors,
+            batch_summary=batch_summary,
+            status=automation_run.status,
+        )
+        db.add(report)
+
     db.commit()
     db.refresh(report)
 

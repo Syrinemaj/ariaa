@@ -1,6 +1,6 @@
 from typing import Optional, Tuple
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.automation.batch_processor import execute_plan_batch
 from app.automation.models import AutomationExecutionRequest, AutomationExecutionResult
@@ -11,7 +11,7 @@ from app.security.sanitizer import sanitize_payload
 
 
 async def execute_automation(
-    db: Session,
+    db: AsyncSession,
     request: AutomationExecutionRequest,
     approval_granted: bool = False,
     org_id: str = "",
@@ -37,19 +37,19 @@ async def execute_automation(
         created_by_user_id=created_by_user_id,
     )
     db.add(automation_run)
-    db.commit()
-    db.refresh(automation_run)
+    await db.commit()
+    await db.refresh(automation_run)
 
     log_execution_started(automation_run_id=automation_run.id, dry_run=request.dry_run)
 
-    sanitized_auth = sanitize_payload(request.auth_headers)
-    sanitized_rows = [sanitize_payload(row) for row in request.input_rows]
-
+    # NOTE: sanitize_payload() masks sensitive-looking fields (auth, tokens, passwords)
+    # and must only be used for persisted logs below — never for the actual outbound
+    # call, or real credentials/data get replaced with the literal "***MASKED***".
     result = await execute_plan_batch(
         plan=plan,
-        input_rows=sanitized_rows,
+        input_rows=request.input_rows,
         base_url=request.base_url,
-        auth_headers=sanitized_auth,
+        auth_headers=request.auth_headers,
         dry_run=request.dry_run,
     )
 
@@ -76,8 +76,8 @@ async def execute_automation(
         )
         db.add(log)
 
-    db.commit()
-    db.refresh(automation_run)
+    await db.commit()
+    await db.refresh(automation_run)
 
     log_execution_completed(
         automation_run_id=automation_run.id,

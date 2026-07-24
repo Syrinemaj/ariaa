@@ -17,8 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.ai.embeddings import build_endpoint_embedding_text
-from app.ai.local_embedding_client import LocalEmbeddingClient
+from app.rag.embeddings.builder import build_endpoint_embedding_text
+from app.rag.embeddings.client import LocalEmbeddingClient
 from app.models.embedding import EndpointEmbedding
 from app.models.endpoint import Endpoint
 

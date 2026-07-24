@@ -73,7 +73,7 @@ async def mark_idempotency_success(
         text("""
             UPDATE idempotency_records
             SET status = 'success',
-                response_reference = :ref::jsonb,
+                response_reference = CAST(:ref AS jsonb),
                 updated_at = NOW()
             WHERE idempotency_key = :key
               AND endpoint_key = :endpoint_key

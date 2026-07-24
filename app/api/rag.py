@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models.endpoint import Endpoint
 from app.models.user import User
 from app.rag.models import SemanticSearchRequest
-from app.rag.service import enrich_endpoints_metadata, index_run_for_rag, search_rag_context
+from app.rag.pipeline import enrich_endpoints_metadata, index_run_for_rag, search_rag_context
 from app.registry.repository import get_run_by_id
 
 logger = logging.getLogger(__name__)

@@ -2,6 +2,7 @@
 LLM usage & benchmark endpoints.
 
 GET  /llm/summary          — lifetime totals + today summary (admin)
+GET  /llm/compare-models   — lifetime usage projected onto Groq/Bedrock-Claude pricing
 GET  /llm/benchmark/tasks  — per-task aggregates with estimation accuracy
 GET  /llm/benchmark/daily  — daily token/cost timeline (last N days)
 GET  /llm/high-token       — most expensive individual calls
@@ -27,6 +28,7 @@ from app.llm_observability.repository import (
     get_recent_calls,
     get_today_token_summary,
 )
+from app.llm_observability.service import get_model_cost_comparison
 from app.llm_observability.token_estimator import estimate_har_tokens, estimate_run_cost
 from app.models.user import User
 
@@ -95,6 +97,20 @@ def get_llm_summary(
         "today":    get_today_token_summary(db),
         "lifetime": get_overall_summary(db),
     }
+
+
+@router.get("/compare-models")
+def compare_models(
+    db: Session = Depends(get_sync_db),
+    current_user: User = Depends(require_admin),
+):
+    """
+    Project lifetime token usage onto every priced model (current Groq
+    model vs. Amazon Bedrock's Claude Haiku 4.5 / Sonnet 5 / Opus 4.8) so
+    you can see what switching provider would actually cost, based on real
+    volume rather than a guess. Cheapest model first in `projected_by_model`.
+    """
+    return get_model_cost_comparison(db)
 
 
 @router.get("/benchmark/tasks", response_model=List[TaskBenchmark])

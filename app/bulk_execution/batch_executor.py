@@ -75,6 +75,25 @@ async def execute_batch(
 
     redis = get_redis()
 
+    # Deltas reported to the shared job counter so far — hincrby() is atomic
+    # and additive across concurrent batches, unlike hset() which would
+    # overwrite the cumulative total with this batch's local count alone.
+    reported_success = 0
+    reported_failed = 0
+
+    def _report_progress_delta() -> None:
+        nonlocal reported_success, reported_failed
+        if not job_id:
+            return
+        success_delta = success_count - reported_success
+        failed_delta = failed_count - reported_failed
+        if success_delta:
+            redis.hincrby(f"job:{job_id}", "completed", success_delta)
+        if failed_delta:
+            redis.hincrby(f"job:{job_id}", "failed", failed_delta)
+        reported_success = success_count
+        reported_failed = failed_count
+
     for i, data_row in enumerate(rows):
         state: Dict[str, Any] = {"row_index": data_row.row_index}
         row_failed = False
@@ -195,8 +214,7 @@ async def execute_batch(
         # et PostgreSQL la ferme avec "SSL connection has been closed unexpectedly".
         if (i + 1) % BATCH_COMMIT_SIZE == 0:
             await db.commit()
-            if job_id:
-                redis.hset(f"job:{job_id}", "completed", success_count + failed_count)
+            _report_progress_delta()
 
     # ── Finalisation du batch ─────────────────────────────────────────────────
     batch.status = "completed"
@@ -205,6 +223,9 @@ async def execute_batch(
     batch.metadata_json = {"duration_seconds": round(time.time() - started_at, 3)}
 
     await db.commit()
+    # Report whatever's left since the last intermediate checkpoint (or the
+    # whole batch, if it finished before ever hitting BATCH_COMMIT_SIZE rows).
+    _report_progress_delta()
 
     try:
         from app.observability.metrics import record_bulk_batch

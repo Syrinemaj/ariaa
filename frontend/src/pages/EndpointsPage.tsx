@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import { MethodBadge, SeverityBadge } from '../components/aria/Badges'
 import { Method, Risk } from '../lib/aria-data'
 import { getRunEndpoints, RunEndpoint } from '../lib/analysisApi'
 import { listRuns, AnalysisRun } from '../lib/registryApi'
-import { Search, Download, FileCode2, Lock, Unlock, ChevronRight, Sparkles } from 'lucide-react'
+import { useRun } from '../contexts/RunContext'
+import { useToast } from '../contexts/ToastContext'
+import { Search, Download, FileCode2, Lock, Unlock, ChevronRight, Sparkles, Layers, Network } from 'lucide-react'
 
 export default function EndpointsPage() {
   const nav = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { setActiveRun } = useRun()
+  const { toast } = useToast()
   const [q, setQ] = useState('')
   const [method, setMethod] = useState('ALL')
   const [domain, setDomain] = useState('ALL')
@@ -21,13 +26,22 @@ export default function EndpointsPage() {
   const [endpoints, setEndpoints] = useState<RunEndpoint[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Load runs list on mount
+  // Load runs list on mount — honour ?run= query param for context navigation
   useEffect(() => {
+    const paramRun = searchParams.get('run')
     listRuns({ limit: 50 }).then(data => {
       setRuns(data.items)
-      if (data.items.length > 0) setSelectedRunId(data.items[0].id)
+      const initial = data.items.find(r => r.id === paramRun) ?? data.items[0]
+      if (initial) setSelectedRunId(initial.id)
     }).catch(() => {})
   }, [])
+
+  // Sync active run into RunContext whenever selection changes
+  useEffect(() => {
+    if (!selectedRunId) return
+    const run = runs.find(r => r.id === selectedRunId)
+    if (run) setActiveRun({ id: run.id, name: run.file_name })
+  }, [selectedRunId, runs])
 
   // Load endpoints when a run is selected
   useEffect(() => {
@@ -56,13 +70,37 @@ export default function EndpointsPage() {
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Endpoints catalog</h2>
-            <p className="text-sm ink-2 mt-1">
-              {endpoints.length} endpoints discovered{selectedRun ? ` · ${selectedRun.file_name}` : ''}
-            </p>
+            {selectedRun ? (
+              <p className="text-sm ink-2 mt-1">
+                <span className="font-mono font-semibold" style={{ color: 'var(--ink)' }}>{selectedRun.file_name}</span>
+                {' · '}{endpoints.length} endpoints
+              </p>
+            ) : (
+              <p className="text-sm ink-2 mt-1">{endpoints.length} endpoints discovered</p>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <button className="btn-secondary"><Download className="w-4 h-4" /> Export JSON</button>
+            <button onClick={() => {
+              const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `endpoints-${selectedRunId || 'export'}.json`
+              a.click()
+              URL.revokeObjectURL(url)
+              toast({ type: 'success', message: `Fichier téléchargé · ${filtered.length} endpoints` })
+            }} className="btn-secondary"><Download className="w-4 h-4" /> Export JSON</button>
             <button onClick={() => nav('/openapi')} className="btn-secondary"><FileCode2 className="w-4 h-4" /> View OpenAPI</button>
+            {selectedRunId && (
+              <button onClick={() => nav(`/workflows?run=${selectedRunId}`)} className="btn-secondary">
+                <Network className="w-4 h-4" /> Workflows
+              </button>
+            )}
+            {selectedRunId && (
+              <button onClick={() => nav(`/bulk?run=${selectedRunId}`)} className="btn-primary">
+                <Layers className="w-4 h-4" /> Automatiser
+              </button>
+            )}
           </div>
         </div>
 

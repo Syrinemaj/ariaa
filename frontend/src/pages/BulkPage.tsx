@@ -1,12 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useRun } from '../contexts/RunContext'
+import { useToast } from '../contexts/ToastContext'
 import AppLayout from '../components/layout/AppLayout'
 import { StatusBadge } from '../components/aria/Badges'
 import { listRuns, AnalysisRun } from '../lib/registryApi'
-import { createPlan, CreatePlanResponse } from '../lib/automationApi'
+import {
+  createPlan, CreatePlanResponse, validateToken, planFromWorkflow, recordApproval,
+  ValidateTokenResponse,
+} from '../lib/automationApi'
 import {
   uploadDataFile, suggestMapping, validateBulk, dryRunBulk,
-  executeBulk, getBulkJobProgress, getBulkReport,
+  executeBulk, getBulkJobProgress, getBulkReport, downloadRowErrorsCsv,
   DataFileUploadResult, MappingResult, ValidationResult,
   DryRunResult, BulkExecuteResult, BulkJobProgress, BulkReport,
 } from '../lib/bulkApi'
@@ -16,6 +21,7 @@ import {
   FlaskConical, Folder, Download, Info, X, Plus,
   Lock, TriangleAlert, Loader2, Zap,
 } from 'lucide-react'
+import AutomationSimpleDrawer from '../components/automation/AutomationSimpleDrawer'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -596,6 +602,7 @@ function StepExecute({
   baseUrl, setBaseUrl,
   execHeaders, setExecHeaders,
   bulkJob, jobProgress, executing,
+  tokenStatus, tokenMessage, onTestToken,
   onExecute, onNext, onBack,
 }: {
   approval: boolean
@@ -613,6 +620,9 @@ function StepExecute({
   bulkJob: BulkExecuteResult | null
   jobProgress: BulkJobProgress | null
   executing: boolean
+  tokenStatus: 'idle' | 'testing' | 'valid' | 'error'
+  tokenMessage: string
+  onTestToken: () => void
   onExecute: () => void
   onNext: () => void
   onBack: () => void
@@ -640,7 +650,19 @@ function StepExecute({
           <div className="space-y-4">
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">URL de l&apos;API cible</p>
-              <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} className="input !py-2 font-mono text-xs" />
+              <div className="flex gap-2">
+                <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} className="input !py-2 font-mono text-xs flex-1" />
+                <button onClick={onTestToken} disabled={!baseUrl || tokenStatus === 'testing'}
+                  className="btn-secondary shrink-0 !py-1.5 !px-3 text-xs whitespace-nowrap">
+                  {tokenStatus === 'testing' ? <Spinner className="w-3.5 h-3.5" /> : 'Tester'}
+                </button>
+              </div>
+              {tokenStatus !== 'idle' && tokenStatus !== 'testing' && (
+                <p className={`mt-1.5 text-xs flex items-center gap-1 ${tokenStatus === 'valid' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {tokenStatus === 'valid' ? <Check className="w-3 h-3" /> : <TriangleAlert className="w-3 h-3" />}
+                  {tokenMessage}
+                </p>
+              )}
             </div>
             <KeyValueEditor label="En-têtes d'authentification" rows={execHeaders} setRows={setExecHeaders} />
             <div>
@@ -692,6 +714,10 @@ function StepExecute({
                   : <span className="pill bg-rose-50 text-rose-700 border-rose-200">Exécution réelle</span>
                 }
               </div>
+              <p className="mt-2 font-mono" style={{ color: 'var(--ink)' }}>
+                <span className="text-2xl font-black">{progress ? (progress.completed + progress.failed).toLocaleString() : '—'}</span>
+                <span className="text-sm ink-2"> / {progress ? progress.total.toLocaleString() : '—'} lignes traitées</span>
+              </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2.5 rounded-lg" style={{ background: 'color-mix(in oklch, #10b981 8%, var(--card))' }}>
@@ -735,11 +761,12 @@ function StepExecute({
 }
 
 function StepReport({
-  report, loadingReport, onBack,
+  report, loadingReport, onBack, onViewFullReport,
 }: {
   report: BulkReport | null
   loadingReport: boolean
   onBack: () => void
+  onViewFullReport: (automationRunId: string) => void
 }) {
   return (
     <div className="space-y-4">
@@ -817,7 +844,11 @@ function StepReport({
                   <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Lignes en erreur</p>
                   <p className="text-xs ink-2">{report.row_errors.length} lignes</p>
                 </div>
-                <button className="btn-secondary text-xs"><Download className="w-3.5 h-3.5" /> CSV</button>
+                <button
+                  onClick={() => report && downloadRowErrorsCsv(report.automation_run_id)}
+                  className="btn-secondary text-xs">
+                  <Download className="w-3.5 h-3.5" /> CSV
+                </button>
               </div>
               <div className="rounded-xl max-h-80 overflow-y-auto" style={{ border: '1px solid var(--line)' }}>
                 <table className="w-full text-sm">
@@ -848,8 +879,11 @@ function StepReport({
       <div className="flex justify-between">
         <button onClick={onBack} className="btn-secondary"><ChevronLeft className="w-4 h-4" />Retour</button>
         <div className="flex gap-2">
-          <button className="btn-secondary"><Download className="w-4 h-4" /> Rapport</button>
-          <button className="btn-primary"><FlaskConical className="w-4 h-4" /> Enregistrer comme template</button>
+          {report && (
+            <button onClick={() => onViewFullReport(report.automation_run_id)} className="btn-primary">
+              <BarChart3 className="w-4 h-4" /> Voir le rapport complet
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -860,11 +894,17 @@ function StepReport({
 
 export default function BulkPage() {
   const nav = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { setActiveRun } = useRun()
+  const { toast } = useToast()
 
   // Setup
   const [runs, setRuns] = useState<AnalysisRun[]>([])
   const [selectedRunId, setSelectedRunId] = useState('')
   const [planInstruction, setPlanInstruction] = useState('Créer un employé avec contrat CDI, ouvrir un compte paie et badge')
+
+  // Job recovery — detect an interrupted bulk job from a previous session
+  const [resumableJob, setResumableJob] = useState<{ jobId: string; workflowName: string } | null>(null)
   const [planResult, setPlanResult] = useState<CreatePlanResponse | null>(null)
   const [generatingPlan, setGeneratingPlan] = useState(false)
 
@@ -895,41 +935,131 @@ export default function BulkPage() {
 
   // Step 5: Execute
   const [isSimulation, setIsSimulation] = useState(true)
-  const [baseUrl, setBaseUrl] = useState('https://hr-api.northwind.io')
+  const [baseUrl, setBaseUrl] = useState('')
   const [execHeaders, setExecHeaders] = useState<HeaderRow[]>([
-    { k: 'Authorization', v: 'Bearer eyJhbGciOiJIUzI1NiJ9.payload.sign' },
-    { k: 'X-Tenant', v: 'northwind' },
+    { k: 'Authorization', v: '' },
   ])
   const [batchSize, setBatchSize] = useState(100)
   const [bulkJob, setBulkJob] = useState<BulkExecuteResult | null>(null)
   const [jobProgress, setJobProgress] = useState<BulkJobProgress | null>(null)
   const [executing, setExecuting] = useState(false)
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Token validation
+  const [tokenStatus, setTokenStatus] = useState<'idle' | 'testing' | 'valid' | 'error'>('idle')
+  const [tokenMessage, setTokenMessage] = useState('')
+
+  // Workflow shortcut — plan generated without LLM
+  const [loadingWorkflowPlan, setLoadingWorkflowPlan] = useState(false)
+  const [workflowShortcutId, setWorkflowShortcutId] = useState<string | null>(null)
 
   // Step 6: Report
   const [bulkReport, setBulkReport] = useState<BulkReport | null>(null)
   const [loadingReport, setLoadingReport] = useState(false)
 
+  // Automation Simple drawer
+  const [showSimpleSheet, setShowSimpleSheet] = useState(false)
+
   const completed = new Set(Array.from({ length: step }, (_, i) => i))
 
-  // Load analysis runs on mount
+  // Load analysis runs on mount — honour ?run= and ?workflow= query params
   useEffect(() => {
-    listRuns({ limit: 50 }).then(data => {
+    const paramRun      = searchParams.get('run')
+    const paramWorkflow = searchParams.get('workflow')
+
+    listRuns({ limit: 50 }).then(async data => {
       setRuns(data.items)
-      if (data.items.length > 0) setSelectedRunId(data.items[0].id)
+      const initial = data.items.find(r => r.id === paramRun) ?? data.items[0]
+      if (initial) {
+        setSelectedRunId(initial.id)
+        setActiveRun({ id: initial.id, name: initial.file_name })
+
+        // If a workflow ID was passed, record it for the shortcut button
+        if (paramWorkflow) {
+          setWorkflowShortcutId(paramWorkflow)
+          try {
+            const { getWorkflows } = await import('../lib/registryApi')
+            const workflows = await getWorkflows(initial.id)
+            const wf = workflows.find(w => w.id === paramWorkflow)
+            if (wf) setPlanInstruction(`Exécuter le workflow ${wf.name}`)
+          } catch { /* non-blocking */ }
+        }
+      }
     }).catch(() => {})
+
+    // Check for a recoverable bulk job from a previous session
+    try {
+      const saved = localStorage.getItem('aria_bulk_job')
+      if (saved) setResumableJob(JSON.parse(saved) as { jobId: string; workflowName: string })
+    } catch { /* ignore */ }
   }, [])
 
   // Cleanup polling on unmount
   useEffect(() => {
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
+    return () => { if (pollingRef.current) clearTimeout(pollingRef.current) }
   }, [])
+
+  async function handleWorkflowPlan() {
+    if (!workflowShortcutId) return
+    setLoadingWorkflowPlan(true)
+    setApiError('')
+    setPlanResult(null)
+    // BUG-006: reset downstream wizard state so stale results from a prior plan
+    // never pre-fill the new wizard steps
+    setUploadResult(null)
+    setMappingResult(null)
+    setValidationResult(null)
+    setDryRunResult(null)
+    setStep(0)
+    try {
+      const result = await planFromWorkflow(workflowShortcutId)
+      setPlanResult(result)
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Erreur conversion workflow')
+    } finally {
+      setLoadingWorkflowPlan(false)
+    }
+  }
+
+  async function handleTestToken() {
+    if (!baseUrl) return
+    setTokenStatus('testing')
+    setTokenMessage('')
+    try {
+      const authRow = execHeaders.find(h => h.k.toLowerCase() === 'authorization')
+      const authValue = authRow?.v ?? ''
+      let tokenType: 'bearer' | 'api_key' | 'basic' = 'bearer'
+      let tokenValue = authValue
+      if (authValue.toLowerCase().startsWith('bearer ')) {
+        tokenType = 'bearer'
+        tokenValue = authValue.slice(7).trim()
+      } else if (authValue.toLowerCase().startsWith('basic ')) {
+        tokenType = 'basic'
+        tokenValue = authValue.slice(6).trim()
+      } else if (!authValue.includes(' ') && authValue.length > 0) {
+        tokenType = 'api_key'
+      }
+      const result: ValidateTokenResponse = await validateToken(baseUrl, tokenType, tokenValue)
+      setTokenStatus(result.valid ? 'valid' : 'error')
+      setTokenMessage(result.message)
+    } catch (e) {
+      setTokenStatus('error')
+      setTokenMessage(e instanceof Error ? e.message : 'Erreur réseau')
+    }
+  }
 
   async function handleGeneratePlan() {
     if (!selectedRunId) return
     setGeneratingPlan(true)
     setApiError('')
     setPlanResult(null)
+    // BUG-006: reset downstream wizard state to prevent stale results from a
+    // previous plan leaking into the new wizard flow
+    setUploadResult(null)
+    setMappingResult(null)
+    setValidationResult(null)
+    setDryRunResult(null)
+    setStep(0)
     try {
       const result = await createPlan(selectedRunId, planInstruction, 8)
       setPlanResult(result)
@@ -1014,19 +1144,59 @@ export default function BulkPage() {
         approved,
       )
       setBulkJob(result)
+      // Persist job for recovery across page reloads
+      localStorage.setItem('aria_bulk_job', JSON.stringify({
+        jobId: result.job_id,
+        workflowName: planResult?.plan.workflow_name ?? 'Bulk run',
+      }))
 
-      // Poll for progress
-      pollingRef.current = setInterval(async () => {
+      // Persist approval record in DB when it's a real (non-simulation) run
+      if (!isSimulation && approved) {
         try {
-          const progress = await getBulkJobProgress(result.job_id)
-          setJobProgress(progress)
-          if (['done', 'failed', 'partial'].includes(progress.status)) {
-            clearInterval(pollingRef.current!)
-            pollingRef.current = null
+          await recordApproval(result.automation_run_id, 'Approuvé via BulkPage')
+        } catch { /* non-blocking — execution already started */ }
+      }
+
+      // Poll for progress with exponential backoff using recursive setTimeout
+      let pollInterval = 3000
+      const MAX_POLL_MS = 45 * 60 * 1000  // 45 min hard limit
+      const pollStartTime = Date.now()
+
+      const schedulePoll = () => {
+        pollingRef.current = setTimeout(async () => {
+          // Hard timeout — stop polling and show actionable error
+          if (Date.now() - pollStartTime > MAX_POLL_MS) {
             setExecuting(false)
+            setApiError('Le job semble bloqué (timeout 45 min). Vérifiez les logs du worker ou consultez le rapport partiel.')
+            return
           }
-        } catch { /* ignore transient polling errors */ }
-      }, 3000)
+
+          try {
+            const progress = await getBulkJobProgress(result.job_id)
+            setJobProgress(progress)
+            if (['done', 'failed', 'partial'].includes(progress.status)) {
+              pollingRef.current = null
+              setExecuting(false)
+              localStorage.removeItem('aria_bulk_job')
+              setResumableJob(null)
+              const successRate = progress.total > 0
+                ? `${progress.completed}/${progress.total} réussies`
+                : 'Terminé'
+              toast({
+                type: progress.status === 'done' ? 'success' : 'warning',
+                message: `Bulk terminé · ${successRate}`,
+                action: { label: 'Rapport →', onClick: () => nav(`/reports?tab=automation&run=${progress.automation_run_id}`) },
+              })
+            } else {
+              pollInterval = Math.min(pollInterval * 1.3, 15000)
+              schedulePoll()
+            }
+          } catch {
+            schedulePoll() // retry on transient network error
+          }
+        }, pollInterval)
+      }
+      schedulePoll()
     } catch (e) {
       setApiError(e instanceof Error ? e.message : "Erreur exécution")
       setExecuting(false)
@@ -1070,6 +1240,27 @@ export default function BulkPage() {
           </div>
         </div>
 
+        {/* Resumable job banner */}
+        {resumableJob && !bulkJob && (
+          <div className="card pad flex items-center gap-4"
+            style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Job interrompu détecté</p>
+              <p className="text-xs ink-2 mt-0.5">{resumableJob.workflowName} · reprendre le suivi depuis la progression</p>
+            </div>
+            <button onClick={() => {
+              setStep(5)
+              setBulkJob({ job_id: resumableJob.jobId } as BulkExecuteResult)
+            }} className="btn-primary text-xs whitespace-nowrap">
+              Reprendre le suivi →
+            </button>
+            <button onClick={() => {
+              setResumableJob(null)
+              localStorage.removeItem('aria_bulk_job')
+            }} className="btn-ghost text-xs">Ignorer</button>
+          </div>
+        )}
+
         {/* Info banner */}
         <div className="card overflow-hidden">
           <div className="grid lg:grid-cols-[1fr_auto] items-stretch">
@@ -1081,7 +1272,7 @@ export default function BulkPage() {
               </div>
             </div>
             <div className="p-5 flex items-center" style={{ background: 'color-mix(in oklch, var(--brand) 4%, var(--card))', borderLeft: '1px solid var(--line)' }}>
-              <button onClick={() => nav('/automation')} className="btn-secondary"><FlaskConical className="w-4 h-4" /> Automation Simple</button>
+              <button onClick={() => setShowSimpleSheet(true)} className="btn-secondary"><FlaskConical className="w-4 h-4" /> Automation Simple</button>
             </div>
           </div>
         </div>
@@ -1110,15 +1301,44 @@ export default function BulkPage() {
               <input value={planInstruction} onChange={e => setPlanInstruction(e.target.value)}
                 className="input !py-2 text-xs" placeholder="Ex : Créer un employé avec contrat CDI…" />
             </div>
-            <button onClick={handleGeneratePlan} disabled={!selectedRunId || generatingPlan} className="btn-primary whitespace-nowrap">
-              {generatingPlan ? <><Spinner className="w-4 h-4" /> Génération…</> : <><Zap className="w-4 h-4" /> Générer le plan</>}
-            </button>
+            <div className="flex gap-2">
+              {workflowShortcutId && (
+                <button onClick={handleWorkflowPlan} disabled={loadingWorkflowPlan || !!planResult}
+                  className="btn-secondary whitespace-nowrap" title="Convertir le workflow sélectionné en plan sans appel IA">
+                  {loadingWorkflowPlan ? <><Spinner className="w-4 h-4" /> Conversion…</> : <><Layers className="w-4 h-4" /> Utiliser ce workflow</>}
+                </button>
+              )}
+              <button onClick={handleGeneratePlan} disabled={!selectedRunId || generatingPlan} className="btn-primary whitespace-nowrap">
+                {generatingPlan ? <><Spinner className="w-4 h-4" /> Génération…</> : <><Zap className="w-4 h-4" /> Générer le plan</>}
+              </button>
+            </div>
           </div>
           {planResult && (
             <div className="mt-3 p-3 rounded-xl" style={{ background: 'color-mix(in oklch, var(--brand) 5%, var(--card))', border: '1px solid color-mix(in oklch, var(--brand) 25%, var(--line))' }}>
               <p className="text-xs font-semibold mb-2" style={{ color: 'var(--brand)' }}>
                 {planResult.plan.workflow_name} · {planResult.plan.steps.length} étapes
               </p>
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <div className="flex items-center gap-2 min-w-[140px]">
+                  <span className="text-[10px] font-bold tracking-widest uppercase ink-2">Confiance IA</span>
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)', minWidth: 60 }}>
+                    <div className="h-1.5 rounded-full grad-bg" style={{ width: `${planResult.plan.intent.confidence * 100}%` }} />
+                  </div>
+                  <span className={`font-mono text-xs ${planResult.plan.intent.confidence >= 0.9 ? 'text-emerald-600' : planResult.plan.intent.confidence >= 0.7 ? 'text-amber-600' : 'text-rose-600'}`}>
+                    {planResult.plan.intent.confidence.toFixed(2)}
+                  </span>
+                </div>
+                {planResult.plan.intent.business_domain && (
+                  <span className="pill text-xs" style={{ border: '1px solid var(--line)', background: 'var(--card)' }}>
+                    domaine : {planResult.plan.intent.business_domain}
+                  </span>
+                )}
+                {planResult.plan.intent.entities.map(entity => (
+                  <span key={entity} className="pill text-xs" style={{ border: '1px solid var(--line)', background: 'var(--card)' }}>
+                    {entity}
+                  </span>
+                ))}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {planResult.plan.steps.map(s => (
                   <div key={s.order} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg" style={{ border: '1px solid var(--line)', background: 'var(--card)' }}>
@@ -1212,6 +1432,7 @@ export default function BulkPage() {
             baseUrl={baseUrl} setBaseUrl={setBaseUrl}
             execHeaders={execHeaders} setExecHeaders={setExecHeaders}
             bulkJob={bulkJob} jobProgress={jobProgress} executing={executing}
+            tokenStatus={tokenStatus} tokenMessage={tokenMessage} onTestToken={handleTestToken}
             onExecute={handleExecute} onNext={handleGoReport} onBack={() => setStep(4)}
           />
         )}
@@ -1219,9 +1440,12 @@ export default function BulkPage() {
           <StepReport
             report={bulkReport} loadingReport={loadingReport}
             onBack={() => setStep(5)}
+            onViewFullReport={(runId) => nav(`/reports?tab=automation&run=${runId}`)}
           />
         )}
       </div>
+
+      <AutomationSimpleDrawer open={showSimpleSheet} onClose={() => setShowSimpleSheet(false)} />
     </AppLayout>
   )
 }

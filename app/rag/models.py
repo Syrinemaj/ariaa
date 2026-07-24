@@ -20,11 +20,10 @@ class SemanticSearchRequest(BaseModel):
     run_id: Optional[str] = None
     top_k: int = 5
     score_threshold: float = Field(
-        default=0.0,
+        default=0.35,
         ge=0.0,
         le=1.0,
-        description="Minimum similarity score (0–1). Results below this value are dropped. "
-                    "Recommended: 0.5 for production use to avoid false matches.",
+        description="Minimum similarity score (0–1). Results below this value are dropped.",
     )
 
 

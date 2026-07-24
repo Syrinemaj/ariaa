@@ -6,19 +6,8 @@ import {
     Zap, Shield, BarChart2, Activity, Cpu, GitBranch,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { api, ApiError } from '../lib/api'
 
-// ─── Logo ─────────────────────────────────────────────────────────────────────
-const ARIALogo: React.FC<{ size?: number }> = ({ size = 36 }) => (
-    <svg width={size} height={Math.round(size * 44 / 36)} viewBox="0 0 36 44" fill="none">
-        <defs>
-            <linearGradient id="lg-light" x1="0" y1="0" x2="36" y2="44" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#fff" /><stop offset="1" stopColor="#fff" stopOpacity="0.7" />
-            </linearGradient>
-        </defs>
-        <path d="M18 2L34 11V29L18 38L2 29V11Z" fill="url(#lg-light)" opacity="0.22" />
-        <path d="M18 7L30 14.5V27.5L18 35L6 27.5V14.5Z" fill="url(#lg-light)" />
-    </svg>
-)
 
 // ─── Animated counter ─────────────────────────────────────────────────────────
 const Counter: React.FC<{ to: number; suffix?: string; duration?: number }> = ({ to, suffix = '', duration = 1800 }) => {
@@ -109,16 +98,31 @@ export default function AuthPage() {
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault()
         const errs: Record<string, string> = {}
-        if (rUser.trim().length < 3) errs.user = 'Min. 3 caractères'
+        if (rUser.trim().length < 2) errs.user = 'Min. 2 caractères'
         if (!rEmail.includes('@')) errs.email = 'Email invalide'
         if (rPwd.length < 8) errs.pwd = 'Min. 8 caractères'
         if (rPwd !== rConfirm) errs.confirm = "Les mots de passe ne correspondent pas"
         setRErrors(errs)
         if (Object.keys(errs).length) return
         setRLoading(true); setRErr('')
-        await new Promise(r => setTimeout(r, 800))
-        setRLoading(false)
-        setRDone(true)
+        try {
+            await api.post('/auth/request-access', {
+                email: rEmail.trim().toLowerCase(),
+                password: rPwd,
+                full_name: rUser.trim(),
+            })
+            setRDone(true)
+        } catch (err: unknown) {
+            if (err instanceof ApiError) {
+                if (err.status === 422) setRErr('Vérifiez les informations saisies.')
+                else if (err.status === 429) setRErr('Trop de tentatives. Réessayez dans 1 minute.')
+                else setRErr('Une erreur est survenue. Veuillez réessayer.')
+            } else {
+                setRErr('Erreur réseau. Vérifiez votre connexion.')
+            }
+        } finally {
+            setRLoading(false)
+        }
     }
 
     return (
@@ -227,7 +231,7 @@ export default function AuthPage() {
                             <div>
                                 <div className="flex items-center justify-between mb-2">
                                     <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#94a3b8' }}>Mot de passe</label>
-                                    <button type="button" className="text-xs font-semibold hover:opacity-70 transition-opacity" style={{ color: '#6366f1' }}>Oublié ?</button>
+                                    <button type="button" className="text-xs font-semibold hover:opacity-70 transition-opacity" style={{ color: '#6366f1' }} onClick={() => navigate('/forgot-password')}>Oublié ?</button>
                                 </div>
                                 <div className="relative">
                                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#94a3b8' }} />
@@ -292,9 +296,9 @@ export default function AuthPage() {
                             <>
                                 <div className="flex items-center gap-2 mb-8">
                                     <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-                                        <ARIALogo size={16} />
+                                        <img src="/logo.png" alt="ARIA" style={{ height: 16, width: 'auto' }} />
                                     </div>
-                                    <span className="text-sm font-bold tracking-tight" style={{ color: '#6366f1' }}>aria</span>
+                                    <span className="text-sm font-bold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
                                 </div>
 
                                 <div className="mb-6">
@@ -403,9 +407,9 @@ export default function AuthPage() {
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
                                 <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)' }}>
-                                    <ARIALogo size={18} />
+                                    <img src="/logo.png" alt="ARIA" style={{ height: 18, width: 'auto' }} />
                                 </div>
-                                <span className="text-lg font-black text-white tracking-tight">aria</span>
+                                <span className="text-lg font-black tracking-tight" style={{ color: '#1E318A' }}>aria</span>
                             </div>
                             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
                                 style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc' }}>

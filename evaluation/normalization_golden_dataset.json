@@ -1,0 +1,1225 @@
+[
+  {
+    "id": "a01_entier_pur",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/orders/123",
+      "/api/orders/456",
+      "/api/orders/789"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "entier pur — NUMERIC_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "order_id"
+      ]
+    }
+  },
+  {
+    "id": "a02_uuid_avec_tirets",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/sessions/550e8400-e29b-41d4-a716-446655440000",
+      "/api/sessions/6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "UUID avec tirets — UUID_PATTERN",
+    "expected_names": {
+      "2": [
+        "session_id"
+      ]
+    }
+  },
+  {
+    "id": "a03_uuid_sans_tirets",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/sessions/550e8400e29b41d4a716446655440000",
+      "/api/sessions/6ba7b8109dad11d180b400c04fd430c8"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "UUID sans tirets (32 hex) — ne matche pas UUID_PATTERN, capté via HASH_PATTERN",
+    "expected_names": {
+      "2": [
+        "session_id"
+      ]
+    }
+  },
+  {
+    "id": "a04_hash_md5_like",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/files/9e107d9d372bb6826bd81d3542a419d6",
+      "/api/files/e4d909c290d0fb1ca068ffaddf22cbd0"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "hash 32 hex (MD5-like) — HASH_PATTERN",
+    "expected_names": {
+      "2": [
+        "file_id"
+      ]
+    }
+  },
+  {
+    "id": "a05_hash_sha1_like",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/commits/2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+      "/api/commits/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "hash 40 hex (SHA1-like) — HASH_PATTERN",
+    "expected_names": {
+      "2": [
+        "commit_id"
+      ]
+    }
+  },
+  {
+    "id": "a06_mongo_objectid",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/documents/507f1f77bcf86cd799439011",
+      "/api/documents/507f191e810c19729de860ea"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "ObjectId Mongo (24 hex) — HASH_PATTERN",
+    "expected_names": {
+      "2": [
+        "document_id"
+      ]
+    }
+  },
+  {
+    "id": "a07_jwt_like",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/tokens/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "JWT (3 segments base64url) — JWT_PATTERN, single example",
+    "expected_names": {
+      "2": [
+        "token_id"
+      ]
+    }
+  },
+  {
+    "id": "a08_date",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/reports/2024-01-15",
+      "/api/reports/2024-02-20"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "date YYYY-MM-DD — DATE_PATTERN",
+    "expected_names": {
+      "2": [
+        "report_id"
+      ]
+    }
+  },
+  {
+    "id": "a09_datetime",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/logs/2024-01-15T10:30:00",
+      "/api/logs/2024-02-20T08:15:00"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "datetime ISO — DATETIME_PATTERN",
+    "expected_names": {
+      "2": [
+        "log_id"
+      ]
+    }
+  },
+  {
+    "id": "a10_invoice_code",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/invoices/INV-2024-0891",
+      "/api/invoices/INV-2024-1123",
+      "/api/invoices/INV-2024-7765"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "code métier INV-YYYY-NNNN — INVOICE_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "invoice_id"
+      ]
+    }
+  },
+  {
+    "id": "a11_payment_code",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/payments/PAY-2024-0055",
+      "/api/payments/PAY-2024-0099"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "code métier PAY-YYYY-NNNN — PAYMENT_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "payment_id"
+      ]
+    }
+  },
+  {
+    "id": "a12_employee_code_dash",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/employees/EMP-42",
+      "/api/employees/EMP-108"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "code EMP-NN (tiret) — EMPLOYEE_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "employee_id"
+      ]
+    }
+  },
+  {
+    "id": "a13_generic_business_code",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/widgets/WGT-4021",
+      "/api/widgets/WGT-9987"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "préfixe non répertorié explicitement — GENERIC_BUSINESS_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "widget_id"
+      ]
+    }
+  },
+  {
+    "id": "a14_stripe_style",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/charges/ch_1AbCdEfGhIjKlMn",
+      "/api/charges/ch_9XyZaBcDeFgHiJk"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "ID style Stripe (préfixe court + 10+ alphanum) — STRIPE_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "charge_id"
+      ]
+    }
+  },
+  {
+    "id": "a15_short_prefixed",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/items/u001",
+      "/api/items/u042"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "1 lettre + 3+ chiffres — SHORT_PREFIXED_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "user_id"
+      ]
+    }
+  },
+  {
+    "id": "a16_short_hex",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/webhooks/9f2a7b",
+      "/api/webhooks/ab12cd"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "hash hex court (lettre+chiffre mêlés) — SHORT_HEX_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "webhook_id"
+      ]
+    }
+  },
+  {
+    "id": "a17_ulid",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/events/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "/api/events/01BX5ZZKBKACTAV9WEVGEMMVRZ"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "ULID (26 chars Crockford Base32) — ULID_PATTERN",
+    "expected_names": {
+      "2": [
+        "event_id"
+      ]
+    }
+  },
+  {
+    "id": "a18_prefixed_2part",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/hr/employees/emp_301",
+      "/hr/employees/emp_302"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "ID préfixé 2 parties (emp_NNN) — PREFIXED_RESOURCE_ID_PATTERN post-relaxation",
+    "expected_names": {
+      "2": [
+        "employee_id"
+      ]
+    }
+  },
+  {
+    "id": "a19_prefixed_3part",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/hr/contracts/ctr_soph_001",
+      "/hr/contracts/ctr_soph_002"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "ID préfixé 3 parties (ctr_word_NNN) — PREFIXED_RESOURCE_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "contract_id"
+      ]
+    }
+  },
+  {
+    "id": "a20_prefixed_uuid",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/auth/users/usr_550e8400-e29b-41d4-a716-446655440000",
+      "/auth/users/usr_6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "préfixe + UUID complet — PREFIXED_UUID_PATTERN (ajout du diff regex)",
+    "expected_names": {
+      "2": [
+        "user_id"
+      ]
+    }
+  },
+  {
+    "id": "a21_slug_id_suffix",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/blog/posts/mon-article-482",
+      "/blog/posts/guide-python-2026",
+      "/blog/posts/top-10-astuces-901"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "slug texte + marqueur numérique en suffixe — SLUG_ID_SUFFIX_PATTERN",
+    "expected_names": {
+      "2": [
+        "post_id"
+      ]
+    }
+  },
+  {
+    "id": "a22_slug_id_prefix",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/blog/posts/482-mon-article",
+      "/blog/posts/901-top-astuces"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "slug texte + marqueur numérique en préfixe — SLUG_ID_PREFIX_PATTERN",
+    "expected_names": {
+      "2": [
+        "post_id"
+      ]
+    }
+  },
+  {
+    "id": "a23_sku_code",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/shop/products/SKU-1234AB",
+      "/shop/products/SKU-9987ZZ"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "code SKU, suffixe alphanumérique mixte — SKU_CODE_PATTERN",
+    "expected_names": {
+      "2": [
+        "sku"
+      ]
+    }
+  },
+  {
+    "id": "a24_hex_0x",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/chain/transactions/0x1a2b3c4d5e",
+      "/chain/transactions/0xdeadbeef01"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "ID hex préfixé 0x (style blockchain) — HEX_0X_PATTERN",
+    "expected_names": {
+      "2": [
+        "transaction_id"
+      ]
+    }
+  },
+  {
+    "id": "a25_composite_numeric",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/reports/lines/123_456",
+      "/reports/lines/789_012"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "clé composite deux entiers — COMPOSITE_NUMERIC_ID_PATTERN",
+    "expected_names": {
+      "2": [
+        "line_id"
+      ]
+    }
+  },
+  {
+    "id": "a26_stripe_short_suffix",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/billing/charges/cus_A1b2C3D4",
+      "/billing/charges/cus_Z9y8X7w6"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "suffixe Stripe 8 caractères — raté avant l'abaissement du seuil (10→8)",
+    "expected_names": {
+      "2": [
+        "customer_id"
+      ]
+    }
+  },
+  {
+    "id": "a27_version_beyond_v20",
+    "category": "regex_forms",
+    "method": "GET",
+    "urls": [
+      "/api/v21/employees",
+      "/api/v99/employees"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2
+    ],
+    "notes": "version au-delà de v20 (hors liste _STATIC_SEGMENTS énumérée) — VERSION_SEGMENT_PATTERN"
+  },
+  {
+    "id": "b01_hr_employees_vs_departments",
+    "category": "bug1_sibling_resources",
+    "method": "POST",
+    "urls": [
+      "/api/v1/hr/employees",
+      "/api/v1/hr/departments"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "notes": "Bug 1 — deux ressources distinctes de même longueur, ne doivent PAS fusionner en {hr_id}"
+  },
+  {
+    "id": "b02_shop_products_orders_carts",
+    "category": "bug1_sibling_resources",
+    "method": "GET",
+    "urls": [
+      "/api/v1/shop/products",
+      "/api/v1/shop/orders",
+      "/api/v1/shop/carts"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "notes": "Bug 1 — 3 ressources sœurs, aucune ne doit devenir un paramètre"
+  },
+  {
+    "id": "b03_auth_login_logout_register",
+    "category": "bug1_sibling_resources",
+    "method": "POST",
+    "urls": [
+      "/api/v1/auth/login",
+      "/api/v1/auth/logout",
+      "/api/v1/auth/register"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "notes": "Bug 1 — actions sœurs, domaine auth"
+  },
+  {
+    "id": "b04_generic_reports_invoices_settings",
+    "category": "bug1_sibling_resources",
+    "method": "GET",
+    "urls": [
+      "/api/reports",
+      "/api/invoices",
+      "/api/settings"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "Bug 1 — ressources racine sœurs, chemin court"
+  },
+  {
+    "id": "b05_v1_vs_v2_stays_literal",
+    "category": "bug1_sibling_resources",
+    "method": "GET",
+    "urls": [
+      "/api/v1/employees",
+      "/api/v2/employees"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2
+    ],
+    "notes": "le segment de version lui-même varie mais ne doit jamais devenir un paramètre"
+  },
+  {
+    "id": "c01_contract_vs_salary",
+    "category": "bug2_cascade_leak",
+    "method": "POST",
+    "urls": [
+      "/hr/employees/emp_301/contract",
+      "/hr/employees/emp_302/contract",
+      "/hr/employees/emp_303/salary"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "Bug 2 — une fois emp_NNN détecté, contract/salary ne doit pas devenir {emp_NNN_id}",
+    "expected_names": {
+      "2": [
+        "employee_id"
+      ]
+    }
+  },
+  {
+    "id": "c02_cancel_vs_refund",
+    "category": "bug2_cascade_leak",
+    "method": "POST",
+    "urls": [
+      "/shop/orders/ord_5001/cancel",
+      "/shop/orders/ord_5002/cancel",
+      "/shop/orders/ord_5003/refund"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "Bug 2 — même mécanisme, domaine shop",
+    "expected_names": {
+      "2": [
+        "order_id"
+      ]
+    }
+  },
+  {
+    "id": "c03_checkout_vs_clear",
+    "category": "bug2_cascade_leak",
+    "method": "POST",
+    "urls": [
+      "/shop/carts/cart_7001/checkout",
+      "/shop/carts/cart_7002/checkout",
+      "/shop/carts/cart_7003/clear"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "Bug 2 — même mécanisme, cart_id",
+    "expected_names": {
+      "2": [
+        "cart_id"
+      ]
+    }
+  },
+  {
+    "id": "c04_activate_vs_suspend",
+    "category": "bug2_cascade_leak",
+    "method": "POST",
+    "urls": [
+      "/auth/users/usr_501/activate",
+      "/auth/users/usr_502/activate",
+      "/auth/users/usr_503/suspend"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "Bug 2 — même mécanisme, domaine auth",
+    "expected_names": {
+      "2": [
+        "user_id"
+      ]
+    }
+  },
+  {
+    "id": "d01_department_employee_2level",
+    "category": "nested_multilevel",
+    "method": "GET",
+    "urls": [
+      "/hr/departments/dept_10/employees/emp_101",
+      "/hr/departments/dept_10/employees/emp_102",
+      "/hr/departments/dept_20/employees/emp_201"
+    ],
+    "id_positions": [
+      2,
+      4
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "2 niveaux dynamiques imbriqués",
+    "expected_names": {
+      "2": [
+        "department_id"
+      ],
+      "4": [
+        "employee_id"
+      ]
+    }
+  },
+  {
+    "id": "d02_org_team_member_3level",
+    "category": "nested_multilevel",
+    "method": "GET",
+    "urls": [
+      "/orgs/org_1/teams/team_5/members/mem_9",
+      "/orgs/org_1/teams/team_5/members/mem_10",
+      "/orgs/org_2/teams/team_6/members/mem_11"
+    ],
+    "id_positions": [
+      1,
+      3,
+      5
+    ],
+    "fixed_positions": [
+      0,
+      2,
+      4
+    ],
+    "notes": "3 niveaux dynamiques imbriqués",
+    "expected_names": {
+      "1": [
+        "resource_id"
+      ],
+      "3": [
+        "resource_id"
+      ],
+      "5": [
+        "resource_id"
+      ]
+    }
+  },
+  {
+    "id": "d03_shop_cart_item",
+    "category": "nested_multilevel",
+    "method": "GET",
+    "urls": [
+      "/shop/carts/cart_7001/items/item_1",
+      "/shop/carts/cart_7001/items/item_2",
+      "/shop/carts/cart_7002/items/item_3"
+    ],
+    "id_positions": [
+      2,
+      4
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "2 niveaux, cart_id fixe pour 2 items puis change",
+    "expected_names": {
+      "2": [
+        "cart_id"
+      ],
+      "4": [
+        "resource_id"
+      ]
+    }
+  },
+  {
+    "id": "d04_hr_dept_employee_contract",
+    "category": "nested_multilevel",
+    "method": "GET",
+    "urls": [
+      "/hr/departments/dept_10/employees/emp_101/contract",
+      "/hr/departments/dept_20/employees/emp_201/contract"
+    ],
+    "id_positions": [
+      2,
+      4
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3,
+      5
+    ],
+    "notes": "2 niveaux dynamiques + suffixe littéral final",
+    "expected_names": {
+      "2": [
+        "department_id"
+      ],
+      "4": [
+        "employee_id"
+      ]
+    }
+  },
+  {
+    "id": "e01_single_uuid",
+    "category": "single_observation",
+    "method": "GET",
+    "urls": [
+      "/api/sessions/550e8400-e29b-41d4-a716-446655440000"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "point 7 — forme reconnue même sans comparaison croisée",
+    "expected_names": {
+      "2": [
+        "session_id"
+      ]
+    }
+  },
+  {
+    "id": "e02_single_prefixed_known",
+    "category": "single_observation",
+    "method": "GET",
+    "urls": [
+      "/hr/employees/emp_999"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "point 7 — préfixe connu détecté dès le premier exemple",
+    "expected_names": {
+      "2": [
+        "employee_id"
+      ]
+    }
+  },
+  {
+    "id": "e03_single_prefixed_unknown_prefix",
+    "category": "single_observation",
+    "method": "GET",
+    "urls": [
+      "/api/widgets/wgt_042"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "point 7 — préfixe inconnu, templatisé quand même (confidence basse, nom générique)",
+    "expected_names": {
+      "2": [
+        "resource_id"
+      ]
+    }
+  },
+  {
+    "id": "e04_single_short_hex",
+    "category": "single_observation",
+    "method": "GET",
+    "urls": [
+      "/api/webhooks/9f2a7b"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "point 7 — forme hex courte détectée dès le premier exemple",
+    "expected_names": {
+      "2": [
+        "webhook_id"
+      ]
+    }
+  },
+  {
+    "id": "f01_unknown_prefix_repeated_3word",
+    "category": "unknown_prefix",
+    "method": "GET",
+    "urls": [
+      "/api/widgets/wgt_alpha_009",
+      "/api/widgets/wgt_beta_014",
+      "/api/widgets/wgt_gamma_027"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "préfixe totalement absent de la table — reste templatisé par la forme (confidence basse)",
+    "expected_names": {
+      "2": [
+        "resource_id"
+      ]
+    }
+  },
+  {
+    "id": "f02_unknown_prefix_2part",
+    "category": "unknown_prefix",
+    "method": "GET",
+    "urls": [
+      "/api/gadgets/gzq_701",
+      "/api/gadgets/gzq_702"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "préfixe 2 parties inconnu — idem",
+    "expected_names": {
+      "2": [
+        "resource_id"
+      ]
+    }
+  },
+  {
+    "id": "g01_payload_match_response",
+    "category": "payload_naming",
+    "method": "GET",
+    "urls": [
+      "/api/webhooks/9f2a7b"
+    ],
+    "request_bodies": [
+      null
+    ],
+    "response_bodies": [
+      {
+        "hook_id": "9f2a7b",
+        "status": "active"
+      }
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "le nom viendrait du payload (hook_id) — non noté ici (structurel seulement), juste vérifie que le body ne casse pas la détection",
+    "expected_names": {
+      "2": [
+        "hook_id"
+      ]
+    }
+  },
+  {
+    "id": "g02_payload_match_request",
+    "category": "payload_naming",
+    "method": "POST",
+    "urls": [
+      "/hr/employees/emp_450/contract"
+    ],
+    "request_bodies": [
+      {
+        "employeeId": "emp_450",
+        "contractType": "CDI"
+      }
+    ],
+    "response_bodies": [
+      null
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "body présent avec un champ correspondant — vérifie l'absence d'effet de bord sur la position détectée",
+    "expected_names": {
+      "2": [
+        "employee_id"
+      ]
+    }
+  },
+  {
+    "id": "h01_status_enum_stays_literal",
+    "category": "accepted_tradeoff",
+    "method": "GET",
+    "urls": [
+      "/api/workflows/pending",
+      "/api/workflows/active",
+      "/api/workflows/archived"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2
+    ],
+    "notes": "compromis accepté : mot alphabétique pur qui varie (statut) — reste littéral, jamais un ID"
+  },
+  {
+    "id": "h02_year_pure_number_still_detected",
+    "category": "accepted_tradeoff",
+    "method": "GET",
+    "urls": [
+      "/api/reports/2021",
+      "/api/reports/2022",
+      "/api/reports/2023"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "contraste avec h01 : une année en chiffres purs reste détectée (forme numérique valide, contrairement à un mot)",
+    "expected_names": {
+      "2": [
+        "report_id"
+      ]
+    }
+  },
+  {
+    "id": "h03_slug_pure_no_marker",
+    "category": "accepted_tradeoff",
+    "method": "GET",
+    "urls": [
+      "/blog/posts/mon-titre-darticle",
+      "/blog/posts/guide-complet-normalisation",
+      "/blog/posts/astuces-python-avancees"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2
+    ],
+    "notes": "compromis accepté : slug texte pur SANS marqueur numérique — reste littéral, jamais un ID (contraste avec a21/a22 qui ont un bloc de chiffres et sont détectés)"
+  },
+  {
+    "id": "i01_details_suffix_stays_fixed",
+    "category": "no_over_detection",
+    "method": "GET",
+    "urls": [
+      "/api/orders/123/details",
+      "/api/orders/456/details",
+      "/api/orders/789/details"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "vérifie qu'on ne sur-détecte pas 'details' comme variable"
+  },
+  {
+    "id": "i02_reviews_suffix_stays_fixed",
+    "category": "no_over_detection",
+    "method": "GET",
+    "urls": [
+      "/shop/products/prod_1/reviews",
+      "/shop/products/prod_2/reviews"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "vérifie qu'on ne sur-détecte pas 'reviews' comme variable"
+  },
+  {
+    "id": "i03_items_suffix_multi_id",
+    "category": "no_over_detection",
+    "method": "GET",
+    "urls": [
+      "/shop/carts/cart_7001/items",
+      "/shop/carts/cart_7002/items",
+      "/shop/carts/cart_7104/items"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1,
+      3
+    ],
+    "notes": "vérifie que 'items' reste fixe malgré 3 valeurs de cart_id différentes"
+  },
+  {
+    "id": "j01_v1_excluded_by_static_predecessor",
+    "category": "static_segments",
+    "method": "GET",
+    "urls": [
+      "/api/v1/employees",
+      "/api/v1/products",
+      "/api/v1/orders"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2
+    ],
+    "notes": "position juste après v1 exclue explicitement (_STATIC_SEGMENTS), renforcée par le verrou de forme"
+  },
+  {
+    "id": "j02_me_shortcut_stays_literal",
+    "category": "static_segments",
+    "method": "GET",
+    "urls": [
+      "/api/users/me/profile"
+    ],
+    "id_positions": [],
+    "fixed_positions": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "notes": "'me' est un raccourci utilisateur connu (_STATIC_SEGMENTS), jamais un ID"
+  }
+]

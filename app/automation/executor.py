@@ -87,6 +87,28 @@ def _resolve_path_params(
         encoded = quote(raw, safe="")
         resolved = resolved.replace(placeholder, encoded)
 
+    # Fallback: resolve remaining {xxx_id} / {xxxId} placeholders using
+    # normalized key matching, then last_id.  Covers the common case where
+    # POST /employees returns {"id": "emp_xxx"} and the next step path is
+    # /employees/{employee_id} — the state key "employeeId" normalizes to
+    # the same token as the placeholder "employee_id".
+    import re as _re
+    for param in _re.findall(r'\{(\w+)\}', resolved):
+        param_norm = param.lower().replace("_", "")
+        matched = None
+        for k, v in values.items():
+            if k.lower().replace("_", "") == param_norm:
+                matched = str(v)
+                break
+        if matched is None:
+            matched = str(values["last_id"]) if "last_id" in values else None
+        if matched is not None:
+            if _contains_traversal(matched):
+                raise PathTraversalError(
+                    f"Path parameter {param!r} contains a traversal sequence: {matched!r}"
+                )
+            resolved = resolved.replace("{" + param + "}", quote(matched, safe=""))
+
     # Second pass: check the fully assembled path
     if _contains_traversal(resolved):
         raise PathTraversalError(

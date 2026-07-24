@@ -11,6 +11,7 @@ interface LoginResult {
 interface AuthContextType {
   user: AuthUser | null
   isAuthenticated: boolean
+  loading: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   logout: () => void
 }
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType | null>(null)
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null)
+  const [loading, setLoading] = useState(true)
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -30,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('aria_auth_user')
       }
     }
+    setLoading(false)
   }, [])
 
   const login = async (email: string, password: string): Promise<LoginResult> => {
@@ -42,8 +45,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
 
       if (!tokenRes.ok) {
-        const body = await tokenRes.json().catch(() => ({})) as { detail?: string }
-        return { success: false, error: body.detail ?? 'Invalid credentials' }
+        const body = await tokenRes.json().catch(() => ({})) as { detail?: unknown }
+        const rawDetail = body.detail
+        const detail = typeof rawDetail === 'string' ? rawDetail : ''
+        if (detail === 'Account pending approval') {
+          return { success: false, status: 'pending' }
+        }
+        if (detail === 'Account deactivated') {
+          return { success: false, status: 'rejected', reason: 'Votre accès a été révoqué par un administrateur.' }
+        }
+        return { success: false, error: detail || 'Email ou mot de passe invalide.' }
       }
 
       const tokens = await tokenRes.json() as { access_token: string; refresh_token: string }
@@ -93,7 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

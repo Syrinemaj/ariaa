@@ -16,6 +16,22 @@ ENDPOINT_UNDERSTANDING_SCHEMA = {
     },
 }
 
+WORKFLOW_UNDERSTANDING_SCHEMA = {
+    "name": "workflow_understanding",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "name":            {"type": "string"},
+            "business_domain": {"type": "string"},
+            "summary":         {"type": "string"},
+            "confidence":      {"type": "number"},
+        },
+        "required": ["name", "business_domain", "summary", "confidence"],
+        "additionalProperties": False,
+    },
+}
+
 BUSINESS_INTENT_SCHEMA = {
     "name": "business_intent",
     "strict": True,

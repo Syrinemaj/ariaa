@@ -1,19 +1,36 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.events import AuditEvent
 from app.audit.service import log_audit_event
 from app.auth.dependencies import require_admin
-from app.auth.schemas import CreateUserRequest, CurrentUserResponse
+from app.auth.schemas import CreateUserRequest
 from app.auth.service import create_user
 from app.auth.token_store import increment_token_version
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+class RoleUpdateRequest(BaseModel):
+    role: str
+
+
+def _user_dict(u: User) -> dict:
+    return {
+        "id": u.id,
+        "org_id": u.org_id,
+        "email": u.email,
+        "full_name": u.full_name,
+        "role": u.role,
+        "is_active": u.is_active,
+        "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+    }
 
 
 @router.get("", response_model=dict)
@@ -27,23 +44,10 @@ async def list_users(
         .order_by(User.created_at.desc())
     )
     users = result.scalars().all()
-
-    return {
-        "users": [
-            CurrentUserResponse(
-                id=u.id,
-                org_id=u.org_id,
-                email=u.email,
-                full_name=u.full_name,
-                role=u.role,
-                is_active=u.is_active,
-            ).model_dump()
-            for u in users
-        ]
-    }
+    return {"users": [_user_dict(u) for u in users]}
 
 
-@router.post("", response_model=CurrentUserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
 async def create_user_route(
     payload: CreateUserRequest,
     db: AsyncSession = Depends(get_db),
@@ -72,17 +76,56 @@ async def create_user_route(
         metadata={"email": user.email, "role": user.role},
     )
 
-    return CurrentUserResponse(
-        id=user.id,
-        org_id=user.org_id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        is_active=user.is_active,
+    return _user_dict(user)
+
+
+@router.patch("/{user_id}/role", response_model=dict)
+async def update_user_role(
+    user_id: str,
+    payload: RoleUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if payload.role.upper() not in UserRole.values():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Rôle invalide. Valeurs acceptées : {', '.join(UserRole.values())}",
+        )
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.org_id == current_user.org_id)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous ne pouvez pas modifier votre propre rôle",
+        )
+
+    user.role = payload.role.upper()
+    user.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    # Invalider les tokens existants pour que le nouveau rôle prenne effet immédiatement
+    increment_token_version(user.id)
+
+    await log_audit_event(
+        db=db,
+        user=current_user,
+        action=AuditEvent.USER_CREATED,  # Reuse closest event; consider adding USER_ROLE_CHANGED
+        resource_type="user",
+        resource_id=user.id,
+        metadata={"target_email": user.email, "new_role": user.role},
     )
 
+    return _user_dict(user)
 
-@router.patch("/{user_id}/deactivate", response_model=CurrentUserResponse)
+
+@router.patch("/{user_id}/deactivate", response_model=dict)
 async def deactivate_user(
     user_id: str,
     db: AsyncSession = Depends(get_db),
@@ -117,17 +160,10 @@ async def deactivate_user(
         metadata={"target_email": user.email},
     )
 
-    return CurrentUserResponse(
-        id=user.id,
-        org_id=user.org_id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        is_active=user.is_active,
-    )
+    return _user_dict(user)
 
 
-@router.patch("/{user_id}/activate", response_model=CurrentUserResponse)
+@router.patch("/{user_id}/activate", response_model=dict)
 async def activate_user(
     user_id: str,
     db: AsyncSession = Depends(get_db),
@@ -156,11 +192,4 @@ async def activate_user(
         metadata={"target_email": user.email},
     )
 
-    return CurrentUserResponse(
-        id=user.id,
-        org_id=user.org_id,
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        is_active=user.is_active,
-    )
+    return _user_dict(user)

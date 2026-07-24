@@ -1,12 +1,15 @@
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 export class ApiError extends Error {
+  body?: Record<string, unknown>
   constructor(
     public readonly status: number,
     message: string,
+    body?: Record<string, unknown>,
   ) {
     super(message)
     this.name = 'ApiError'
+    this.body = body
   }
 }
 
@@ -36,12 +39,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { detail?: string }
-    throw new ApiError(res.status, body.detail ?? `HTTP ${res.status}`)
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>
+    const detail = body.detail
+    const message = typeof detail === 'string' ? detail : `HTTP ${res.status}`
+    throw new ApiError(res.status, message, body)
   }
 
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() })
+  if (res.status === 401 && !window.location.pathname.startsWith('/login')) {
+    localStorage.removeItem('access_token')
+    window.location.href = '/login'
+    throw new ApiError(401, 'Unauthorized')
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>
+    const detail = body.detail
+    const message = typeof detail === 'string' ? detail : `HTTP ${res.status}`
+    throw new ApiError(res.status, message, body)
+  }
+  return res.blob()
 }
 
 export const api = {
@@ -57,4 +78,5 @@ export const api = {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     }),
   del:   <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  blob:  (path: string) => requestBlob(path),
 }

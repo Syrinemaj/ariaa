@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
 
     # ── Embedding client (always local sentence-transformers) ────────────────
     # Loaded lazily on first call — no startup latency penalty.
-    from app.ai.local_embedding_client import LocalEmbeddingClient
+    from app.rag.embeddings.client import LocalEmbeddingClient
     app.state.embedding_client = LocalEmbeddingClient()
     logger.info(
         "ai.embedding.selected",
@@ -215,8 +215,20 @@ async def metrics():
 # Served LAST so all API routes take priority.
 # In development, Vite dev server handles the frontend — this block is a no-op.
 import os
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 _static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+_index_html = os.path.join(_static_dir, "index.html")
+
 if os.path.isdir(_static_dir):
+    # SPA catch-all: serve index.html for any path that isn't an API route.
+    # Must be registered BEFORE the StaticFiles mount so FastAPI sees it.
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        if os.path.isfile(_index_html):
+            return FileResponse(_index_html)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404)
+
     app.mount("/", StaticFiles(directory=_static_dir, html=True), name="frontend")

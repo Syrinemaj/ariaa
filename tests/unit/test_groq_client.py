@@ -135,18 +135,98 @@ class TestStructuredChat:
         assert "original prompt" in system_content
         assert "Required schema" in system_content
 
-    def test_non_dict_llm_response_returns_empty_dict(self):
+    def test_default_uses_settings_groq_model(self, monkeypatch):
+        from app.core.config import settings
+        monkeypatch.setattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
+        client, mock = self._client(_VALID_STRUCTURED)
+        client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test")
+        assert mock.chat.completions.create.call_args.kwargs["model"] == "llama-3.3-70b-versatile"
+
+    def test_model_override_used_instead_of_settings_groq_model(self):
+        # ARIA-EVAL: evaluation/judge.py passes model= to request a model
+        # independent of the pipeline's own, without duplicating the key
+        # fallback cascade.
+        client, mock = self._client(_VALID_STRUCTURED)
+        client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test", model="llama-3.1-70b-versatile")
+        assert mock.chat.completions.create.call_args.kwargs["model"] == "llama-3.1-70b-versatile"
+
+    def test_model_override_forwarded_through_secondary_fallback(self, monkeypatch):
+        from app.core.config import settings
+        from app.ai.groq_client import GroqClient
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "primary-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_2", "secondary-key")
+
+        primary_instance = MagicMock()
+        primary_instance.chat.completions.create.side_effect = _rate_limit_error()
+
+        secondary_instance = MagicMock()
+        secondary_instance.chat.completions.create.return_value = _make_completion(_VALID_STRUCTURED)
+
+        def _fake_openai(**kwargs):
+            return primary_instance if kwargs["api_key"] == "primary-key" else secondary_instance
+
+        with patch("app.ai.groq_client.OpenAI", side_effect=_fake_openai), \
+             patch("app.ai.groq_client.AsyncOpenAI"):
+            client = GroqClient()
+            client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test", model="custom-model")
+
+        assert secondary_instance.chat.completions.create.call_args.kwargs["model"] == "custom-model"
+
+    def test_non_dict_llm_response_raises_after_retry(self):
+        # A non-dict response is retried once (with a correction message),
+        # then raises rather than silently returning {} — callers indexing
+        # required fields (result["intent"]) would otherwise hit a raw KeyError.
         mock_completion = _make_completion("not_a_dict")
         mock_completion.choices[0].message.content = json.dumps([1, 2, 3])
         with patch("app.ai.groq_client.OpenAI") as MockSync, \
              patch("app.ai.groq_client.AsyncOpenAI"):
             instance = MockSync.return_value
             instance.chat.completions.create.return_value = mock_completion
+            from app.ai.base_client import StructuredResponseError
+            from app.ai.groq_client import GroqClient
+            client = GroqClient()
+            client._sync = instance
+            with pytest.raises(StructuredResponseError):
+                client.structured_chat("p", {}, _SAMPLE_SCHEMA, "t")
+        # Retried exactly once (2 attempts total) before giving up.
+        assert instance.chat.completions.create.call_count == 2
+
+    def test_missing_required_field_raises_after_retry(self):
+        mock_completion = _make_completion({"intent": "create employees"})  # missing "action"
+        with patch("app.ai.groq_client.OpenAI") as MockSync, \
+             patch("app.ai.groq_client.AsyncOpenAI"):
+            instance = MockSync.return_value
+            instance.chat.completions.create.return_value = mock_completion
+            from app.ai.base_client import StructuredResponseError
+            from app.ai.groq_client import GroqClient
+            client = GroqClient()
+            client._sync = instance
+            with pytest.raises(StructuredResponseError):
+                client.structured_chat("p", {}, _SAMPLE_SCHEMA, "t")
+
+    def test_recovers_on_retry_after_invalid_first_attempt(self):
+        # First call returns garbage, second (retry) returns a valid dict —
+        # the retry must actually recover, not just detect+raise.
+        bad = _make_completion("bad")
+        bad.choices[0].message.content = "not json at all"
+        good = _make_completion(_VALID_STRUCTURED)
+        with patch("app.ai.groq_client.OpenAI") as MockSync, \
+             patch("app.ai.groq_client.AsyncOpenAI"):
+            instance = MockSync.return_value
+            instance.chat.completions.create.side_effect = [bad, good]
             from app.ai.groq_client import GroqClient
             client = GroqClient()
             client._sync = instance
             result = client.structured_chat("p", {}, _SAMPLE_SCHEMA, "t")
-        assert result == {}
+        assert result == _VALID_STRUCTURED
+        assert instance.chat.completions.create.call_count == 2
+
+    def test_pins_low_temperature_for_structured_extraction(self):
+        client, mock = self._client(_VALID_STRUCTURED)
+        client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test")
+        _, kwargs = mock.chat.completions.create.call_args
+        assert kwargs["temperature"] < 0.3
 
     def test_db_none_does_not_call_log_usage(self):
         client, _ = self._client(_VALID_STRUCTURED)
@@ -158,6 +238,156 @@ class TestStructuredChat:
         # db=None → _log_usage is called but should not call the service
         args = mock_log.call_args.args
         assert args[0] is None  # db
+
+
+# ── Secondary Groq key fallback ───────────────────────────────────────────────
+# On RateLimitError/APIError/APITimeoutError, GROQ_API_KEY_2 (a second Groq
+# account/key) is tried before Azure — this is the fix for hitting Groq's
+# per-key daily token cap mid-run.
+
+def _rate_limit_error() -> Any:
+    import httpx
+    from openai import RateLimitError
+    response = httpx.Response(
+        status_code=429,
+        request=httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions"),
+    )
+    return RateLimitError("rate limit reached", response=response, body=None)
+
+
+class TestSecondaryGroqKeyFallback:
+    def test_structured_chat_retries_with_second_key_on_rate_limit(self, monkeypatch):
+        from app.core.config import settings
+        from app.ai.groq_client import GroqClient
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "primary-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_2", "secondary-key")
+
+        primary_instance = MagicMock()
+        primary_instance.chat.completions.create.side_effect = _rate_limit_error()
+
+        secondary_instance = MagicMock()
+        secondary_instance.chat.completions.create.return_value = _make_completion(_VALID_STRUCTURED)
+
+        created_sync_clients: list[Any] = []
+
+        def _fake_openai(**kwargs):
+            instance = primary_instance if kwargs["api_key"] == "primary-key" else secondary_instance
+            created_sync_clients.append(kwargs["api_key"])
+            return instance
+
+        with patch("app.ai.groq_client.OpenAI", side_effect=_fake_openai), \
+             patch("app.ai.groq_client.AsyncOpenAI"):
+            client = GroqClient()
+            result = client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test")
+
+        assert result == _VALID_STRUCTURED
+        assert "secondary-key" in created_sync_clients
+        secondary_instance.chat.completions.create.assert_called_once()
+
+    def test_no_secondary_key_configured_falls_through_to_azure_or_raises(self, monkeypatch):
+        from app.core.config import settings
+        from app.ai.groq_client import GroqClient
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "primary-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_2", None)
+        # Explicit, not just relying on the default — isolates this test from
+        # whatever GROQ_API_KEY_3 happens to be set to in .env (the tertiary
+        # fallback added alongside GROQ_API_KEY_2's tests below).
+        monkeypatch.setattr(settings, "GROQ_API_KEY_3", None)
+        monkeypatch.setattr(settings, "AZURE_OPENAI_API_KEY", None)
+
+        primary_instance = MagicMock()
+        primary_instance.chat.completions.create.side_effect = _rate_limit_error()
+
+        with patch("app.ai.groq_client.OpenAI") as MockSync, \
+             patch("app.ai.groq_client.AsyncOpenAI"):
+            MockSync.return_value = primary_instance
+            client = GroqClient()
+            with pytest.raises(type(_rate_limit_error())):
+                client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test")
+
+    def test_secondary_key_same_as_primary_is_ignored(self, monkeypatch):
+        # A misconfigured GROQ_API_KEY_2 identical to GROQ_API_KEY would just
+        # fail the same way — must not be treated as a usable fallback.
+        from app.core.config import settings
+        from app.ai.groq_client import GroqClient
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "same-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_2", "same-key")
+
+        client = GroqClient()
+        assert client._secondary_groq_fallback() is None
+
+
+class TestTertiaryGroqKeyFallback:
+    def test_structured_chat_retries_with_third_key_when_first_two_rate_limited(self, monkeypatch):
+        from app.core.config import settings
+        from app.ai.groq_client import GroqClient
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "primary-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_2", "secondary-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_3", "tertiary-key")
+
+        primary_instance = MagicMock()
+        primary_instance.chat.completions.create.side_effect = _rate_limit_error()
+
+        secondary_instance = MagicMock()
+        secondary_instance.chat.completions.create.side_effect = _rate_limit_error()
+
+        tertiary_instance = MagicMock()
+        tertiary_instance.chat.completions.create.return_value = _make_completion(_VALID_STRUCTURED)
+
+        created_sync_clients: list[Any] = []
+
+        def _fake_openai(**kwargs):
+            created_sync_clients.append(kwargs["api_key"])
+            return {
+                "primary-key": primary_instance,
+                "secondary-key": secondary_instance,
+                "tertiary-key": tertiary_instance,
+            }[kwargs["api_key"]]
+
+        with patch("app.ai.groq_client.OpenAI", side_effect=_fake_openai), \
+             patch("app.ai.groq_client.AsyncOpenAI"):
+            client = GroqClient()
+            result = client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test")
+
+        assert result == _VALID_STRUCTURED
+        assert "tertiary-key" in created_sync_clients
+        tertiary_instance.chat.completions.create.assert_called_once()
+
+    def test_no_tertiary_key_configured_falls_through_to_azure_or_raises(self, monkeypatch):
+        from app.core.config import settings
+        from app.ai.groq_client import GroqClient
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "primary-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_2", None)
+        monkeypatch.setattr(settings, "GROQ_API_KEY_3", None)
+        monkeypatch.setattr(settings, "AZURE_OPENAI_API_KEY", None)
+
+        primary_instance = MagicMock()
+        primary_instance.chat.completions.create.side_effect = _rate_limit_error()
+
+        with patch("app.ai.groq_client.OpenAI") as MockSync, \
+             patch("app.ai.groq_client.AsyncOpenAI"):
+            MockSync.return_value = primary_instance
+            client = GroqClient()
+            with pytest.raises(type(_rate_limit_error())):
+                client.structured_chat("prompt", {}, _SAMPLE_SCHEMA, "test")
+
+    def test_tertiary_key_same_as_primary_or_secondary_is_ignored(self, monkeypatch):
+        from app.core.config import settings
+        from app.ai.groq_client import GroqClient
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY", "same-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_2", "secondary-key")
+        monkeypatch.setattr(settings, "GROQ_API_KEY_3", "same-key")
+        client = GroqClient()
+        assert client._tertiary_groq_fallback() is None
+
+        monkeypatch.setattr(settings, "GROQ_API_KEY_3", "secondary-key")
+        assert client._tertiary_groq_fallback() is None
 
 
 # ── structured_chat_async ─────────────────────────────────────────────────────
@@ -189,18 +419,27 @@ class TestStructuredChatAsync:
         assert call_kwargs["response_format"] == {"type": "json_object"}
 
     @pytest.mark.asyncio
-    async def test_non_dict_returns_empty(self):
+    async def test_non_dict_raises_after_retry(self):
         mock_completion = _make_completion("nope")
         mock_completion.choices[0].message.content = json.dumps([])
         with patch("app.ai.groq_client.OpenAI"), \
              patch("app.ai.groq_client.AsyncOpenAI") as MockAsync:
             instance = MockAsync.return_value
             instance.chat.completions.create = AsyncMock(return_value=mock_completion)
+            from app.ai.base_client import StructuredResponseError
             from app.ai.groq_client import GroqClient
             client = GroqClient()
             client._async = instance
-            result = await client.structured_chat_async("p", {}, _SAMPLE_SCHEMA, "t")
-        assert result == {}
+            with pytest.raises(StructuredResponseError):
+                await client.structured_chat_async("p", {}, _SAMPLE_SCHEMA, "t")
+        assert instance.chat.completions.create.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_pins_low_temperature_for_structured_extraction(self):
+        client, mock = self._async_client(_VALID_STRUCTURED)
+        await client.structured_chat_async("p", {}, _SAMPLE_SCHEMA, "t")
+        _, kwargs = mock.chat.completions.create.call_args
+        assert kwargs["temperature"] < 0.3
 
 
 # ── classify_api_call ─────────────────────────────────────────────────────────

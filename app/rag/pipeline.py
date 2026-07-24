@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.local_embedding_client import LocalEmbeddingClient
+from app.rag.embeddings.client import LocalEmbeddingClient
 from app.models.endpoint import Endpoint
 from app.rag.context_builder import build_rag_context
 from app.rag.models import EndpointSearchResult
@@ -39,6 +39,25 @@ async def search_rag_context(
     )
     context = build_rag_context(results)
     return results, context
+
+
+# ARIA-WORKFLOW-V2: supports the double-query RAG in plan_builder.py — one
+# query for the instruction's direct intent, one for implicit dependency
+# endpoints (setup/configuration/assign/notify). The same endpoint can
+# legitimately surface in both; keep whichever match scored higher rather
+# than counting/ordering it twice.
+def merge_deduplicate(
+    results_1: List[EndpointSearchResult],
+    results_2: List[EndpointSearchResult],
+) -> List[EndpointSearchResult]:
+    """Merge two RAG result lists, deduplicated by endpoint_id (higher score
+    wins), sorted by score descending."""
+    best_by_id: Dict[str, EndpointSearchResult] = {}
+    for result in [*results_1, *results_2]:
+        existing = best_by_id.get(result.endpoint_id)
+        if existing is None or result.score > existing.score:
+            best_by_id[result.endpoint_id] = result
+    return sorted(best_by_id.values(), key=lambda r: r.score, reverse=True)
 
 
 async def enrich_endpoints_metadata(

@@ -49,7 +49,7 @@ async def _run_embedding_async(run_id: str) -> dict:
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    from app.ai.local_embedding_client import LocalEmbeddingClient
+    from app.rag.embeddings.client import LocalEmbeddingClient
     from app.core.config import settings
     from app.rag.vector_store import index_embeddings_for_run
 

@@ -71,7 +71,11 @@ def validate_bulk_data(
 
     validation_run.valid_rows = valid_count
     validation_run.invalid_rows = invalid_count
-    validation_run.status = "completed" if invalid_count == 0 else "failed"
+    # "completed" reflects that the validation process itself ran to completion,
+    # not that every row is valid — per-row outcome is in valid_rows/invalid_rows.
+    # This lets real execution proceed on the valid subset when the caller opts
+    # into allow_partial_execution (enforced downstream in bulk_execution.service).
+    validation_run.status = "completed"
 
     db.commit()
     db.refresh(validation_run)

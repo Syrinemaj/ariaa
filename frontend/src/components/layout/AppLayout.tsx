@@ -5,7 +5,8 @@ import Topbar from './Topbar'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
+  if (loading) return null
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
   return (

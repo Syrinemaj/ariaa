@@ -20,7 +20,7 @@ from typing import List, Optional
 
 import redis.asyncio as aioredis
 
-from app.ai.local_embedding_client import LocalEmbeddingClient
+from app.rag.embeddings.client import LocalEmbeddingClient
 
 _REDIS_TTL_SECONDS: int = 86_400  # 24 hours
 

@@ -1,19 +1,8 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Mail, ArrowLeft, CheckCircle2 } from 'lucide-react'
+import { api } from '../lib/api'
 
-const ARIALogo: React.FC = () => (
-  <svg width="40" height="44" viewBox="0 0 36 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="logoGradFP" x1="2" y1="2" x2="34" y2="38" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#6366f1" />
-        <stop offset="1" stopColor="#8b5cf6" />
-      </linearGradient>
-    </defs>
-    <path d="M18 2L34 11V29L18 38L2 29V11L18 2Z" fill="url(#logoGradFP)" opacity="0.2" />
-    <path d="M18 7L30 14V26L18 33L6 26V14L18 7Z" fill="url(#logoGradFP)" />
-  </svg>
-)
 
 const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -24,9 +13,14 @@ const ForgotPasswordPage: React.FC = () => {
     e.preventDefault()
     if (!email) return
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 1000))
-    setLoading(false)
-    setSubmitted(true)
+    try {
+      await api.post('/auth/forgot-password', { email })
+    } catch {
+      // Always show success to prevent user enumeration
+    } finally {
+      setLoading(false)
+      setSubmitted(true)
+    }
   }
 
   return (
@@ -39,8 +33,8 @@ const ForgotPasswordPage: React.FC = () => {
         <div className="rounded-2xl px-8 py-9" style={{ background: '#13151f', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }}>
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
-            <ARIALogo />
-            <span className="text-3xl font-bold tracking-tight mt-3" style={{ background: 'linear-gradient(135deg, #818cf8, #c4b5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>aria</span>
+            <img src="/logo.png" alt="ARIA" style={{ height: 40, width: 'auto' }} />
+            <span className="text-3xl font-bold tracking-tight mt-3" style={{ color: '#1E318A' }}>aria</span>
             <p className="text-sm mt-1 font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>Intelligence API Inversée</p>
           </div>
 

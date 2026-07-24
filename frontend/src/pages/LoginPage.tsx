@@ -6,45 +6,6 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
-// ─── ARIA Layered Hexagon Logo ───────────────────────────────────────────────
-const ARIALogo: React.FC<{ size?: number; variant?: 'light' | 'color' }> = ({
-  size = 36,
-  variant = 'color',
-}) => {
-  const h = Math.round(size * 44 / 36)
-  const gradId = `hg-${variant}`
-  return (
-    <svg width={size} height={h} viewBox="0 0 36 44" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="36" y2="44" gradientUnits="userSpaceOnUse">
-          {variant === 'light' ? (
-            <>
-              <stop stopColor="#ffffff" />
-              <stop offset="1" stopColor="#ffffff" stopOpacity="0.7" />
-            </>
-          ) : (
-            <>
-              <stop stopColor="#6366f1" />
-              <stop offset="1" stopColor="#8b5cf6" />
-            </>
-          )}
-        </linearGradient>
-      </defs>
-      {/* Outer hex – translucent halo */}
-      <path
-        d="M18 2L34 11V29L18 38L2 29V11Z"
-        fill={`url(#${gradId})`}
-        opacity="0.22"
-      />
-      {/* Inner hex – solid */}
-      <path
-        d="M18 7L30 14.5V27.5L18 35L6 27.5V14.5Z"
-        fill={`url(#${gradId})`}
-      />
-    </svg>
-  )
-}
-
 // ─── Alert Banner ────────────────────────────────────────────────────────────
 type AlertVariant = 'error' | 'warning' | 'rejected'
 
@@ -192,8 +153,8 @@ const LoginPage: React.FC = () => {
 
           {/* Logo */}
           <div className="flex items-center gap-2.5 mb-auto pb-10">
-            <ARIALogo size={28} variant="light" />
-            <span className="text-lg font-bold text-white tracking-tight">aria</span>
+            <img src="/logo.png" alt="ARIA" style={{ height: 48, width: 'auto' }} />
+            <span className="text-2xl font-bold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
           </div>
 
           {/* Center block */}
@@ -352,23 +313,15 @@ const LoginPage: React.FC = () => {
 
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5 mb-9">
-            <ARIALogo size={26} variant="color" />
-            <span
-              className="text-xl font-bold tracking-tight"
-              style={{
-                background:           'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor:  'transparent',
-                backgroundClip:       'text',
-              }}
-            >
+            <img src="/logo.png" alt="ARIA" style={{ height: 44, width: 'auto' }} />
+            <span className="text-2xl font-bold tracking-tight" style={{ color: '#1E318A' }}>
               aria
             </span>
           </div>
 
           {/* Heading block */}
           <div className="mb-7">
-            <h2 className="text-[1.65rem] font-bold tracking-tight leading-tight mb-1.5" style={{ color: '#e2e8f0' }}>
+            <h2 className="text-[1.65rem] font-bold tracking-tight leading-tight mb-1.5" style={{ color: '#1E318A' }}>
               Bienvenue
             </h2>
             <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>

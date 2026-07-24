@@ -78,6 +78,14 @@ async def get_bulk_job_progress(
             detail="Job not found or expired (TTL 24h)",
         )
 
+    # BUG-009: verify job belongs to the caller's org (written by execute_valid_rows_in_batches)
+    job_org_id = data.get("org_id")
+    if job_org_id and job_org_id != current_user.org_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found or expired (TTL 24h)",
+        )
+
     total = int(data.get("total", 0))
     completed = int(data.get("completed", 0))
     failed = int(data.get("failed", 0))

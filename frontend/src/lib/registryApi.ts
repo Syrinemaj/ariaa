@@ -21,6 +21,7 @@ export interface BackendWorkflow {
   name: string
   business_domain?: string
   confidence?: number
+  metadata?: Record<string, unknown>
   steps: BackendWorkflowStep[]
 }
 
@@ -59,4 +60,50 @@ export function getWorkflows(runId: string) {
       `/registry/runs/${runId}/workflows`
     )
     .then(r => r.workflows)
+}
+
+export interface WorkflowStepInput {
+  order: number
+  method: string
+  path: string
+  canonical_key: string
+  action?: string
+  risk?: string
+  auth?: boolean
+}
+
+export interface WorkflowUpdateInput {
+  name?: string
+  business_domain?: string
+  steps?: WorkflowStepInput[]
+}
+
+export interface WorkflowCreateInput {
+  name: string
+  business_domain?: string
+  steps: WorkflowStepInput[]
+}
+
+export function updateRun(runId: string, body: { file_name?: string }): Promise<{ id: string; file_name: string }> {
+  return api.patch(`/registry/runs/${runId}`, body)
+}
+
+export function deleteRun(runId: string): Promise<void> {
+  return api.del(`/registry/runs/${runId}`)
+}
+
+export function createWorkflow(runId: string, body: WorkflowCreateInput): Promise<BackendWorkflow> {
+  return api.post(`/registry/runs/${runId}/workflows`, body)
+}
+
+export function updateWorkflow(workflowId: string, body: WorkflowUpdateInput): Promise<BackendWorkflow> {
+  return api.patch(`/registry/workflows/${workflowId}`, body)
+}
+
+export function deleteWorkflow(workflowId: string): Promise<void> {
+  return api.del(`/registry/workflows/${workflowId}`)
+}
+
+export function restoreWorkflow(workflowId: string): Promise<BackendWorkflow> {
+  return api.post(`/registry/workflows/${workflowId}/restore`, {})
 }

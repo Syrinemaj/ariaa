@@ -16,13 +16,31 @@ FIELD_SYNONYMS = {
 
 
 def extract_target_fields_from_plan(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Collect unique target fields across all plan steps.
+    A field that appears in multiple steps (e.g. 'salary' in both POST /employees
+    and POST /employees/payroll) is listed only once — the first step that
+    declares it wins. This prevents duplicate "missing" entries in the mapping UI
+    when several steps share the same request schema fields.
+    """
     target_fields: List[Dict[str, Any]] = []
+    seen_fields: set[str] = set()
+
+    import logging as _log
+    _logger = _log.getLogger(__name__)
 
     for step in plan.get("steps", []):
         request_schema = step.get("request_schema") or {}
         properties = request_schema.get("properties", {})
+        _logger.info(
+            "mapping.step method=%s path=%s fields=%s",
+            step.get("method"), step.get("path"), list(properties.keys()),
+        )
 
         for field_name in properties.keys():
+            if field_name in seen_fields:
+                continue
+            seen_fields.add(field_name)
             target_fields.append({
                 "target_field": field_name,
                 "target_endpoint": step.get("canonical_key"),

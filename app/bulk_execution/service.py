@@ -118,6 +118,7 @@ async def execute_valid_rows_in_batches(
             "automation_run_id": automation_run.id,
             "data_file_id": data_file_id,
             "dry_run": "1" if dry_run else "0",
+            "org_id": org_id or "",  # stored for cross-org ownership checks in GET /jobs/
         },
     )
     redis.expire(f"job:{job_id}", _JOB_TTL)
@@ -126,20 +127,24 @@ async def execute_valid_rows_in_batches(
     from app.workers.tasks.execution import execute_batch_task
 
     enqueued = 0
-    for batch_num, _batch_rows in enumerate(batches, start=1):
+    for batch_num, batch_rows in enumerate(batches, start=1):
         if should_skip_batch(batch_num, completed_batches, resume):
             redis.setex(f"job:{job_id}:batch:{batch_num}", _JOB_TTL, "completed")
             continue
 
         redis.setex(f"job:{job_id}:batch:{batch_num}", _JOB_TTL, "queued")
 
+        # Row IDs are fixed here, at split time — the worker must fetch exactly
+        # these rows, NOT re-query "WHERE status='valid' OFFSET/LIMIT", because
+        # other batches flip rows to "success" concurrently and would shrink/shift
+        # that filtered set out from under a re-query (see batch_builder.py).
         execute_batch_task.apply_async(
             kwargs={
                 "job_id": job_id,
                 "automation_run_id": automation_run.id,
                 "data_file_id": data_file_id,
                 "batch_number": batch_num,
-                "batch_size": effective_batch_size,
+                "row_ids": [row.id for row in batch_rows],
                 "plan_json": plan.model_dump(),
                 "base_url": base_url,
                 "auth_headers": auth_headers,

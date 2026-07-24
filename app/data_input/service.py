@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.data_input.csv_parser import parse_csv_file
 from app.data_input.data_preview import build_preview
 from app.data_input.excel_parser import parse_excel_file
@@ -32,6 +33,17 @@ def save_uploaded_data_file(
     created_by_user_id: Optional[str] = None,
 ) -> UploadedDataFileResult:
     rows = parse_data_file(file_path)
+
+    # BUG-011: reject empty files before creating any DB records
+    if len(rows) == 0:
+        raise ValueError("The file contains no data rows.")
+
+    # BUG-012: enforce row limit before inserting thousands of rows
+    if len(rows) > settings.BULK_MAX_ROWS:
+        raise ValueError(
+            f"File contains {len(rows)} rows, exceeding the {settings.BULK_MAX_ROWS}-row limit. "
+            "Split the file into smaller parts and re-upload."
+        )
 
     columns = list(rows[0].keys()) if rows else []
     file_type = Path(file_name).suffix.lower().replace(".", "")

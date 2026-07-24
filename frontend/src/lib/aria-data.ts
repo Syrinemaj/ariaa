@@ -20,6 +20,8 @@ export interface WorkflowStep {
 export interface Workflow {
   id: string; name: string; domain: string; confidence: number
   description: string; steps: WorkflowStep[]
+  hasOriginal: boolean
+  isManual: boolean  // [F1] true if created_by === "user"
 }
 export interface CsvRow {
   idx: number; first: string; last: string; email: string; dept: string
@@ -56,29 +58,6 @@ export const ENDPOINTS: Endpoint[] = [
   { method:"POST",   path:"/api/v1/access/badges",                      canonical:"access.badge.issue",     domain:"access",  action:"create",       auth:true,  status:[201,409],     samples:9,  confidence:0.92, risk:"medium",   tags:["access","write"] },
   { method:"DELETE", path:"/api/v1/access/badges/{badge_id}",           canonical:"access.badge.revoke",    domain:"access",  action:"delete",       auth:true,  status:[204,404],     samples:3,  confidence:0.90, risk:"high",     tags:["access","delete"] },
   { method:"POST",   path:"/api/v1/notifications/welcome",              canonical:"notify.welcome.send",    domain:"notify",  action:"create",       auth:true,  status:[202],         samples:13, confidence:0.91, risk:"low",      tags:["notify"] },
-]
-
-export const WORKFLOWS: Workflow[] = [
-  {
-    id:"wf_onboard_001", name:"Employee Onboarding", domain:"hr", confidence:0.94,
-    description:"Détecté depuis 1247 transactions HTTP. Crée un employé, attache un contrat, ouvre un compte paie, émet un badge, envoie un email de bienvenue.",
-    steps:[
-      { order:1, method:"POST",   path:"/api/v1/employees",                                canonical:"hr.employees.create",    action:"Create employee record",   risk:"medium",   auth:true, depends:[] },
-      { order:2, method:"POST",   path:"/api/v1/employees/{employee_id}/contracts",        canonical:"hr.contracts.create",    action:"Attach CDI contract",       risk:"high",     auth:true, depends:[1] },
-      { order:3, method:"POST",   path:"/api/v1/payroll/accounts",                         canonical:"payroll.account.create", action:"Open payroll account",      risk:"high",     auth:true, depends:[1] },
-      { order:4, method:"PUT",    path:"/api/v1/payroll/accounts/{account_id}/iban",       canonical:"payroll.iban.update",    action:"Set IBAN for payroll",      risk:"critical", auth:true, depends:[3] },
-      { order:5, method:"POST",   path:"/api/v1/access/badges",                            canonical:"access.badge.issue",     action:"Issue building badge",      risk:"medium",   auth:true, depends:[1] },
-      { order:6, method:"POST",   path:"/api/v1/notifications/welcome",                   canonical:"notify.welcome.send",    action:"Send welcome email",        risk:"low",      auth:true, depends:[1,5] },
-    ]
-  },
-  {
-    id:"wf_offboard_002", name:"Employee Offboarding", domain:"hr", confidence:0.86,
-    description:"Révoque les badges, ferme le compte paie, résilie le contrat.",
-    steps:[
-      { order:1, method:"DELETE", path:"/api/v1/access/badges/{badge_id}", canonical:"access.badge.revoke", action:"Revoke building badge",    risk:"high", auth:true, depends:[] },
-      { order:2, method:"PATCH",  path:"/api/v1/employees/{employee_id}",  canonical:"hr.employees.update", action:"Set status = terminated",  risk:"high", auth:true, depends:[1] },
-    ]
-  },
 ]
 
 export const CSV_ROWS: CsvRow[] = [
@@ -203,13 +182,6 @@ export const SUCCESS_TIMELINE = [
   { day:"Fri", success:312, failed:7 },
   { day:"Sat", success:91,  failed:2 },
   { day:"Sun", success:64,  failed:1 },
-]
-
-export const STATUS_BREAKDOWN = [
-  { label:"2xx", value:4189, pct:92.3, color:"#6366f1" },
-  { label:"3xx", value:122,  pct:2.7,  color:"#3b82f6" },
-  { label:"4xx", value:87,   pct:1.9,  color:"#f59e0b" },
-  { label:"5xx", value:12,   pct:0.3,  color:"#ef4444" },
 ]
 
 export const OPENAPI_DOC = {

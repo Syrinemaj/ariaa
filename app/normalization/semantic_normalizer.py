@@ -2,8 +2,13 @@
 SemanticNormalizer — LLM-based URL path parameter naming.
 
 Uses GroqClient (primary) with automatic Azure fallback.
-Replaces AzureSemanticNormalizer which used AzureOpenAI directly
-with the Azure-specific json_schema response format.
+
+This is the last-resort, single-segment fallback: normalize_path() only
+calls it when neither regex rules nor group_normalizer.py's group-level
+comparison (siblings of the same endpoint, when available) could name the
+segment with confidence >= 0.70. Since this path has no sibling context, the
+prompt leans on payload-field matching and resource-name context instead —
+see the DECISION ORDER below.
 """
 from __future__ import annotations
 
@@ -26,20 +31,41 @@ _PARAM_SCHEMA: dict = {
     },
 }
 
-_SYSTEM_PROMPT = """
-You are an API URL normalization engine.
+_SYSTEM_PROMPT = """You are an API URL normalization engine, used as a last-resort fallback
+when neither regex rules nor group-level comparison (siblings of the same
+endpoint) could confidently name a dynamic URL segment.
 
-Your task:
-- infer the best semantic parameter name for a dynamic URL segment
-- use URL context, request body and response body
-- never invent endpoint paths
-- output strict JSON only
+INPUT you receive (JSON):
+- method, path: the HTTP method and full path containing the segment
+- raw_segment: the exact segment value to name
+- previous_segment / next_segment: the path segments immediately around it
+  (may be null at path boundaries)
+- request_body / response_body: JSON payloads, when available — check these
+  FIRST for a field whose value matches raw_segment (e.g. {"employee_id": 42})
+  before guessing from the URL shape alone
 
-Rules:
-- parameter_name must be snake_case
-- prefer business names like employee_id, invoice_id, customer_id
-- if unclear, return generic_id
-"""
+DECISION ORDER (highest priority first):
+1. A matching field name in request_body/response_body — reuse it verbatim.
+2. previous_segment as a resource name (e.g. "employees" -> employee_id).
+3. The raw_segment's own shape (numeric, hash-like, prefixed business code).
+4. If none of the above gives a confident answer, return "generic_id" with confidence <= 0.5 — do not force a specific business name you cannot justify.
+
+OUTPUT (strict JSON, matches the schema you were given):
+- parameter_name: snake_case (e.g. employee_id, invoice_id, generic_id)
+- confidence: 0.9-1.0 only when rule 1 applied, 0.7-0.9 for rule 2,
+  0.5-0.7 for rule 3, <= 0.5 for rule 4 (unresolved)
+- Never invent endpoint paths. Never return markdown or text outside the JSON object.
+
+EXAMPLES
+
+path=/employees/emp_a12, raw_segment="emp_a12", previous_segment="employees"
+-> {"parameter_name": "employee_id", "parameter_type": "prefixed_id", "confidence": 0.8, "reason": "previous segment 'employees' is a known resource name"}
+
+path=/webhooks/9f2a7b, raw_segment="9f2a7b", previous_segment="webhooks", response_body={"hook_id": "9f2a7b"}
+-> {"parameter_name": "hook_id", "parameter_type": "string", "confidence": 0.95, "reason": "matches response_body field 'hook_id' exactly"}
+
+path=/api/x7q, raw_segment="x7q", previous_segment="api", request_body=null, response_body=null
+-> {"parameter_name": "generic_id", "parameter_type": "string", "confidence": 0.45, "reason": "no payload match, no resource-name context, non-standard short token — genuinely ambiguous"}"""
 
 
 class SemanticNormalizer:

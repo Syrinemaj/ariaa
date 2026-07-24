@@ -71,10 +71,15 @@ export interface HarTokenEstimate {
 }
 
 export interface RagSearchResult {
-  endpoint: RunEndpoint
-  score: number
+  endpoint_id: string
   method: string
   path: string
+  canonical_key: string
+  business_domain: string | null
+  business_action: string | null
+  score: number
+  embedding_text: string
+  metadata: Record<string, unknown>
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────

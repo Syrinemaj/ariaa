@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import AppLayout from '../components/layout/AppLayout'
 import { StatusBadge } from '../components/aria/Badges'
-import { SUCCESS_TIMELINE, STATUS_BREAKDOWN, RecentRun, RecentAutomation, RunStatus } from '../lib/aria-data'
+import { RecentRun, RecentAutomation, RunStatus } from '../lib/aria-data'
 import { listRuns } from '../lib/registryApi'
 import { listAutomationRuns, getSummary, GlobalSummary } from '../lib/reportsApi'
-import { FlaskConical, Package, Wand2, CheckCheck, TriangleAlert, Database, Shield, ArrowRight, Upload, Layers } from 'lucide-react'
+import { getRunEndpoints, RunEndpoint } from '../lib/analysisApi'
+import { FlaskConical, Package, Wand2, CheckCheck, TriangleAlert, Shield, ArrowRight, Upload, Layers } from 'lucide-react'
 
 function mapRunStatus(s: string): RunStatus {
   const m: Record<string, RunStatus> = {
@@ -18,9 +19,9 @@ function mapRunStatus(s: string): RunStatus {
   return m[s] ?? 'pending'
 }
 
-function StatCard({ label, value, icon: Icon, trend, trendUp, sub, alert }: {
+function StatCard({ label, value, icon: Icon, sub, alert }: {
   label: string; value: string; icon: React.ElementType
-  trend?: string; trendUp?: boolean; sub?: string; alert?: boolean
+  sub?: string; alert?: boolean
 }) {
   return (
     <div className="card pad flex flex-col gap-3">
@@ -29,7 +30,6 @@ function StatCard({ label, value, icon: Icon, trend, trendUp, sub, alert }: {
           style={{ background: alert ? 'color-mix(in oklch, #f43f5e 12%, var(--card))' : 'color-mix(in oklch, var(--brand) 12%, var(--card))', color: alert ? '#f43f5e' : 'var(--brand)' }}>
           <Icon className="w-5 h-5" />
         </div>
-        {trend && <span className={`text-xs font-semibold ${trendUp ? 'text-emerald-600' : 'text-rose-600'}`}>{trend}</span>}
       </div>
       <div>
         <p className="text-2xl font-black" style={{ color: 'var(--ink)' }}>{value}</p>
@@ -44,17 +44,15 @@ export default function DashboardPage() {
   const nav = useNavigate()
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
 
-  // Real data state — start empty, fill from API
-  const [recentRuns, setRecentRuns] = useState<RecentRun[]>([])
-  const [recentAutos, setRecentAutos] = useState<RecentAutomation[]>([])
-  const [summary, setSummary] = useState<GlobalSummary | null>(null)
+  const [recentRuns, setRecentRuns]           = useState<RecentRun[]>([])
+  const [recentAutos, setRecentAutos]         = useState<RecentAutomation[]>([])
+  const [summary, setSummary]                 = useState<GlobalSummary | null>(null)
   const [totalAnalysisRuns, setTotalAnalysisRuns] = useState<number | null>(null)
+  const [latestEndpoints, setLatestEndpoints] = useState<RunEndpoint[]>([])
 
   useEffect(() => {
-    // Load global summary (KPIs + alerts)
     getSummary().then(setSummary).catch(() => {})
 
-    // Load recent analysis runs
     listRuns({ limit: 5 }).then(data => {
       setTotalAnalysisRuns(data.total)
       setRecentRuns(data.items.map((r) => ({
@@ -66,9 +64,14 @@ export default function DashboardPage() {
         created: new Date(r.created_at).toLocaleDateString(),
         duration: '—',
       })))
+      // Load endpoints from the most recent run for charts
+      if (data.items.length > 0) {
+        getRunEndpoints(data.items[0].id)
+          .then(eps => setLatestEndpoints(eps.endpoints))
+          .catch(() => {})
+      }
     }).catch(() => {})
 
-    // Load recent automation runs — backend returns { items: [...] }
     listAutomationRuns({ limit: 5 }).then(data => {
       setRecentAutos(data.items.map(r => ({
         id: r.id,
@@ -83,18 +86,35 @@ export default function DashboardPage() {
     }).catch(() => {})
   }, [])
 
-  const runningCount = summary?.status_breakdown?.['running'] ?? 0
   const kpis = [
-    { label: 'Analysis runs',        value: totalAnalysisRuns != null ? totalAnalysisRuns.toLocaleString() : '—', icon: FlaskConical, trend: '+8 this week', trendUp: true, sub: '5 in last 24h' },
-    { label: 'Endpoints catalogued', value: recentRuns.length > 0 ? recentRuns.reduce((s, r) => s + r.endpoints, 0).toLocaleString() : '—', icon: Package, trend: '+22', trendUp: true, sub: 'across latest runs' },
-    { label: 'Automation runs',      value: summary ? summary.total_automation_runs.toLocaleString() : '—', icon: Wand2, trend: '+218 today', trendUp: true, sub: runningCount > 0 ? `${runningCount} en cours` : 'aucun en cours' },
-    { label: 'Global success rate',  value: summary ? `${(summary.global_success_rate * 100).toFixed(1)}%` : '—', icon: CheckCheck, trend: '+0.6pp', trendUp: true, sub: '30-day rolling' },
+    { label: 'Analysis runs',        value: totalAnalysisRuns != null ? totalAnalysisRuns.toLocaleString() : '—', icon: FlaskConical, sub: 'total analyses' },
+    { label: 'Endpoints catalogued', value: recentRuns.length > 0 ? recentRuns.reduce((s, r) => s + r.endpoints, 0).toLocaleString() : '—', icon: Package, sub: 'across latest runs' },
+    { label: 'Automation runs',      value: summary ? summary.total_automation_runs.toLocaleString() : '—', icon: Wand2, sub: summary?.status_breakdown?.['running'] ? `${summary.status_breakdown['running']} en cours` : 'aucun en cours' },
+    { label: 'Global success rate',  value: summary ? `${(summary.global_success_rate * 100).toFixed(1)}%` : '—', icon: CheckCheck, sub: 'sur toutes les exécutions' },
   ]
+
+  const totalFailed = summary?.total_failed ?? 0
   const alerts = [
-    { label: 'Failed executions', value: summary ? summary.total_failed.toLocaleString() : '—', icon: TriangleAlert, trend: summary ? `${summary.total_failed} au total` : '', alert: true },
-    { label: 'Index endpoints',   value: 'Synced', icon: Database, sub: '312 endpoints · 4 min ago' },
-    { label: 'Current role',      value: 'Admin',  icon: Shield,   sub: 'Permissions resolved' },
+    { label: 'Exécutions échouées', value: totalFailed > 0 ? totalFailed.toLocaleString() : '0', icon: TriangleAlert, sub: totalFailed > 0 ? 'voir les rapports' : 'aucune erreur', alert: totalFailed > 0 },
+    { label: 'Rôle actuel',         value: 'Admin',  icon: Shield, sub: 'Permissions actives' },
   ]
+
+  // Real chart data from latest run endpoints
+  const methodData = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+    .map(m => ({ method: m, count: latestEndpoints.filter(e => e.method === m).length }))
+    .filter(d => d.count > 0)
+
+  const domainMap = latestEndpoints.reduce((acc, e) => {
+    const d = e.business_domain ?? 'Other'
+    acc[d] = (acc[d] ?? 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+  const domainData = Object.entries(domainMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([domain, count]) => ({ domain, count }))
+
+  const hasAnyData = totalAnalysisRuns != null && totalAnalysisRuns > 0
 
   return (
     <AppLayout>
@@ -113,71 +133,90 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Hero strip */}
-        <div className="card overflow-hidden">
-          <div className="p-5 flex items-center justify-between gap-4 flex-wrap aria-hero">
-            <div className="space-y-2 max-w-xl">
-              <span className="pill" style={{ background: 'var(--card)', borderColor: 'var(--line)', color: 'var(--ink-2)' }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Automation Bulk #001 en cours d&apos;exécution
-              </span>
-              <p className="text-xl font-black" style={{ color: 'var(--ink)' }}>
-                <span className="grad-text">1,200 employee onboardings</span> in progress
-              </p>
-              <p className="text-sm ink-2">Batch 6 of 12 · 524 / 1,178 rows succeeded · 7 failed · est. 4 min remaining</p>
-              <div className="w-full h-2 rounded-full" style={{ background: 'var(--line)' }}>
-                <div className="h-2 rounded-full grad-bg" style={{ width: '44%' }} />
-              </div>
+        {/* Empty state — first time */}
+        {!hasAnyData && totalAnalysisRuns === 0 && (
+          <div className="card pad text-center py-16 space-y-4">
+            <div className="w-16 h-16 rounded-2xl grad-bg mx-auto flex items-center justify-center">
+              <Upload className="w-7 h-7 text-white" />
             </div>
-          </div>
-        </div>
-
-        {/* KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {kpis.map((k, i) => <StatCard key={i} {...k} />)}
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 card pad">
-            <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Volume d&apos;exécution · 7 derniers jours</p>
-            <p className="text-xs ink-2 mt-0.5 mb-4">Étapes réussies vs échouées</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={SUCCESS_TIMELINE} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in oklch, var(--line) 80%, transparent)" />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12, background: 'var(--card)', border: '1px solid var(--line)', color: 'var(--ink)' }} />
-                <Bar dataKey="success" name="Succès" fill="oklch(0.585 0.205 277)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="failed" name="Échecs" fill="#f87171" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="card pad">
-            <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Codes HTTP</p>
-            <p className="text-xs ink-2 mt-0.5 mb-5">7 derniers jours · 4 410 requêtes</p>
-            <div className="space-y-4">
-              {STATUS_BREAKDOWN.map(s => (
-                <div key={s.label}>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="font-semibold" style={{ color: 'var(--ink)' }}>{s.label}</span>
-                    <span className="font-mono ink-2">{s.value.toLocaleString()}</span>
-                  </div>
-                  <div className="h-2 rounded-full" style={{ background: 'var(--line)' }}>
-                    <div className="h-2 rounded-full grad-bg" style={{ width: `${s.pct}%` }} />
-                  </div>
+            <div>
+              <p className="text-lg font-black" style={{ color: 'var(--ink)' }}>Bienvenue sur ARIA</p>
+              <p className="text-sm ink-2 mt-1">Commencez par analyser un fichier HAR pour découvrir vos endpoints, inférer les schémas et détecter les workflows.</p>
+            </div>
+            <div className="flex items-center justify-center gap-6 text-sm ink-2 pt-2">
+              {['① Uploadez un HAR', '② Explorez vos APIs', '③ Automatisez en bulk'].map((step, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full grad-bg text-white text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
+                  <span>{step.slice(2)}</span>
                 </div>
               ))}
             </div>
+            <button onClick={() => nav('/analysis')} className="btn-primary mx-auto">
+              <Upload className="w-4 h-4" /> Analyser mon premier HAR
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* Alert strip */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {alerts.map((a, i) => <StatCard key={i} {...a} />)}
-        </div>
+        {/* KPIs — only when we have data */}
+        {hasAnyData && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {kpis.map((k, i) => <StatCard key={i} {...k} />)}
+            </div>
 
-        {/* Tables — wired to real API */}
+            {/* Charts — données réelles depuis le run le plus récent */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 card pad">
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Distribution des méthodes HTTP</p>
+                <p className="text-xs ink-2 mt-0.5 mb-4">Run le plus récent · {latestEndpoints.length} endpoints</p>
+                {methodData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[180px] ink-2 text-sm">Chargement…</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={methodData} barGap={4}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="color-mix(in oklch, var(--line) 80%, transparent)" />
+                      <XAxis dataKey="method" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip contentStyle={{ borderRadius: 12, fontSize: 12, background: 'var(--card)', border: '1px solid var(--line)', color: 'var(--ink)' }} />
+                      <Bar dataKey="count" name="Endpoints" fill="oklch(0.585 0.205 277)" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="card pad">
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Top domaines métier</p>
+                <p className="text-xs ink-2 mt-0.5 mb-5">Run le plus récent</p>
+                {domainData.length === 0 ? (
+                  <div className="flex items-center justify-center h-[120px] ink-2 text-sm">Aucune donnée</div>
+                ) : (
+                  <div className="space-y-3">
+                    {domainData.map(({ domain, count }) => {
+                      const pct = Math.round((count / latestEndpoints.length) * 100)
+                      return (
+                        <div key={domain}>
+                          <div className="flex justify-between text-xs mb-1.5">
+                            <span className="font-semibold capitalize" style={{ color: 'var(--ink)' }}>{domain}</span>
+                            <span className="font-mono ink-2">{count} eps</span>
+                          </div>
+                          <div className="h-2 rounded-full" style={{ background: 'var(--line)' }}>
+                            <div className="h-2 rounded-full grad-bg" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Alerts */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {alerts.map((a, i) => <StatCard key={i} {...a} />)}
+            </div>
+          </>
+        )}
+
+        {/* Tables — always visible */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card overflow-hidden">
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -193,13 +232,20 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {recentRuns.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center ink-2 text-sm">No runs yet</td></tr>
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center">
+                      <p className="text-sm ink-2">Aucune analyse</p>
+                      <button onClick={() => nav('/analysis')} className="btn-primary mt-3 mx-auto text-xs">
+                        <Upload className="w-3.5 h-3.5" /> Analyser un HAR
+                      </button>
+                    </td>
+                  </tr>
                 )}
                 {recentRuns.map((r, i) => (
                   <tr key={r.id} className="border-t cursor-pointer transition" style={{ borderColor: 'var(--line)' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in oklch, var(--brand) 4%, var(--card))')}
                     onMouseLeave={e => (e.currentTarget.style.background = '')}
-                    onClick={() => nav('/endpoints')}>
+                    onClick={() => nav(`/endpoints?run=${r.id}`)}>
                     <td className="px-4 py-2.5">
                       <p className="font-semibold" style={{ color: 'var(--ink)' }}>Analyse #{String(i + 1).padStart(3, '0')}</p>
                       <p className="text-xs ink-2 truncate max-w-[160px]">{r.name}</p>
@@ -223,17 +269,24 @@ export default function DashboardPage() {
             </div>
             <table className="w-full text-sm">
               <thead className="aria-thead">
-                <tr>{['Run', 'Workflow', 'Status', 'Success'].map(h => <th key={h} className="text-left px-4 py-2.5">{h}</th>)}</tr>
+                <tr>{['Run', 'Workflow', 'Status', 'Succès'].map(h => <th key={h} className="text-left px-4 py-2.5">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {recentAutos.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center ink-2 text-sm">No runs yet</td></tr>
+                  <tr>
+                    <td colSpan={4} className="px-4 py-10 text-center">
+                      <p className="text-sm ink-2">Aucune exécution</p>
+                      <button onClick={() => nav('/bulk')} className="btn-primary mt-3 mx-auto text-xs">
+                        <Layers className="w-3.5 h-3.5" /> Lancer un bulk
+                      </button>
+                    </td>
+                  </tr>
                 )}
                 {recentAutos.map((r, i) => (
                   <tr key={r.id} className="border-t cursor-pointer transition" style={{ borderColor: 'var(--line)' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in oklch, var(--brand) 4%, var(--card))')}
                     onMouseLeave={e => (e.currentTarget.style.background = '')}
-                    onClick={() => nav('/bulk')}>
+                    onClick={() => nav(`/reports?tab=automation&run=${r.id}`)}>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold" style={{ color: 'var(--ink)' }}>#{String(i + 1).padStart(3, '0')}</p>

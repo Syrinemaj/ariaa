@@ -7,21 +7,27 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.base_client import StructuredResponseError
 from app.audit.service import log_audit_event
 from app.auth.dependencies import require_admin_or_operator
+from app.core.config import settings
+from app.core.rate_limit import limiter
 from app.automation.models import AutomationExecutionRequest
 from app.automation.service import execute_automation
 from app.db.session import get_db
 from app.models.user import User, UserRole
 from app.monitoring.service import log_plan_generated, log_plan_validated
+from app.core.logging import get_logger
 from app.planner.models import AutomationPlan
 from app.planner.service import create_plan_from_instruction
+from app.planner.step_ordering import DependencyCycleError, topological_sort_steps
 from app.registry.repository import get_run_by_id
 from app.security.execution_guard import ExecutionGuardError
 from app.security.pinned_dns_transport import SSRFError
 from app.security.ssrf_guard import create_safe_client, validate_target_url
 
 router = APIRouter(prefix="/automation", tags=["Automation"])
+logger = get_logger(__name__)
 
 
 class CreatePlanRequest(BaseModel):
@@ -91,7 +97,9 @@ def _build_auth_headers(req: ValidateTokenRequest) -> Dict[str, str]:
 
 
 @router.post("/validate-token", response_model=ValidateTokenResponse)
+@limiter.limit(settings.RATE_LIMIT_AUTH)
 async def validate_token(
+    request: Request,
     body: ValidateTokenRequest,
     current_user: User = Depends(require_admin_or_operator),
 ) -> ValidateTokenResponse:
@@ -163,6 +171,102 @@ async def validate_token(
     )
 
 
+class PlanFromWorkflowRequest(BaseModel):
+    workflow_id: str
+
+
+@router.post("/plan-from-workflow")
+async def plan_from_workflow(
+    body: PlanFromWorkflowRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin_or_operator),
+):
+    """
+    Convert an existing WorkflowModel directly into an AutomationPlan without an LLM call.
+    Each step is enriched with the corresponding Endpoint's schema (request/response schemas,
+    auth requirements, risk level).
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models.analysis_run import AnalysisRun
+    from app.models.workflow import WorkflowModel
+    from app.models.endpoint import Endpoint
+
+    # BUG-007 IDOR: verify workflow belongs to the caller's org
+    res = await db.execute(
+        select(WorkflowModel)
+        .join(AnalysisRun, AnalysisRun.id == WorkflowModel.run_id)
+        .options(selectinload(WorkflowModel.steps))
+        .where(
+            WorkflowModel.id == body.workflow_id,
+            AnalysisRun.org_id == current_user.org_id,
+        )
+    )
+    wf = res.scalar_one_or_none()
+    if not wf:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    ep_res = await db.execute(
+        select(Endpoint)
+        .options(selectinload(Endpoint.schema))
+        .where(Endpoint.run_id == wf.run_id)
+    )
+    ep_by_canonical: dict = {ep.canonical_key: ep for ep in ep_res.scalars().all()}
+
+    steps = []
+    for s in sorted(wf.steps, key=lambda x: x.step_order):
+        ep = ep_by_canonical.get(s.canonical_key)
+        schema = ep.schema if ep else None
+        steps.append({
+            "order": s.step_order,
+            "endpoint_id": ep.id if ep else s.canonical_key,
+            "method": s.method,
+            "path": s.path,
+            "canonical_key": s.canonical_key,
+            "action": s.action or "",
+            "business_domain": ep.business_domain if ep else "",
+            "depends_on": s.depends_on or [],
+            "request_schema": schema.request_schema or {} if schema else {},
+            "response_schema": schema.response_schema or {} if schema else {},
+            "auth_required": schema.auth_required if schema else True,
+            "risk_level": (ep.metadata_json or {}).get("risk", "low") if ep else "low",
+        })
+
+    # depends_on comes straight from detected workflow data (usually already
+    # a valid chronological order), but re-sort defensively — schema-based
+    # dependency detection (Pass 2 in dependency_detector.py) can in rare
+    # cases point at a step that comes later in raw step_order.
+    try:
+        steps = topological_sort_steps(steps)
+    except DependencyCycleError as exc:
+        logger.warning(
+            "plan_from_workflow.dependency_cycle", workflow_id=wf.id, error=str(exc)
+        )
+
+    plan = {
+        "run_id": wf.run_id,
+        "instruction": f"Exécuter le workflow {wf.name}",
+        "intent": {
+            "instruction": f"Exécuter le workflow {wf.name}",
+            "intent": wf.business_domain or "automation",
+            "business_domain": wf.business_domain or "",
+            "quantity": None,
+            "entities": [],
+            "action": "execute",
+            "confidence": wf.confidence or 0.9,
+            "requires_bulk_execution": True,
+            "reason": f"Conversion directe depuis WorkflowModel {wf.id}",
+        },
+        "workflow_name": wf.name,
+        "steps": steps,
+        "requires_approval": True,
+        "dry_run_default": True,
+        "metadata": {"source": "workflow", "workflow_id": wf.id},
+    }
+
+    return {"plan": plan, "validation": {"is_valid": True, "issues": []}}
+
+
 @router.post("/plan")
 async def create_automation_plan(
     request: Request,
@@ -177,15 +281,53 @@ async def create_automation_plan(
     ai_client = request.app.state.ai_client
     embedding_client = request.app.state.embedding_client
 
-    plan, validation = await create_plan_from_instruction(
-        db=db,
-        run_id=body.run_id,
-        instruction=body.instruction,
-        top_k=body.top_k,
-        embedding_client=embedding_client,
-        ai_client=ai_client,
-        org_id=current_user.org_id,
-    )
+    try:
+        plan, validation = await create_plan_from_instruction(
+            db=db,
+            run_id=body.run_id,
+            instruction=body.instruction,
+            top_k=body.top_k,
+            embedding_client=embedding_client,
+            ai_client=ai_client,
+            org_id=current_user.org_id,
+        )
+    except StructuredResponseError:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "LLM_RESPONSE_INVALID",
+                "message": "Le modèle IA n'a pas retourné de réponse exploitable pour cette instruction.",
+                "suggestion": "Réessayez, ou reformulez l'instruction différemment.",
+            },
+        )
+
+    # Confidence gate applies regardless of whether RAG found any endpoints —
+    # semantic search always returns its "closest" matches, so a low-confidence
+    # (unclear/nonsense) instruction can accidentally match something and slip
+    # past an empty-steps-only check. This must run first.
+    confidence = plan.intent.confidence if plan.intent else 0.0
+    reason = (plan.intent.reason or "").upper() if plan.intent else ""
+    if confidence < settings.PLAN_MIN_INTENT_CONFIDENCE or "UNCLEAR" in reason:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INSTRUCTION_UNCLEAR",
+                "message": "L'instruction est trop vague ou ne décrit pas une action API concrète.",
+                "suggestion": "Exemple : « Créer un employé avec contrat CDI et envoyer un email de bienvenue »",
+                "confidence": confidence,
+            },
+        )
+
+    if not plan.steps:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "NO_MATCHING_ENDPOINTS",
+                "message": "Aucun endpoint correspondant n'a été trouvé dans ce run d'analyse.",
+                "suggestion": "Vérifiez que le run contient les APIs nécessaires, ou reformulez l'instruction.",
+                "confidence": confidence,
+            },
+        )
 
     log_plan_generated(
         run_id=body.run_id,

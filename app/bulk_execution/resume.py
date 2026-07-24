@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db.redis_client import get_redis
 from app.models.bulk_batch import BulkBatch
+from app.models.data_file import DataRow
 
 _JOB_TTL = 86_400  # 24 h
 
@@ -56,7 +57,6 @@ def resume_job(
     base_url: str,
     auth_headers: dict,
     dry_run: bool,
-    batch_size: int,
     org_id: str = "",
 ) -> dict:
     """
@@ -77,7 +77,8 @@ def resume_job(
         .all()
     )
 
-    incomplete = [b for b in all_batches if b.status != "completed"]
+    # BUG-005: skip "running" batches — re-enqueueing them causes double execution
+    incomplete = [b for b in all_batches if b.status not in {"completed", "running"}]
 
     if not incomplete:
         return {
@@ -95,6 +96,27 @@ def resume_job(
 
     enqueued = 0
     for batch in incomplete:
+        # Re-derive this batch's row IDs from its own fixed row_index range
+        # (start_row/end_row, set once at the original split) — never by
+        # OFFSET/LIMIT on "status='valid'", which drifts as sibling batches
+        # complete concurrently. Ranges across batches are disjoint by
+        # construction, so this can't overlap with another batch's rows.
+        # Only rows still "valid" are retried — already-succeeded rows within
+        # this range (partial batch progress) are left alone.
+        pending_rows = (
+            db.query(DataRow.id)
+            .filter(
+                DataRow.data_file_id == data_file_id,
+                DataRow.row_index >= batch.start_row,
+                DataRow.row_index <= batch.end_row,
+                DataRow.status == "valid",
+            )
+            .all()
+        )
+        row_ids = [r.id for r in pending_rows]
+        if not row_ids:
+            continue
+
         redis.setex(f"job:{job_id}:batch:{batch.batch_number}", _JOB_TTL, "queued")
         execute_batch_task.apply_async(
             kwargs={
@@ -102,7 +124,7 @@ def resume_job(
                 "automation_run_id": automation_run_id,
                 "data_file_id": data_file_id,
                 "batch_number": batch.batch_number,
-                "batch_size": batch_size,
+                "row_ids": row_ids,
                 "plan_json": plan_json,
                 "base_url": base_url,
                 "auth_headers": auth_headers,

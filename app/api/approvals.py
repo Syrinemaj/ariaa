@@ -8,7 +8,7 @@ from app.auth.dependencies import require_admin_or_operator
 from app.db.session import get_sync_db
 from app.models.approval import AutomationApproval
 from app.models.automation import AutomationRun
-from app.models.user import User
+from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
@@ -21,15 +21,36 @@ class RejectRequest(BaseModel):
     comment: str | None = None
 
 
+def _assert_run_owned(db: Session, automation_run_id: str, org_id: str) -> AutomationRun:
+    run = db.query(AutomationRun).filter(
+        AutomationRun.id == automation_run_id,
+        AutomationRun.org_id == org_id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Automation run not found")
+    return run
+
+
 @router.get("")
 def list_approvals(
     status: str = "pending",
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    # BUG-007: filter by org via join — operators must not see other orgs' approvals
+    run_ids = [
+        row.id
+        for row in db.query(AutomationRun.id).filter(
+            AutomationRun.org_id == current_user.org_id
+        ).all()
+    ]
+
     approvals = (
         db.query(AutomationApproval)
-        .filter(AutomationApproval.status == status)
+        .filter(
+            AutomationApproval.status == status,
+            AutomationApproval.automation_run_id.in_(run_ids),
+        )
         .order_by(AutomationApproval.created_at.desc())
         .all()
     )
@@ -68,6 +89,13 @@ def approve(
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    # BUG-004: only admins may approve — operators cannot self-approve their own runs
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin users can approve automation runs")
+
+    # BUG-007: verify the run belongs to the caller's org
+    _assert_run_owned(db, automation_run_id, current_user.org_id)
+
     result = approve_automation(
         db=db,
         automation_run_id=automation_run_id,
@@ -86,6 +114,13 @@ def reject(
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    # BUG-004: only admins may reject as well
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Only admin users can reject automation runs")
+
+    # BUG-007: verify the run belongs to the caller's org
+    _assert_run_owned(db, automation_run_id, current_user.org_id)
+
     approval = (
         db.query(AutomationApproval)
         .filter(AutomationApproval.automation_run_id == automation_run_id)

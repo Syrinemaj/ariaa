@@ -65,10 +65,19 @@ export interface AnalysisRunReport {
   average_success_rate: number    // 0-1
 }
 
+export interface DailyTrendPoint {
+  date: string    // YYYY-MM-DD
+  count: number
+}
+
 // ── API calls ─────────────────────────────────────────────────────────────────
 
 export function getSummary(): Promise<GlobalSummary> {
   return api.get<GlobalSummary>('/reports/summary')
+}
+
+export function getDailyTrend(days = 30): Promise<DailyTrendPoint[]> {
+  return api.get<DailyTrendPoint[]>(`/reports/daily?days=${days}`)
 }
 
 export function listAutomationRuns(params?: { limit?: number; status?: string }) {
@@ -85,6 +94,14 @@ export function listAutomationRuns(params?: { limit?: number; status?: string })
 
 export function getAutomationReport(id: string): Promise<AutomationExecutionReport> {
   return api.get<AutomationExecutionReport>(`/reports/automation/${id}`)
+}
+
+export function updateAutomationRun(id: string, body: { workflow_name?: string }): Promise<{ id: string; workflow_name: string }> {
+  return api.patch<{ id: string; workflow_name: string }>(`/reports/automation-runs/${id}`, body)
+}
+
+export function deleteAutomationRun(id: string): Promise<void> {
+  return api.del(`/reports/automation-runs/${id}`)
 }
 
 export function getAnalysisReport(runId: string): Promise<AnalysisRunReport> {

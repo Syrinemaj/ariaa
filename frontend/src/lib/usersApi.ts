@@ -9,6 +9,7 @@ export interface BackendUser {
   full_name: string
   role: string
   is_active: boolean
+  last_login_at: string | null
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────
@@ -32,4 +33,8 @@ export function activateUser(id: string) {
 
 export function deactivateUser(id: string) {
   return api.patch<BackendUser>(`/users/${id}/deactivate`)
+}
+
+export function updateUserRole(id: string, role: string) {
+  return api.patch<BackendUser>(`/users/${id}/role`, { role })
 }

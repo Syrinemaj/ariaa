@@ -181,3 +181,15 @@ export function getBulkJobProgress(jobId: string): Promise<BulkJobProgress> {
 export function getBulkReport(automationRunId: string): Promise<BulkReport> {
   return api.get(`/bulk/reports/${automationRunId}`)
 }
+
+export async function downloadRowErrorsCsv(automationRunId: string): Promise<void> {
+  const blob = await api.blob(`/bulk/reports/${encodeURIComponent(automationRunId)}/errors.csv`)
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `errors_${automationRunId.slice(0, 8)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}

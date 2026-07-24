@@ -77,6 +77,37 @@ export function createPlan(runId: string, instruction: string, topK: number) {
   })
 }
 
+export interface ValidateTokenResponse {
+  valid: boolean
+  error_code: string | null
+  message: string
+  status_code: number | null
+}
+
+export function validateToken(
+  baseUrl: string,
+  tokenType: 'bearer' | 'api_key' | 'basic',
+  tokenValue: string,
+  probePath = '/',
+): Promise<ValidateTokenResponse> {
+  return api.post<ValidateTokenResponse>('/automation/validate-token', {
+    base_url: baseUrl,
+    token_type: tokenType,
+    token_value: tokenValue,
+    probe_path: probePath,
+  })
+}
+
+export function planFromWorkflow(workflowId: string): Promise<CreatePlanResponse> {
+  return api.post<CreatePlanResponse>('/automation/plan-from-workflow', { workflow_id: workflowId })
+}
+
+export function recordApproval(automationRunId: string, comment?: string): Promise<void> {
+  return api.post(`/approvals/${encodeURIComponent(automationRunId)}/approve`, {
+    comment: comment ?? null,
+  })
+}
+
 export function executePlan(
   plan: BackendAutomationPlan,
   inputRows: Record<string, unknown>[],

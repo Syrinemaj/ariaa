@@ -1,0 +1,4 @@
+first_name,last_name,email,department_id,position,salary,start_date,employeeId,contractType,currency,workingHours,trialPeriodMonths,managerId,amount,effectiveDate,reason,phone
+Alice,Martin,alice.martin@acme.com,10,Software Engineer,62000,2026-07-01,E001,CDI,EUR,35,4,M001,62000,2026-07-01,Hiring,+33160000001
+Bob,Dupont,bob.dupont@acme.com,10,Senior Engineer,78000,2026-07-01,E002,CDI,EUR,39,3,M001,78000,2026-07-01,Hiring,+33160000002
+Claire,Bernard,claire.bernard@acme.com,20,HR Specialist,54000,2026-07-03,E003,CDI,EUR,35,2,M002,54000,2026-07-03,Hiring,+33160000003

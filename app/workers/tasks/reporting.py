@@ -40,6 +40,8 @@ def generate_bulk_report(self, run_id: str, job_id: str, org_id: str) -> dict:
 
 
 async def _run_report_async(run_id: str, job_id: str, org_id: str) -> dict:
+    from datetime import datetime, timezone
+
     from app.db.session import AsyncSessionLocal
     from app.models.automation import AutomationRun
     from app.models.bulk_batch import BulkBatch
@@ -64,13 +66,19 @@ async def _run_report_async(run_id: str, job_id: str, org_id: str) -> dict:
         stats = batch_result.one()
 
         # Update the AutomationRun with final stats
+        now = datetime.now(timezone.utc)
         automation_run.success_count = stats.total_success or 0
         automation_run.failed_count = stats.total_failed or 0
         automation_run.status = "success" if (stats.total_failed or 0) == 0 else "partial_success"
+        # created_at is stamped when the run starts (execute_valid_rows_in_batches),
+        # right before batches are enqueued — this is otherwise left at its 0.0
+        # default for every bulk run, which silently breaks "Durée"/"Débit" in Reports.
+        created_at = automation_run.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        automation_run.duration_seconds = max((now - created_at).total_seconds(), 0.0)
         automation_run.result_json = {
-            "report_generated_at": __import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
-            ).isoformat(),
+            "report_generated_at": now.isoformat(),
             "total_success": stats.total_success or 0,
             "total_failed": stats.total_failed or 0,
             "total_batches": stats.total_batches or 0,

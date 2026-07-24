@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
 import AppLayout from '../components/layout/AppLayout'
-import { STATUS_BREAKDOWN } from '../lib/aria-data'
-import { listAutomationRuns, getSummary, getAutomationReport, getAnalysisReport, GlobalSummary, AutomationExecutionReport, AnalysisRunReport } from '../lib/reportsApi'
+import { StatusBadge } from '../components/aria/Badges'
+import { listAutomationRuns, getSummary, getDailyTrend, getAutomationReport, getAnalysisReport, GlobalSummary, AutomationExecutionReport, AnalysisRunReport, DailyTrendPoint } from '../lib/reportsApi'
 import { listRuns } from '../lib/registryApi'
 import { Wand2, FlaskConical, ChevronDown } from 'lucide-react'
-
-const AREA_DATA = [88,121,96,142,188,230,295,312,91,64,120,156,175,210,248,268,290,270,132,88,140,174,198,224,251,280,305,271,158,402]
-  .map((value, i) => ({ value, label: i === 0 ? '21 avr' : i === 13 ? '5 mai' : i === 29 ? '20 mai' : '' }))
 
 
 type RunOption = { id: string; label: string }
@@ -51,13 +49,28 @@ function RunSelector({ icon: Icon, options, value, onChange, endpoint }: {
   )
 }
 
-function GlobalTab({ summary }: { summary: GlobalSummary | null }) {
+function GlobalTab({ summary, dailyTrend }: { summary: GlobalSummary | null; dailyTrend: DailyTrendPoint[] }) {
   const totalAutos  = summary?.total_automation_runs ?? 0
   const totalSteps  = summary?.total_steps ?? 0
   const successRate = summary ? summary.global_success_rate * 100 : 0
   const errorRate   = summary ? (1 - summary.global_success_rate) * 100 : 0
   const totalSuc    = summary?.total_success ?? 0
   const totalFail   = summary?.total_failed ?? 0
+
+  const statusEntries = Object.entries(summary?.status_breakdown ?? {})
+  const statusTotal = statusEntries.reduce((sum, [, count]) => sum + count, 0)
+
+  const midIdx = Math.floor(dailyTrend.length / 2)
+  const trendData = dailyTrend.map((d, i) => ({
+    value: d.count,
+    label: (i === 0 || i === midIdx || i === dailyTrend.length - 1)
+      ? new Date(d.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      : '',
+  }))
+  const peak = dailyTrend.reduce((max, d) => d.count > max.count ? d : max, { date: '', count: 0 })
+  const peakLabel = peak.count > 0
+    ? `pic : ${peak.count} le ${new Date(peak.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
+    : 'aucune activité sur la période'
 
   return (
     <div className="space-y-4">
@@ -79,15 +92,16 @@ function GlobalTab({ summary }: { summary: GlobalSummary | null }) {
           <div className="flex justify-between mt-1 text-xs ink-2"><span>{totalSuc.toLocaleString()} succès</span><span>{totalFail.toLocaleString()} échecs</span></div>
         </div>
         <div className="card pad">
-          <p className="text-sm font-bold mb-4" style={{ color: 'var(--ink)' }}>Répartition des codes HTTP · 7 j</p>
-          {STATUS_BREAKDOWN.map(s => (
-            <div key={s.label} className="mb-3">
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-semibold" style={{ color: 'var(--ink)' }}>{s.label}</span>
-                <span className="font-mono ink-2">{s.value.toLocaleString()}</span>
+          <p className="text-sm font-bold mb-4" style={{ color: 'var(--ink)' }}>Automations par statut</p>
+          {statusEntries.length === 0 && <p className="text-xs ink-2">Aucune automation pour l&apos;instant.</p>}
+          {statusEntries.map(([status, count]) => (
+            <div key={status} className="mb-3">
+              <div className="flex justify-between items-center text-xs mb-1">
+                <StatusBadge s={status} />
+                <span className="font-mono ink-2">{count.toLocaleString()}</span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-                <div className="h-2 rounded-full grad-bg" style={{ width: `${s.pct}%` }} />
+                <div className="h-2 rounded-full grad-bg" style={{ width: `${statusTotal > 0 ? (count / statusTotal) * 100 : 0}%` }} />
               </div>
             </div>
           ))}
@@ -95,9 +109,9 @@ function GlobalTab({ summary }: { summary: GlobalSummary | null }) {
       </div>
       <div className="card pad">
         <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Automations · 30 derniers jours</p>
-        <p className="text-xs ink-2 mb-4">pic : 402 le 20 mai</p>
+        <p className="text-xs ink-2 mb-4">{peakLabel}</p>
         <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={AREA_DATA}>
+          <AreaChart data={trendData}>
             <defs>
               <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="oklch(0.585 0.205 277)" stopOpacity={0.15} />
@@ -116,12 +130,16 @@ function GlobalTab({ summary }: { summary: GlobalSummary | null }) {
   )
 }
 
-function AutomationTab({ options }: { options: RunOption[] }) {
+function AutomationTab({ options, initialRunId }: { options: RunOption[]; initialRunId?: string }) {
   const [autoRunId, setAutoRunId] = useState(options[0]?.id ?? '')
   const [report, setReport] = useState<AutomationExecutionReport | null>(null)
 
   useEffect(() => {
-    if (options.length > 0 && !autoRunId) setAutoRunId(options[0].id)
+    if (options.length === 0) return
+    if (!autoRunId) {
+      const target = initialRunId && options.some(o => o.id === initialRunId) ? initialRunId : options[0].id
+      setAutoRunId(target)
+    }
   }, [options])
 
   useEffect(() => {
@@ -194,12 +212,16 @@ function AutomationTab({ options }: { options: RunOption[] }) {
   )
 }
 
-function AnalysisTab({ options }: { options: RunOption[] }) {
+function AnalysisTab({ options, initialRunId }: { options: RunOption[]; initialRunId?: string }) {
   const [runId, setRunId] = useState(options[0]?.id ?? '')
   const [report, setReport] = useState<AnalysisRunReport | null>(null)
 
   useEffect(() => {
-    if (options.length > 0 && !runId) setRunId(options[0].id)
+    if (options.length === 0) return
+    if (!runId) {
+      const target = initialRunId && options.some(o => o.id === initialRunId) ? initialRunId : options[0].id
+      setRunId(target)
+    }
   }, [options])
 
   useEffect(() => {
@@ -227,10 +249,19 @@ function AnalysisTab({ options }: { options: RunOption[] }) {
 }
 
 export default function ReportsPage() {
-  const [tab, setTab] = useState<'global' | 'automation' | 'analysis'>('global')
+  const [searchParams] = useSearchParams()
+  const nav = useNavigate()
+  const [tab, setTab] = useState<'global' | 'automation' | 'analysis'>(() => {
+    const t = searchParams.get('tab')
+    if (t === 'automation' || t === 'analysis') return t
+    return 'global'
+  })
+  const initialRunId = searchParams.get('run') ?? undefined
+  const fromBulk = searchParams.has('tab') && searchParams.has('run')
   const [autoRunOptions, setAutoRunOptions] = useState<RunOption[]>([])
   const [runOptions, setRunOptions]         = useState<RunOption[]>([])
   const [summary, setSummary]               = useState<GlobalSummary | null>(null)
+  const [dailyTrend, setDailyTrend]         = useState<DailyTrendPoint[]>([])
 
   const TABS = [
     { key: 'global',     label: "Vue d'ensemble" },
@@ -241,6 +272,7 @@ export default function ReportsPage() {
   // Fetch real run options for selectors + global summary
   useEffect(() => {
     getSummary().then(setSummary).catch(() => {})
+    getDailyTrend(30).then(setDailyTrend).catch(() => {})
 
     listAutomationRuns({ limit: 50 })
       .then(data => {
@@ -260,10 +292,32 @@ export default function ReportsPage() {
   return (
     <AppLayout>
       <div className="p-6 space-y-6">
-        <div>
-          <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Reports</h2>
-          <p className="text-sm ink-2 mt-1">Métriques agrégées sur l&apos;ensemble des analyses et automations.</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Reports</h2>
+            <p className="text-sm ink-2 mt-1">Métriques agrégées sur l&apos;ensemble des analyses et automations.</p>
+          </div>
+          {fromBulk && (
+            <button onClick={() => nav(-1)} className="btn-ghost text-xs">
+              ← Retour
+            </button>
+          )}
         </div>
+
+        {/* Context header when navigating from Bulk */}
+        {fromBulk && initialRunId && tab === 'automation' && (
+          <div className="card pad flex items-center gap-4"
+            style={{ background: 'color-mix(in oklch, var(--brand) 5%, var(--card))', border: '1px solid color-mix(in oklch, var(--brand) 20%, var(--line))' }}>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'var(--brand)' }}>Rapport d'exécution</p>
+              <p className="text-sm font-semibold mt-0.5" style={{ color: 'var(--ink)' }}>
+                {autoRunOptions.find(o => o.id === initialRunId)?.label ?? initialRunId.slice(0, 8)}
+              </p>
+            </div>
+            <button onClick={() => nav('/bulk')} className="btn-secondary text-xs">Relancer</button>
+          </div>
+        )}
+
         <div className="flex gap-1 rounded-xl p-1 w-fit" style={{ background: 'color-mix(in oklch, var(--ink) 5%, var(--card))', border: '1px solid var(--line)' }}>
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -277,9 +331,9 @@ export default function ReportsPage() {
             </button>
           ))}
         </div>
-        {tab === 'global'     && <GlobalTab summary={summary} />}
-        {tab === 'automation' && <AutomationTab options={autoRunOptions} />}
-        {tab === 'analysis'   && <AnalysisTab options={runOptions} />}
+        {tab === 'global'     && <GlobalTab summary={summary} dailyTrend={dailyTrend} />}
+        {tab === 'automation' && <AutomationTab options={autoRunOptions} initialRunId={initialRunId} />}
+        {tab === 'analysis'   && <AnalysisTab options={runOptions} initialRunId={initialRunId} />}
       </div>
     </AppLayout>
   )

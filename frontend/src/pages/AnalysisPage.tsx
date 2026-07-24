@@ -1,16 +1,33 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import { MethodBadge } from '../components/aria/Badges'
 import { useHarAnalysis } from '../hooks/useHarAnalysis'
-import { Upload, Play, RefreshCw, Sparkles, Search, ArrowRight, FileCode2, Lock, Unlock, Database, Check } from 'lucide-react'
+import { useRun } from '../contexts/RunContext'
+import { useToast } from '../contexts/ToastContext'
+import { listRuns, AnalysisRun } from '../lib/registryApi'
+import { Upload, Play, RefreshCw, Sparkles, Search, ArrowRight, FileCode2, Lock, Unlock, Database, Check, Network, Layers, Zap, Clock, List } from 'lucide-react'
+
+const PIPELINE_STEPS = [
+  'Nettoyage des requêtes HTTP',
+  'Normalisation des endpoints',
+  'Inférence de schémas',
+  'Persistance en base',
+  'Détection des workflows',
+  'Enrichissement IA (Groq)',
+]
 
 export default function AnalysisPage() {
-  const nav = useNavigate()
+  const nav  = useNavigate()
+  const { setActiveRun } = useRun()
+  const { toast } = useToast()
   const [filename, setFilename] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [query, setQuery] = useState('')
+  const [file, setFile]         = useState<File | null>(null)
+  const [query, setQuery]       = useState('')
+  const [historyRuns, setHistoryRuns] = useState<AnalysisRun[]>([])
+  const [progressStep, setProgressStep] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const {
     phase,
@@ -29,9 +46,55 @@ export default function AnalysisPage() {
   const showResults = phase === 'done' && result !== null
   const indexed     = indexState === 'done'
 
+  // Animate progress steps while processing
+  useEffect(() => {
+    if (phase === 'processing') {
+      setProgressStep(0)
+      progressRef.current = setInterval(() => {
+        setProgressStep(prev => (prev < PIPELINE_STEPS.length - 1 ? prev + 1 : prev))
+      }, 2800)
+    } else {
+      if (progressRef.current) clearInterval(progressRef.current)
+      if (phase === 'done') setProgressStep(PIPELINE_STEPS.length)
+    }
+    return () => { if (progressRef.current) clearInterval(progressRef.current) }
+  }, [phase])
+
+  // When analysis completes, update RunContext + show toast
+  useEffect(() => {
+    if (showResults && result) {
+      setActiveRun({ id: result.run_id, name: filename || 'capture.har' })
+      toast({
+        type: 'success',
+        message: `Analyse terminée · ${result.normalized_endpoints} endpoints · ${result.saved_workflows} workflows`,
+        action: { label: 'Explorer →', onClick: () => nav(`/endpoints?run=${result.run_id}`) },
+      })
+      // Refresh history
+      listRuns({ limit: 6 }).then(data => setHistoryRuns(data.items)).catch(() => {})
+    }
+  }, [showResults])
+
+  // Load history on mount
+  useEffect(() => {
+    listRuns({ limit: 6 }).then(data => setHistoryRuns(data.items)).catch(() => {})
+  }, [])
+
   function handleFileSelect(f: File) {
     setFile(f)
     setFilename(f.name)
+  }
+
+  function statusIcon(s: string) {
+    if (s === 'completed' || s === 'done') return '✦'
+    if (s === 'processing' || s === 'running') return '◌'
+    if (s === 'failed') return '✕'
+    return '○'
+  }
+  function statusColor(s: string) {
+    if (s === 'completed' || s === 'done') return 'text-violet-500'
+    if (s === 'processing' || s === 'running') return 'text-amber-500'
+    if (s === 'failed') return 'text-red-500'
+    return 'ink-2'
   }
 
   return (
@@ -39,8 +102,8 @@ export default function AnalysisPage() {
       <div className="p-6 space-y-6">
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Analyse a HAR capture</h2>
-            <p className="text-sm ink-2 mt-1">Upload a .har / .jmx / live capture to discover endpoints, infer schemas, and detect workflows.</p>
+            <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Analyser un fichier HAR</h2>
+            <p className="text-sm ink-2 mt-1">Uploadez un .har / .jmx pour découvrir vos endpoints, inférer les schémas et détecter les workflows.</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => nav('/rag')} className="btn-secondary"><Sparkles className="w-4 h-4" /> Endpoint Search</button>
@@ -64,8 +127,8 @@ export default function AnalysisPage() {
                 <div className="w-14 h-14 rounded-2xl grad-bg mx-auto flex items-center justify-center mb-4 shadow-lg">
                   <Upload className="w-6 h-6 text-white" />
                 </div>
-                <p className="font-semibold" style={{ color: 'var(--ink)' }}>Drop your .har file here</p>
-                <p className="text-xs ink-2 mt-1">or click to browse · max 50 MB · .har, .jmx, .json</p>
+                <p className="font-semibold" style={{ color: 'var(--ink)' }}>Déposez votre fichier .har ici</p>
+                <p className="text-xs ink-2 mt-1">ou cliquez pour parcourir · max 50 MB · .har, .jmx</p>
                 {filename && (
                   <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono"
                     style={{ background: 'var(--card)', border: '1px solid var(--line)', color: 'var(--ink)' }}>
@@ -74,61 +137,65 @@ export default function AnalysisPage() {
                 )}
               </div>
               <div className="mt-4">
-                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 ink-2">
-                  Nom du fichier HAR
-                </label>
-                <input
-                  type="text"
-                  value={filename}
-                  onChange={e => setFilename(e.target.value)}
-                  placeholder="ex: capture-prod-2026.har"
-                  className="input w-full"
-                />
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 ink-2">Nom du fichier HAR</label>
+                <input type="text" value={filename} onChange={e => setFilename(e.target.value)}
+                  placeholder="ex: capture-prod-2026.har" className="input w-full" />
               </div>
-              {phase === 'error' && error && (
-                <p className="mt-3 text-xs text-red-600">{error}</p>
-              )}
+              {phase === 'error' && error && <p className="mt-3 text-xs text-red-600">{error}</p>}
               <div className="flex flex-wrap items-center gap-4 mt-4">
                 <div className="flex-1" />
-                <button
-                  onClick={() => file && void upload(file, filename)}
-                  disabled={isLoading || !file}
-                  className="btn-primary">
-                  {isLoading ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing…</> : <><Play className="w-4 h-4" />Run analysis</>}
+                <button onClick={() => file && void upload(file, filename)}
+                  disabled={isLoading || !file} className="btn-primary">
+                  {isLoading ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyse en cours…</> : <><Play className="w-4 h-4" />Lancer l'analyse</>}
                 </button>
               </div>
             </div>
             <div className="p-6" style={{ background: 'color-mix(in oklch, var(--ink) 3%, var(--card))', borderLeft: '1px solid var(--line)' }}>
-              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Endpoint</p>
-              <p className="font-mono text-sm" style={{ color: 'var(--ink)' }}>POST /upload/har/analyze</p>
-              <div className="hr-soft my-4" />
-              <p className="text-xs ink-2 mb-3">Pipeline steps after upload:</p>
+              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-3">Pipeline</p>
               <ol className="space-y-2">
-                {['Cleaned HTTP transactions', 'Normalized endpoints', 'Schema inference', 'Persisted endpoints', 'Detected workflows'].map((s, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm">
-                    <span className="w-6 h-6 rounded-lg grad-bg text-white text-xs font-bold flex items-center justify-center">{i + 1}</span>
-                    <span style={{ color: 'var(--ink)' }}>{s}</span>
-                  </li>
-                ))}
+                {PIPELINE_STEPS.map((s, i) => {
+                  const done    = phase === 'done' || progressStep > i
+                  const current = phase === 'processing' && progressStep === i
+                  return (
+                    <li key={i} className="flex items-center gap-3 text-sm">
+                      <span className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 transition-all ${done ? 'grad-bg text-white' : current ? 'bg-amber-100 text-amber-700' : ''}`}
+                        style={!done && !current ? { background: 'color-mix(in oklch, var(--ink) 8%, var(--card))', color: 'var(--ink-2)' } : {}}>
+                        {done ? <Check className="w-3 h-3" /> : current ? <RefreshCw className="w-3 h-3 animate-spin" /> : i + 1}
+                      </span>
+                      <span style={{ color: done ? 'var(--ink)' : 'var(--ink-2)' }}>{s}</span>
+                    </li>
+                  )
+                })}
               </ol>
             </div>
           </div>
         </div>
 
-        {isLoading && (
-          <div className="card pad space-y-3">
-            {[40, 100, 92].map((w, i) => <div key={i} className="skel" style={{ width: `${w}%`, height: i === 0 ? 18 : 12 }} />)}
-          </div>
-        )}
-
         {showResults && (
           <>
+            {/* CTA block */}
+            <div className="card pad flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Analyse terminée — que voulez-vous faire ?</p>
+                <p className="text-xs ink-2 mt-0.5">{result.normalized_endpoints} endpoints · {result.saved_workflows} workflows · ✦ Enrichissement IA actif</p>
+              </div>
+              <button onClick={() => nav(`/endpoints?run=${result.run_id}`)} className="btn-primary">
+                <Database className="w-4 h-4" /> Explorer les endpoints
+              </button>
+              <button onClick={() => nav(`/workflows?run=${result.run_id}`)} className="btn-secondary">
+                <Network className="w-4 h-4" /> Voir les workflows
+              </button>
+              <button onClick={() => nav(`/bulk?run=${result.run_id}`)} className="btn-secondary">
+                <Zap className="w-4 h-4" /> Créer un plan
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
-                { l: 'Analyse',              v: result.run_id.slice(0, 8) },
-                { l: 'Appels HTTP nettoyés', v: result.cleaned_api_calls.toLocaleString() },
-                { l: 'Endpoints normalisés', v: result.normalized_endpoints.toString() },
-                { l: 'Workflows détectés',   v: result.saved_workflows.toString() },
+                { l: 'Run ID',                v: result.run_id.slice(0, 8) },
+                { l: 'Appels HTTP nettoyés',  v: result.cleaned_api_calls.toLocaleString() },
+                { l: 'Endpoints normalisés',  v: result.normalized_endpoints.toString() },
+                { l: 'Workflows détectés',    v: result.saved_workflows.toString() },
               ].map((c, i) => (
                 <div key={i} className="card p-3">
                   <p className="text-[10px] font-bold tracking-widest uppercase ink-2">{c.l}</p>
@@ -141,10 +208,10 @@ export default function AnalysisPage() {
             <div className="card overflow-hidden">
               <div className="flex items-center justify-between px-5 pt-5 pb-3">
                 <div>
-                  <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Detected endpoints</p>
+                  <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Endpoints détectés</p>
                   <p className="text-xs ink-2">{result.normalized_endpoints} endpoints</p>
                 </div>
-                <button onClick={() => nav('/endpoints')} className="btn-ghost text-xs">Open catalog <ArrowRight className="w-3.5 h-3.5" /></button>
+                <button onClick={() => nav(`/endpoints?run=${result.run_id}`)} className="btn-ghost text-xs">Open catalog <ArrowRight className="w-3.5 h-3.5" /></button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -172,25 +239,22 @@ export default function AnalysisPage() {
               <div className="card pad flex flex-col gap-4">
                 <div>
                   <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>RAG indexing</p>
-                  <p className="text-xs ink-2 mt-1">Embed {result.normalized_endpoints} endpoints to enable natural-language search.</p>
+                  <p className="text-xs ink-2 mt-1">Embedder {result.normalized_endpoints} endpoints pour la recherche en langage naturel.</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${indexed ? 'bg-emerald-50 text-emerald-600' : ''}`}
                     style={indexed ? {} : { background: 'color-mix(in oklch, var(--ink) 6%, var(--card))', color: 'var(--ink-2)' }}>
                     {indexState === 'indexing'
                       ? <RefreshCw className="w-5 h-5 animate-spin" />
-                      : indexed
-                        ? <Check className="w-5 h-5" />
-                        : <Database className="w-5 h-5" />}
+                      : indexed ? <Check className="w-5 h-5" />
+                      : <Database className="w-5 h-5" />}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{indexed ? 'Indexed' : 'Not indexed'}</p>
+                    <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{indexed ? 'Indexé' : 'Non indexé'}</p>
                     <p className="text-xs font-mono ink-2">{indexed ? `${result.saved_endpoints} vecteurs` : '—'}</p>
                   </div>
                   <div className="flex-1" />
-                  <button
-                    onClick={() => void triggerIndex()}
-                    disabled={indexState === 'indexing'}
+                  <button onClick={() => void triggerIndex()} disabled={indexState === 'indexing'}
                     className={indexed ? 'btn-secondary' : 'btn-primary'}>
                     {indexed ? <><RefreshCw className="w-3.5 h-3.5" /> Re-index</> : <><Sparkles className="w-3.5 h-3.5" /> Index for AI</>}
                   </button>
@@ -198,23 +262,16 @@ export default function AnalysisPage() {
                 <p className="font-mono text-xs ink-2">POST /rag/index/{result.run_id}</p>
               </div>
               <div className="card pad">
-                <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Recherche d&apos;endpoint rapide</p>
+                <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Recherche d'endpoint rapide</p>
                 <p className="text-xs ink-2 mb-3">Trouvez un endpoint en langage naturel.</p>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ink-2" />
-                    <input
-                      value={query}
-                      onChange={e => setQuery(e.target.value)}
+                    <input value={query} onChange={e => setQuery(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && void search(query)}
-                      className="input !pl-9"
-                      placeholder="find users endpoints"
-                    />
+                      className="input !pl-9" placeholder="find users endpoints" />
                   </div>
-                  <button
-                    onClick={() => void search(query)}
-                    disabled={searching}
-                    className="btn-primary">
+                  <button onClick={() => void search(query)} disabled={searching} className="btn-primary">
                     {searching ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                   </button>
                 </div>
@@ -230,6 +287,47 @@ export default function AnalysisPage() {
               </div>
             </div>
           </>
+        )}
+
+        {/* History — runs précédents */}
+        {historyRuns.length > 0 && !showResults && (
+          <div className="card overflow-hidden">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Analyses précédentes</p>
+                <p className="text-xs ink-2">{historyRuns.length} runs récents · cliquez pour explorer</p>
+              </div>
+              <button onClick={() => nav('/runs')} className="btn-ghost text-xs">
+                <List className="w-3.5 h-3.5" /> Voir tout <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="divide-y" style={{ borderColor: 'var(--line)' }}>
+              {historyRuns.map(r => (
+                <div key={r.id} className="flex items-center gap-4 px-5 py-3 transition cursor-pointer"
+                  onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in oklch, var(--brand) 4%, var(--card))')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
+                  onClick={() => nav(`/endpoints?run=${r.id}`)}>
+                  <span className={`text-lg font-bold shrink-0 ${statusColor(r.status)}`}>{statusIcon(r.status)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{r.file_name}</p>
+                    <p className="text-xs ink-2">{r.total_normalized_endpoints} endpoints · {new Date(r.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={e => { e.stopPropagation(); nav(`/endpoints?run=${r.id}`) }} className="btn-ghost text-xs">
+                      <Database className="w-3.5 h-3.5" /> Endpoints
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); nav(`/workflows?run=${r.id}`) }} className="btn-ghost text-xs">
+                      <Network className="w-3.5 h-3.5" /> Workflows
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); nav(`/bulk?run=${r.id}`) }} className="btn-ghost text-xs">
+                      <Layers className="w-3.5 h-3.5" /> Bulk
+                    </button>
+                  </div>
+                  <Clock className="w-4 h-4 ink-2 shrink-0" />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </AppLayout>

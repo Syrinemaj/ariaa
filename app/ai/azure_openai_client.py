@@ -34,6 +34,8 @@ from sqlalchemy.orm import Session
 
 from app.ai.response_schemas import ClassificationResponse
 from app.ai.token_counter import truncate_dict_to_token_limit, truncate_to_token_limit
+from app.ai.traffic_classification import CLASSIFY_SCHEMA as _CLASSIFY_SCHEMA
+from app.ai.traffic_classification import SYSTEM_PROMPT as _CLASSIFY_SYSTEM_PROMPT
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -52,13 +54,6 @@ class AzureOpenAIClient:
     # ─── Sync interface (Celery tasks + sync FastAPI routes) ──────────────────
 
     def classify_api_call(self, payload: dict, db: Optional[Session] = None) -> ClassificationResponse:
-        system_prompt = (
-            "You are an API traffic classification engine.\n"
-            "Decide if an HTTP call is a business API, reject telemetry/tracking/static assets.\n"
-            "Classify business domain and action if applicable.\n"
-            "Return strict JSON only."
-        )
-
         safe_payload, truncated = truncate_dict_to_token_limit(
             payload, settings.AZURE_OPENAI_MODEL, settings.LLM_MAX_INPUT_TOKENS
         )
@@ -69,29 +64,12 @@ class AzureOpenAIClient:
             model=settings.AZURE_OPENAI_MODEL,
             max_tokens=settings.LLM_MAX_COMPLETION_TOKENS,
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": _CLASSIFY_SYSTEM_PROMPT},
                 {"role": "user", "content": json.dumps(safe_payload, ensure_ascii=False)},
             ],
             response_format={
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "api_traffic_classification",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "is_business_api": {"type": "boolean"},
-                            "should_keep": {"type": "boolean"},
-                            "business_domain": {"type": ["string", "null"]},
-                            "business_action": {"type": ["string", "null"]},
-                            "confidence": {"type": "number"},
-                            "reason": {"type": "string"},
-                        },
-                        "required": ["is_business_api", "should_keep", "business_domain",
-                                     "business_action", "confidence", "reason"],
-                        "additionalProperties": False,
-                    },
-                },
+                "json_schema": _CLASSIFY_SCHEMA,
             },
         )
 
@@ -199,14 +177,28 @@ class AzureOpenAIClient:
         if usage is None:
             return
 
-        # Always increment Prometheus counters (no DB required).
+        if db is not None:
+            # log_llm_call_and_print_terminal_summary already records to
+            # Prometheus (with correctly-priced cost) as part of persisting
+            # the call — do not also record here, or every call with a db
+            # session double-counts aria_llm_tokens_total / aria_llm_cost_total.
+            from app.llm_observability.service import log_llm_call_and_print_terminal_summary
+            log_llm_call_and_print_terminal_summary(
+                db=db,
+                task_name=task_name,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+            )
+            return
+
+        # No DB session — this is the only place Prometheus gets recorded,
+        # so do it here, priced by the model that actually served the call.
         try:
-            from app.core.config import settings as _s
+            from app.llm_observability.cost_estimator import estimate_llm_cost
             from app.observability.metrics import record_llm_tokens
             total = (usage.prompt_tokens or 0) + (usage.completion_tokens or 0)
-            cost = (
-                (usage.prompt_tokens or 0) / 1000 * _s.LLM_PROMPT_COST_PER_1K
-                + (usage.completion_tokens or 0) / 1000 * _s.LLM_COMPLETION_COST_PER_1K
+            cost = estimate_llm_cost(
+                usage.prompt_tokens or 0, usage.completion_tokens or 0, model=settings.AZURE_OPENAI_MODEL
             )
             record_llm_tokens(
                 task_name=task_name,
@@ -217,15 +209,6 @@ class AzureOpenAIClient:
             )
         except Exception:
             pass
-
-        if db is not None:
-            from app.llm_observability.service import log_llm_call_and_print_terminal_summary
-            log_llm_call_and_print_terminal_summary(
-                db=db,
-                task_name=task_name,
-                prompt_tokens=usage.prompt_tokens,
-                completion_tokens=usage.completion_tokens,
-            )
 
 
 # ─── FastAPI dependency ───────────────────────────────────────────────────────

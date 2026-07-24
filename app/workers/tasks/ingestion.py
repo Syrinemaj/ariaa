@@ -115,6 +115,7 @@ async def _run_ingestion_async(
         _local_engine, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False,
     )
 
+    from app.ai.groq_client import GroqClient
     from app.ingestion.service import process_har_file
     from app.normalization.service import normalize_entries
     from app.registry.repository import (
@@ -160,7 +161,14 @@ async def _run_ingestion_async(
         )
 
         schema_results = infer_schemas_for_endpoints(normalized_endpoints)
-        workflows = discover_workflows(normalized_endpoints)
+        # ai_client/redis enable step reordering (sequence_builder) and rich
+        # description/tags/risk (workflow_descriptor) — previously always
+        # skipped here since discover_workflows() never received a real
+        # ai_client, leaving that code unreachable in production. Workflow
+        # naming itself stays keyword-based at this stage regardless (see
+        # clustering.py docstring) — the LLM-refined name/domain/confidence
+        # is set once, authoritatively, in Step 5 below.
+        workflows = discover_workflows(normalized_endpoints, ai_client=GroqClient(), redis=get_redis())
 
         # ── Step 3 : persist results and mark completed ───────────────────────
         async with AsyncSessionLocal() as db:
@@ -204,7 +212,7 @@ async def _run_ingestion_async(
         from app.models.endpoint import Endpoint
         from app.ai.groq_client import GroqClient
         from app.ai.endpoint_understanding import enrich_endpoint_with_ai
-        from app.rag.service import enrich_endpoints_metadata
+        from app.rag.pipeline import enrich_endpoints_metadata
 
         async with AsyncSessionLocal() as db:
             ep_res = await db.execute(
@@ -230,6 +238,76 @@ async def _run_ingestion_async(
                 )
     except Exception as enrich_exc:
         logger.warning("endpoint_enrichment.step_failed run=%s error=%s", run_id, enrich_exc)
+
+    # ── Step 5 : AI workflow naming (runs after endpoint enrichment so       ──
+    # ──          business_domain / action from enriched endpoints are used)  ──
+    # This is the SOLE authority for wf.name / wf.business_domain / wf.confidence
+    # (enrich_workflow_with_ai, workflow_understanding.py) — it overwrites the
+    # keyword-based provisional values discover_workflows() set above. Only
+    # metadata_json keys it doesn't touch (business_tags, estimated_risk,
+    # description) survive from the Step 2 clustering pass. See
+    # app/workflows/clustering.py's module docstring for the full ownership
+    # rationale (prompt-engineering audit finding: 3 prompts used to compete
+    # for these fields with no coordination).
+    try:
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        from app.models.workflow import WorkflowModel, WorkflowStepModel
+        from app.models.endpoint import Endpoint
+        from app.ai.groq_client import GroqClient
+        from app.ai.workflow_understanding import enrich_workflow_with_ai
+
+        async with AsyncSessionLocal() as db:
+            wf_res = await db.execute(
+                select(WorkflowModel)
+                .options(selectinload(WorkflowModel.steps))
+                .where(WorkflowModel.run_id == run_id)
+            )
+            db_workflows = wf_res.scalars().all()
+
+            # Build canonical_key → enriched endpoint map for this run
+            ep_res = await db.execute(
+                select(Endpoint).where(Endpoint.run_id == run_id)
+            )
+            ep_by_canonical: dict[str, Endpoint] = {
+                ep.canonical_key: ep for ep in ep_res.scalars().all()
+            }
+
+            groq_client = GroqClient()
+            wf_enriched = 0
+
+            for wf in db_workflows:
+                steps_payload = []
+                for s in sorted(wf.steps, key=lambda x: x.step_order):
+                    ep = ep_by_canonical.get(s.canonical_key)
+                    steps_payload.append({
+                        "order":           s.step_order,
+                        "method":          s.method,
+                        "path":            s.path,
+                        "action":          s.action or (ep.business_action if ep else ""),
+                        "business_domain": ep.business_domain if ep else "",
+                    })
+
+                enriched = await asyncio.to_thread(
+                    enrich_workflow_with_ai, wf.id, steps_payload, groq_client
+                )
+
+                if enriched:
+                    wf.name            = enriched["name"]
+                    wf.business_domain = enriched["business_domain"]
+                    wf.confidence      = enriched["confidence"]
+                    wf.metadata_json   = {
+                        **(wf.metadata_json or {}),
+                        "ai_summary": enriched["summary"],
+                    }
+                    wf_enriched += 1
+
+            if wf_enriched:
+                await db.commit()
+                logger.info("workflow_enrichment.done run=%s enriched=%d", run_id, wf_enriched)
+
+    except Exception as wf_exc:
+        logger.warning("workflow_enrichment.step_failed run=%s error=%s", run_id, wf_exc)
 
     await _local_engine.dispose()
     return {

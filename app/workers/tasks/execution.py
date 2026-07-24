@@ -25,24 +25,40 @@ def _update_batch_status(job_id: str, batch_number: int, status: str) -> None:
     get_redis().setex(f"job:{job_id}:batch:{batch_number}", _JOB_TTL, status)
 
 
-def _update_job_progress(job_id: str, success_delta: int, failed_delta: int) -> None:
+def _update_job_progress(
+    job_id: str,
+    batch_failed: bool = False,
+) -> None:
+    # NOTE: "completed"/"failed" row counts are incremented directly by
+    # batch_executor.py (atomic hincrby of the delta, as rows complete) — not
+    # here. This function only tracks batch-level completion and overall
+    # job status, so it must not re-add per-row deltas on top of those.
     redis = get_redis()
-    if success_delta:
-        redis.hincrby(f"job:{job_id}", "completed", success_delta)
-    if failed_delta:
-        redis.hincrby(f"job:{job_id}", "failed", failed_delta)
+    if batch_failed:
+        redis.hincrby(f"job:{job_id}", "batches_failed", 1)
     redis.hincrby(f"job:{job_id}", "batches_done", 1)
 
     data = redis.hgetall(f"job:{job_id}")
-    total = int(data.get("total", 0))
+    batches = int(data.get("batches", 0))
+    batches_done = int(data.get("batches_done", 0))
     completed = int(data.get("completed", 0))
     failed_total = int(data.get("failed", 0))
+    batches_failed_total = int(data.get("batches_failed", 0))
 
-    if total and completed + failed_total >= total:
-        status = "done" if failed_total == 0 else "partial"
-        redis.hset(f"job:{job_id}", "status", status)
+    # Transition queued → running on first batch update
+    if data.get("status") == "queued":
+        redis.hset(f"job:{job_id}", "status", "running")
 
-        # All batches done → trigger report generation
+    # Completion: all batches have reported in (success or final failure)
+    if batches and batches_done >= batches:
+        if completed == 0 and batches_failed_total > 0:
+            final_status = "failed"
+        elif failed_total > 0 or batches_failed_total > 0:
+            final_status = "partial"
+        else:
+            final_status = "done"
+        redis.hset(f"job:{job_id}", "status", final_status)
+
         automation_run_id = data.get("automation_run_id", "")
         org_id = data.get("org_id", "")
         if automation_run_id:
@@ -75,7 +91,7 @@ def execute_batch_task(
     automation_run_id: str,
     data_file_id: str,
     batch_number: int,
-    batch_size: int,
+    row_ids: list,
     plan_json: dict,
     base_url: str,
     auth_headers: dict,
@@ -84,6 +100,17 @@ def execute_batch_task(
 ) -> dict:
     _update_batch_status(job_id, batch_number, "running")
 
+    # Celery uses prefork — the async_engine connection pool is inherited from
+    # the parent process and attached to the parent's event loop.  asyncio.run()
+    # creates a NEW event loop in the forked child, causing
+    # "Future attached to a different loop" errors on first DB call.
+    # Disposing the pool forces fresh connections bound to the new loop.
+    try:
+        from app.db.session import async_engine as _async_engine
+        _async_engine.sync_engine.dispose()
+    except Exception:
+        pass
+
     try:
         result = asyncio.run(
             _run_batch_async(
@@ -91,7 +118,7 @@ def execute_batch_task(
                 automation_run_id=automation_run_id,
                 data_file_id=data_file_id,
                 batch_number=batch_number,
-                batch_size=batch_size,
+                row_ids=row_ids,
                 plan_json=plan_json,
                 base_url=base_url,
                 auth_headers=auth_headers,
@@ -101,11 +128,7 @@ def execute_batch_task(
         )
 
         _update_batch_status(job_id, batch_number, "completed")
-        _update_job_progress(
-            job_id,
-            success_delta=result.get("success_count", 0),
-            failed_delta=result.get("failed_count", 0),
-        )
+        _update_job_progress(job_id)
         logger.info(
             "Batch %d/%s completed: %d ok / %d failed",
             batch_number, job_id,
@@ -120,6 +143,9 @@ def execute_batch_task(
             "Batch %d/%s failed: %s\n%s",
             batch_number, job_id, exc, traceback.format_exc(limit=8),
         )
+        if self.request.retries >= self.max_retries:
+            # Final failure — update progress so the job can still reach completion
+            _update_job_progress(job_id, batch_failed=True)
         raise self.retry(exc=exc) if self.request.retries < self.max_retries else exc
 
 
@@ -128,7 +154,7 @@ async def _run_batch_async(
     automation_run_id: str,
     data_file_id: str,
     batch_number: int,
-    batch_size: int,
+    row_ids: list,
     plan_json: dict,
     base_url: str,
     auth_headers: dict,
@@ -149,16 +175,19 @@ async def _run_batch_async(
     plan = AutomationPlan.model_validate(plan_json)
 
     async with AsyncSessionLocal() as db:
-        offset = (batch_number - 1) * batch_size
+        # Fetch by the exact row IDs assigned to this batch at split time — NOT
+        # by re-querying "WHERE status='valid' OFFSET/LIMIT". That filter mutates
+        # as sibling batches flip rows to "success" concurrently, so a live
+        # re-query silently drops or duplicates rows across batches at scale.
+        # Retry safety for already-completed rows is handled by the idempotency
+        # layer in batch_executor.py, not by a status filter here.
         result = await db.execute(
             select(DataRow)
             .where(
                 DataRow.data_file_id == data_file_id,
-                DataRow.status == "valid",
+                DataRow.id.in_(row_ids),
             )
             .order_by(DataRow.row_index.asc())
-            .offset(offset)
-            .limit(batch_size)
         )
         rows = list(result.scalars().all())
 

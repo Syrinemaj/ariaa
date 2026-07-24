@@ -158,5 +158,21 @@ def increment_token_version(user_id: str) -> int:
     redis = get_redis()
     key = f"token_version:{user_id}"
     new_version = redis.incr(key)
-    redis.expire(key, settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60 * 2)
+    # TTL must outlast refresh tokens (30 days), not just access tokens (30 min).
+    # A shorter TTL let deactivated users re-authenticate after the key expired.
+    redis.expire(key, settings.REFRESH_TOKEN_EXPIRE_DAYS * 86_400)
     return new_version
+
+
+async def revoke_refresh_token(db: AsyncSession, raw: str) -> None:
+    """Revoke a single refresh token by its raw value. No-op if already revoked."""
+    result = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == _sha256(raw),
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    record = result.scalar_one_or_none()
+    if record:
+        record.revoked_at = datetime.now(timezone.utc)
+        await db.flush()

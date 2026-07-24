@@ -1,5 +1,7 @@
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.pagination import PaginationParams, build_paginated_response, paginate_query
@@ -65,6 +67,39 @@ def get_global_summary(db: Session, org_id: Optional[str] = None) -> dict:
         "global_success_rate": compute_success_rate(total_success, total_steps),
         "status_breakdown": status_counts,
     }
+
+
+def get_daily_automation_trend(
+    db: Session,
+    org_id: Optional[str] = None,
+    days: int = 30,
+) -> List[dict]:
+    """Automation runs created per day, over the last `days` days (zero-filled)."""
+    since = datetime.now(timezone.utc) - timedelta(days=days - 1)
+    since_midnight = since.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    query = (
+        db.query(
+            func.date(AutomationRun.created_at).label("day"),
+            func.count().label("count"),
+        )
+        .filter(AutomationRun.created_at >= since_midnight)
+        .group_by(func.date(AutomationRun.created_at))
+    )
+    if org_id:
+        query = query.filter(AutomationRun.org_id == org_id)
+
+    counts_by_day = {str(row.day): row.count for row in query.all()}
+
+    return [
+        {
+            "date": (since_midnight + timedelta(days=offset)).date().isoformat(),
+            "count": counts_by_day.get(
+                (since_midnight + timedelta(days=offset)).date().isoformat(), 0
+            ),
+        }
+        for offset in range(days)
+    ]
 
 
 def get_automation_runs_paginated(

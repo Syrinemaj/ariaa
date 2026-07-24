@@ -20,6 +20,17 @@ class WorkflowModel(Base):
     schema_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # ARIA-WORKFLOW-V2: added for automatic "find an existing workflow
+    # matching this intent" lookup in the planner (migration 013). NULL on
+    # existing rows for primary_entity/action — no derivable source, to be
+    # populated by a future enrichment step. org_id is backfilled in the
+    # migration from analysis_runs.org_id via run_id.
+    primary_entity: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    action: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    org_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("organizations.id"), nullable=True, index=True
+    )
+
     analysis_run = relationship("AnalysisRun", back_populates="workflows")
     steps = relationship("WorkflowStepModel", back_populates="workflow", cascade="all, delete-orphan")
 

@@ -1,16 +1,11 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { User, Mail, Lock, Eye, EyeOff, CheckCircle2, Info } from 'lucide-react'
+import { User, Mail, Lock, Eye, EyeOff, CheckCircle2, Info, AlertCircle } from 'lucide-react'
+import { api, ApiError } from '../lib/api'
 
-const ARIALogo: React.FC<{ size?: number }> = ({ size = 32 }) => (
-  <svg width={size} height={Math.round(size * 40 / 36)} viewBox="0 0 36 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M18 2L34 11V29L18 38L2 29V11L18 2Z" fill="#0284c7" opacity="0.25" />
-    <path d="M18 7L30 14V26L18 33L6 26V14L18 7Z" fill="#0284c7" />
-  </svg>
-)
 
 interface FormErrors {
-  username?: string
+  full_name?: string
   email?: string
   password?: string
   confirmPassword?: string
@@ -23,39 +18,66 @@ const FEATURES = [
 ]
 
 const SignUpPage: React.FC = () => {
-  const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [fullName, setFullName]             = useState('')
+  const [email, setEmail]                   = useState('')
+  const [password, setPassword]             = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
-  const [errors, setErrors] = useState<FormErrors>({})
+  const [showPassword, setShowPassword]     = useState(false)
+  const [showConfirm, setShowConfirm]       = useState(false)
+  const [loading, setLoading]               = useState(false)
+  const [submitted, setSubmitted]           = useState(false)
+  const [apiError, setApiError]             = useState('')
+  const [errors, setErrors]                 = useState<FormErrors>({})
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {}
-    if (!username.trim() || username.trim().length < 3) newErrors.username = 'Le nom d\'utilisateur doit contenir au moins 3 caractères.'
-    if (!email.includes('@')) newErrors.email = 'Veuillez entrer une adresse email valide.'
-    if (password.length < 8) newErrors.password = 'Le mot de passe doit contenir au moins 8 caractères.'
-    if (password !== confirmPassword) newErrors.confirmPassword = 'Les mots de passe ne correspondent pas.'
+    if (!fullName.trim() || fullName.trim().length < 2)
+      newErrors.full_name = 'Le nom doit contenir au moins 2 caractères.'
+    if (!email.includes('@'))
+      newErrors.email = 'Veuillez entrer une adresse email valide.'
+    if (password.length < 8)
+      newErrors.password = 'Le mot de passe doit contenir au moins 8 caractères.'
+    if (password !== confirmPassword)
+      newErrors.confirmPassword = 'Les mots de passe ne correspondent pas.'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setApiError('')
     if (!validate()) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 800))
-    setLoading(false)
-    setSubmitted(true)
+    try {
+      await api.post('/auth/request-access', {
+        email,
+        password,
+        full_name: fullName.trim(),
+      })
+      setSubmitted(true)
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        if (err.status === 422) {
+          setApiError('Veuillez vérifier les informations saisies.')
+        } else if (err.status === 429) {
+          setApiError('Trop de tentatives. Réessayez dans quelques minutes.')
+        } else if (err.status === 404) {
+          setApiError('Service indisponible. Vérifiez que le serveur est démarré.')
+        } else {
+          setApiError('Une erreur est survenue. Veuillez réessayer.')
+        }
+      } else {
+        setApiError('Erreur réseau. Vérifiez votre connexion.')
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const inputBase = "w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-[rgba(255,255,255,0.3)] bg-[#1a1d2e] transition-all duration-150"
   const inputStyle = { border: '1.5px solid rgba(255,255,255,0.1)', outline: 'none' }
   const onFocus = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = '#6366f1')
-  const onBlur = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')
+  const onBlur  = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')
 
   return (
     <div className="min-h-[100dvh] flex flex-col lg:flex-row">
@@ -69,8 +91,8 @@ const SignUpPage: React.FC = () => {
 
         <div className="relative">
           <div className="flex items-center gap-3 mb-16">
-            <ARIALogo size={30} />
-            <span className="text-lg font-semibold text-white tracking-tight">aria</span>
+            <img src="/logo.png" alt="ARIA" style={{ height: 30, width: 'auto' }} />
+            <span className="text-lg font-semibold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
           </div>
 
           <h1 className="text-4xl font-bold text-white tracking-tight leading-tight mb-4">
@@ -97,8 +119,8 @@ const SignUpPage: React.FC = () => {
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-14 py-12 min-h-[100dvh] lg:min-h-0" style={{ background: '#0d0f1b' }}>
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-2.5 mb-10">
-          <ARIALogo size={28} />
-          <span className="text-lg font-semibold text-white tracking-tight">aria</span>
+          <img src="/logo.png" alt="ARIA" style={{ height: 28, width: 'auto' }} />
+          <span className="text-lg font-semibold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
         </div>
 
         <div className="w-full max-w-sm">
@@ -130,15 +152,22 @@ const SignUpPage: React.FC = () => {
                 <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>Un manager examinera votre demande et vous assignera un rôle avant que vous puissiez accéder à la plateforme.</p>
               </div>
 
+              {apiError && (
+                <div className="flex items-center gap-2 rounded-xl px-4 py-3 mb-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+                  <AlertCircle size={15} style={{ color: '#f87171', flexShrink: 0 }} />
+                  <p className="text-xs" style={{ color: '#f87171' }}>{apiError}</p>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
-                {/* Nom d'utilisateur */}
+                {/* Nom complet */}
                 <div>
-                  <label htmlFor="username" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Nom d'utilisateur</label>
+                  <label htmlFor="full_name" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Nom complet</label>
                   <div className="relative">
                     <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="username" type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="votre_pseudo" autoComplete="username" className={inputBase} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+                    <input id="full_name" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Prénom Nom" autoComplete="name" className={inputBase} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
                   </div>
-                  {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
+                  {errors.full_name && <p className="text-xs text-red-500 mt-1">{errors.full_name}</p>}
                 </div>
 
                 {/* Email */}

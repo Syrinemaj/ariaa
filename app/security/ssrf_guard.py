@@ -79,10 +79,18 @@ def _parse_and_check_url(url: str) -> tuple[str, str]:
     Parse + validate URL.
     Returns (hostname, normalized_base).
     Raises SSRFError on violation.
-    """
-    parsed = urlparse(url)
 
-    if parsed.scheme != "https":
+    When settings.ALLOW_HTTP_TARGETS=True (dev mode) the HTTPS-only check,
+    blocked-hostname list, and domain allowlist are all skipped so that local
+    mock APIs (http://host.docker.internal:9000, http://localhost:9000, …)
+    can be reached without touching production safety rules.
+    """
+    parsed = urlparse(url.strip())
+    _dev_http = settings.ALLOW_HTTP_TARGETS
+
+    if parsed.scheme not in ("http", "https"):
+        raise SSRFError(f"Unsupported URL scheme {parsed.scheme!r}")
+    if parsed.scheme == "http" and not _dev_http:
         raise SSRFError("Only HTTPS target URLs are allowed")
 
     if not parsed.hostname:
@@ -90,13 +98,14 @@ def _parse_and_check_url(url: str) -> tuple[str, str]:
 
     hostname = parsed.hostname.lower()
 
-    if hostname in _BLOCKED_HOSTNAMES:
+    if not _dev_http and hostname in _BLOCKED_HOSTNAMES:
         raise SSRFError(f"Hostname {hostname!r} is explicitly forbidden")
 
     normalized_base = normalize_url_base(parsed)
-    allowed = get_allowed_domains()
-    if allowed and normalized_base not in allowed:
-        raise SSRFError(f"Domain {normalized_base!r} is not in the allow-list")
+    if not _dev_http:
+        allowed = get_allowed_domains()
+        if allowed and normalized_base not in allowed:
+            raise SSRFError(f"Domain {normalized_base!r} is not in the allow-list")
 
     return hostname, normalized_base
 
@@ -110,7 +119,8 @@ def validate_target_url(url: str) -> None:
     """
     try:
         hostname, _ = _parse_and_check_url(url)
-        create_pinned_transport(hostname)
+        if not settings.ALLOW_HTTP_TARGETS:
+            create_pinned_transport(hostname)
     except SSRFError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -129,12 +139,25 @@ async def create_safe_client(
     """
     Yield an httpx.AsyncClient with pinned DNS transport.
     TOUTE requête HTTP sortante doit passer par ce context manager.
-    """
-    hostname, _ = _parse_and_check_url(base_url)
 
+    In dev mode (ALLOW_HTTP_TARGETS=True) the pinned-DNS transport is replaced
+    by a plain transport so that private-IP targets (host.docker.internal, …)
+    are reachable without triggering the forbidden-network guard.
+    """
     _limits = limits or httpx.Limits(max_connections=100, max_keepalive_connections=20)
     _timeout = timeout or httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0)
 
+    if settings.ALLOW_HTTP_TARGETS:
+        _parse_and_check_url(base_url)  # still validates URL format
+        async with httpx.AsyncClient(
+            limits=_limits,
+            timeout=_timeout,
+            base_url=base_url,
+        ) as client:
+            yield client
+        return
+
+    hostname, _ = _parse_and_check_url(base_url)
     transport = create_pinned_transport(hostname, limits=_limits)
 
     async with httpx.AsyncClient(

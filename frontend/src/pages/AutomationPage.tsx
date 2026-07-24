@@ -7,7 +7,8 @@ import {
   createPlan, executePlan,
   BackendPlanStep, CreatePlanResponse, ExecutePlanResponse,
 } from '../lib/automationApi'
-import { FlaskConical, Layers, Sparkles, Play, Lock, Unlock, ChevronDown, Plus, X, TriangleAlert } from 'lucide-react'
+import { ApiError } from '../lib/api'
+import { FlaskConical, Layers, Sparkles, Play, Lock, Unlock, ChevronDown, Plus, X, TriangleAlert, AlertCircle } from 'lucide-react'
 
 function MethodBadge({ m }: { m: string }) {
   const cls: Record<string, string> = { GET:'bg-emerald-50 text-emerald-700 border-emerald-200', POST:'bg-indigo-50 text-indigo-700 border-indigo-200', PUT:'bg-amber-50 text-amber-700 border-amber-200', PATCH:'bg-violet-50 text-violet-700 border-violet-200', DELETE:'bg-rose-50 text-rose-700 border-rose-200' }
@@ -101,6 +102,56 @@ function PlanStep({ step }: { step: BackendPlanStep }) {
   )
 }
 
+const INSTRUCTION_EXAMPLES = [
+  'Créer un employé Bob Martin avec contrat CDI et envoyer un email de bienvenue',
+  'Ouvrir un compte paie et calculer le salaire du mois de janvier',
+  'Récupérer la liste des employés actifs du département Engineering',
+  'Mettre à jour le poste et le salaire d\'un employé existant',
+  'Créer un utilisateur avec rôle OPERATOR et activer son accès',
+]
+
+type ScoreLevel = 'low' | 'medium' | 'good'
+const ACTION_WORDS = [
+  'créer','creer','create','mettre','update','envoyer','send','récupérer','recuperer',
+  'fetch','supprimer','delete','lister','list','ouvrir','ajouter','add','générer','generer',
+  'activer','désactiver','modifier','authenticate','login','calculer','calculate',
+  'valider','validate','archiver','archive','importer','import','exporter','export',
+  'synchroniser','notifier','notify','démarrer','arrêter','déclencher','trigger',
+]
+const ENTITY_WORDS = [
+  'employé','employee','contrat','contract','utilisateur','user','compte','account',
+  'salaire','salary','email','fichier','file','client','customer','commande','order',
+  'facture','invoice','manager','département','department','rôle','role','accès','access',
+  'token','rapport','report','paiement','payment','profil','profile','équipe','team',
+  'cotisation','bulletin','fiche','notification','identifiant','credential',
+]
+
+function validateInstruction(v: string): string {
+  const t = v.trim()
+  const lower = t.toLowerCase()
+  if (t.length < 10) return `Trop court — ${t.length}/10 caractères minimum.`
+  if (t.length > 500) return `Trop long — ${t.length}/500 caractères maximum.`
+  if (!ACTION_WORDS.some(w => lower.includes(w)))
+    return 'Ajoutez un verbe d\'action : créer, envoyer, récupérer, mettre à jour, supprimer…'
+  if (!ENTITY_WORDS.some(w => lower.includes(w)) && t.split(/\s+/).length < 5)
+    return 'Précisez l\'objet : employé, contrat, compte, email, utilisateur…'
+  return ''
+}
+
+function scoreInstruction(v: string): { level: ScoreLevel; hint: string } {
+  const t = v.trim()
+  const lower = t.toLowerCase()
+  const words = t.split(/\s+/)
+  if (t.length < 10) return { level: 'low', hint: `${t.length}/10 min` }
+  const hasAction = ACTION_WORDS.some(w => lower.includes(w))
+  const hasEntity = ENTITY_WORDS.some(w => lower.includes(w))
+  const isDetailed = words.length >= 7 && t.length >= 50
+  if (!hasAction) return { level: 'low', hint: 'Verbe d\'action manquant' }
+  if (!hasEntity) return { level: 'medium', hint: 'Précisez l\'objet (employé, contrat…)' }
+  if (isDetailed) return { level: 'good', hint: 'Instruction détaillée ✓' }
+  return { level: 'medium', hint: 'Ajoutez des détails pour de meilleurs résultats' }
+}
+
 export default function AutomationPage() {
   const nav = useNavigate()
 
@@ -121,10 +172,17 @@ export default function AutomationPage() {
     { k: 'X-Tenant', v: 'northwind' },
   ])
   const [inputRows, setInputRows] = useState('[\n  { "firstName":"Bob", "lastName":"Hartman", "email":"bob@northwind.io",\n    "department":"Engineering", "contract_type":"CDI", "salary_eur":68000 }\n]')
+  const [planError, setPlanError]               = useState('')
+  const [planSuggestion, setPlanSuggestion]     = useState('')
+  const [instructionFocused, setInstructionFocused] = useState(false)
 
   const topK = searchLevel === 'precise' ? 5 : searchLevel === 'wide' ? 12 : 8
   const canExecute = !!planResult && (dryRun || approved)
   const steps = planResult?.plan.steps ?? []
+  const instructionError = validateInstruction(instruction)
+  const instructionScore = scoreInstruction(instruction)
+  const SCORE_COLORS: Record<ScoreLevel, string> = { low: '#f43f5e', medium: '#f59e0b', good: '#22c55e' }
+  const SCORE_LEVELS: Record<ScoreLevel, number> = { low: 0, medium: 1, good: 2 }
 
   useEffect(() => {
     listRuns({ limit: 50 }).then(data => {
@@ -134,15 +192,25 @@ export default function AutomationPage() {
   }, [])
 
   async function handleGeneratePlan() {
-    if (!selectedRunId) return
+    if (!selectedRunId || instructionError) return
     setGenerating(true)
     setApiError('')
+    setPlanError('')
+    setPlanSuggestion('')
     setPlanResult(null)
     setExecutionResult(null)
     try {
       const result = await createPlan(selectedRunId, instruction, topK)
       setPlanResult(result)
     } catch (e) {
+      if (e instanceof ApiError && e.status === 400 && e.body) {
+        const d = (e.body as { detail?: { code?: string; message?: string; suggestion?: string } }).detail
+        if (d && typeof d === 'object') {
+          setPlanError(d.message ?? 'Instruction invalide ou aucun endpoint correspondant.')
+          setPlanSuggestion(d.suggestion ?? '')
+          return
+        }
+      }
       setApiError(e instanceof Error ? e.message : 'Erreur lors de la génération du plan')
     } finally {
       setGenerating(false)
@@ -199,6 +267,16 @@ export default function AutomationPage() {
           </div>
         )}
 
+        {planError && (
+          <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', color: '#92400e', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
+            <div>
+              <p className="font-semibold">{planError}</p>
+              {planSuggestion && <p className="mt-1 opacity-80">{planSuggestion}</p>}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card pad">
             <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Générer un plan</p>
@@ -215,7 +293,46 @@ export default function AutomationPage() {
               )}
               <div>
                 <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Instruction</p>
-                <textarea value={instruction} onChange={e => setInstruction(e.target.value)} rows={3} className="input resize-none" />
+                <textarea
+                  value={instruction}
+                  onChange={e => { setInstruction(e.target.value); setPlanError(''); setPlanSuggestion('') }}
+                  onFocus={() => setInstructionFocused(true)}
+                  onBlur={() => setInstructionFocused(false)}
+                  rows={3}
+                  className="input resize-none"
+                  placeholder="Décrivez l'action à automatiser…"
+                />
+                {instruction.trim().length > 0 && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex gap-0.5 flex-1">
+                      {(['low', 'medium', 'good'] as ScoreLevel[]).map(lvl => (
+                        <div key={lvl} className="h-1 flex-1 rounded-full transition-all"
+                          style={{ background: SCORE_LEVELS[instructionScore.level] >= SCORE_LEVELS[lvl] ? SCORE_COLORS[instructionScore.level] : 'var(--line)' }} />
+                      ))}
+                    </div>
+                    <span className="text-xs ink-2 whitespace-nowrap">{instructionScore.hint}</span>
+                    <span className="text-[11px] font-mono whitespace-nowrap"
+                      style={{ color: instruction.length > 450 ? '#f43f5e' : 'var(--ink-2)' }}>
+                      {instruction.length}/500
+                    </span>
+                  </div>
+                )}
+                {instruction.trim().length > 0 && instructionError && (
+                  <p className="mt-1 text-xs" style={{ color: '#f43f5e' }}>{instructionError}</p>
+                )}
+                {(instructionFocused || instruction.trim().length === 0) && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="text-xs ink-2 self-center">Exemples :</span>
+                    {INSTRUCTION_EXAMPLES.map(ex => (
+                      <button key={ex} type="button"
+                        onMouseDown={e => { e.preventDefault(); setInstruction(ex); setPlanError(''); setPlanSuggestion('') }}
+                        className="text-xs px-2.5 py-1 rounded-full border transition hover:opacity-80"
+                        style={{ borderColor: 'var(--brand)', color: 'var(--brand)', background: 'color-mix(in oklch, var(--brand) 6%, var(--card))' }}>
+                        {ex.length > 38 ? ex.slice(0, 38) + '…' : ex}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Niveau de recherche</p>
@@ -231,8 +348,8 @@ export default function AutomationPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <button onClick={handleGeneratePlan} disabled={!selectedRunId || generating} className="btn-primary"
-                  style={{ opacity: !selectedRunId || generating ? 0.6 : 1 }}>
+                <button onClick={handleGeneratePlan} disabled={!selectedRunId || generating || !!instructionError} className="btn-primary"
+                  style={{ opacity: !selectedRunId || generating || !!instructionError ? 0.6 : 1 }}>
                   <Sparkles className="w-4 h-4" /> {generating ? 'Génération…' : 'Générer le plan'}
                 </button>
               </div>

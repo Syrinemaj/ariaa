@@ -2,11 +2,42 @@ import { useEffect, useState } from 'react'
 import AppLayout from '../components/layout/AppLayout'
 import { MethodBadge, SeverityBadge } from '../components/aria/Badges'
 import { Risk } from '../lib/aria-data'
-import { ragSearch } from '../lib/analysisApi'
+import { ragSearch, indexRunEmbeddings } from '../lib/analysisApi'
 import { listRuns, AnalysisRun } from '../lib/registryApi'
-import { Sparkles, Search, RefreshCw, ChevronDown } from 'lucide-react'
+import { Sparkles, Search, RefreshCw, ChevronDown, Cpu, Tag, AlignLeft, Layers, AlertCircle } from 'lucide-react'
+
+// Parse "Key: value" lines from the embedding text into a structured map
+function parseEmbedding(text: string): Record<string, string> {
+  const map: Record<string, string> = {}
+  const lines = text.split('\n')
+  let current = ''
+  for (const line of lines) {
+    const colon = line.indexOf(': ')
+    if (colon !== -1) {
+      current = line.slice(0, colon).trim()
+      map[current] = line.slice(colon + 2).trim()
+    } else if (current && line.trim()) {
+      map[current] += ' ' + line.trim()
+    }
+  }
+  return map
+}
 
 const SUGGESTIONS = ["créer un employé", "révoquer un badge", "mettre à jour l'IBAN", "lister les employés", "rafraîchir le token"]
+
+const FILLER_WORDS = new Set([
+  'bonjour','hello','salut','hi','hey','coucou','bonsoir','bonne nuit','bye','byebye',
+  'test','ok','oui','non','rien','merci','thanks','thank','please','stp','sil vous plait',
+  'lol','wtf','???','...',
+])
+
+function validateQuery(q: string): string {
+  const t = q.trim()
+  if (t.length < 4) return 'Requête trop courte — décrivez une action API en quelques mots.'
+  if (FILLER_WORDS.has(t.toLowerCase())) return 'Cette requête ne correspond à aucune action API.'
+  if (!t.includes(' ') && t.length < 7) return 'Décrivez l\'action en quelques mots (ex : "créer un employé").'
+  return ''
+}
 
 type RagResult = {
   method: string; path: string; canonical: string; domain: string; action: string
@@ -14,15 +45,17 @@ type RagResult = {
 }
 
 export default function RagPage() {
-  const [query, setQuery]     = useState('create a new employee with payroll and badge')
-  const [topK, setTopK]       = useState(5)
-  const [runs, setRuns]       = useState<AnalysisRun[]>([])
-  const [runId, setRunId]     = useState('')
-  const [running, setRunning] = useState(false)
-  const [expanded, setExpanded] = useState<number | null>(null)
-  const [results, setResults] = useState<RagResult[]>([])
+  const [query, setQuery]       = useState('create a new employee with payroll and badge')
+  const [topK, setTopK]         = useState(5)
+  const [runs, setRuns]         = useState<AnalysisRun[]>([])
+  const [runId, setRunId]       = useState('')
+  const [running, setRunning]         = useState(false)
+  const [indexing, setIndexing]       = useState(false)
+  const [indexDone, setIndexDone]     = useState(false)
+  const [expanded, setExpanded]       = useState<number | null>(null)
+  const [results, setResults]         = useState<RagResult[]>([])
+  const [lowRelevance, setLowRelevance] = useState(false)
 
-  // Load analysis runs for the selector
   useEffect(() => {
     listRuns({ limit: 50 }).then(data => {
       setRuns(data.items)
@@ -31,23 +64,31 @@ export default function RagPage() {
   }, [])
 
   const search = async () => {
-    if (!query.trim() || !runId) return
+    if (!query.trim() || !runId || validateQuery(query)) return
     setRunning(true)
     setExpanded(null)
+    setLowRelevance(false)
     try {
       const data = await ragSearch(query, runId, topK)
-      setResults(data.results.map(r => ({
+      const mapped = data.results.map(r => ({
         method:    r.method,
         path:      r.path,
-        canonical: r.endpoint.canonical_key,
-        domain:    r.endpoint.business_domain ?? '—',
-        action:    r.endpoint.business_action ?? '—',
+        canonical: r.canonical_key,
+        domain:    r.business_domain ?? '—',
+        action:    r.business_action ?? '—',
         score:     r.score,
-        embedding: `${r.method} ${r.path} canonical=${r.endpoint.canonical_key} domain=${r.endpoint.business_domain ?? '—'} action=${r.endpoint.business_action ?? '—'}`,
-        risk:      (r.endpoint.risk || 'low') as Risk,
-        tags:      [],
+        embedding: r.embedding_text,
+        risk:      ((r.metadata?.risk as string) || 'low') as Risk,
+        tags:      (r.metadata?.tags as string[]) || [],
         samples:   0,
-      })))
+      }))
+      setResults(mapped)
+      if (mapped.length > 0) {
+        const scores = mapped.map(r => r.score)
+        const maxScore = Math.max(...scores)
+        const scoreSpread = maxScore - Math.min(...scores)
+        setLowRelevance(maxScore < 0.75 || scoreSpread < 0.03)
+      }
     } catch {
       // keep existing results on error
     } finally {
@@ -55,7 +96,21 @@ export default function RagPage() {
     }
   }
 
-  // Run options for selector — fall back to run IDs if no label available
+  const reindex = async () => {
+    if (!runId || indexing) return
+    setIndexing(true)
+    setIndexDone(false)
+    try {
+      await indexRunEmbeddings(runId)
+      setIndexDone(true)
+      setTimeout(() => setIndexDone(false), 4000)
+    } catch {
+      // silent
+    } finally {
+      setIndexing(false)
+    }
+  }
+
   const runOptions = runs.map(r => ({ id: r.id, label: r.file_name }))
 
   return (
@@ -72,9 +127,13 @@ export default function RagPage() {
               <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Requête</p>
               <div className="relative">
                 <Sparkles className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--brand)' }} />
-                <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && void search()}
+                <input value={query} onChange={e => { setQuery(e.target.value); setLowRelevance(false) }}
+                  onKeyDown={e => e.key === 'Enter' && void search()}
                   className="input !pl-9" placeholder="ex. révoquer un badge pour un employé licencié" />
               </div>
+              {query.trim().length > 0 && validateQuery(query) && (
+                <p className="mt-1 text-xs" style={{ color: '#f43f5e' }}>{validateQuery(query)}</p>
+              )}
             </div>
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Analyse source</p>
@@ -90,9 +149,19 @@ export default function RagPage() {
               </div>
               <input type="range" min="1" max="20" value={topK} onChange={e => setTopK(+e.target.value)} className="w-full" />
             </div>
-            <button onClick={() => void search()} disabled={running || !runId} className="btn-primary">
-              {running ? <><RefreshCw className="w-4 h-4 animate-spin" />Recherche…</> : <><Search className="w-4 h-4" />Rechercher</>}
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => void search()} disabled={running || !runId || !!validateQuery(query)} className="btn-primary"
+                style={{ opacity: running || !runId || !!validateQuery(query) ? 0.6 : 1 }}>
+                {running ? <><RefreshCw className="w-4 h-4 animate-spin" />Recherche…</> : <><Search className="w-4 h-4" />Rechercher</>}
+              </button>
+              <button onClick={() => void reindex()} disabled={indexing || !runId} className="btn-secondary" title="Re-indexer les embeddings">
+                {indexing
+                  ? <RefreshCw className="w-4 h-4 animate-spin" />
+                  : indexDone
+                    ? <Cpu className="w-4 h-4" style={{ color: '#16a34a' }} />
+                    : <Cpu className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
             <span className="ink-2">Essayer :</span>
@@ -109,8 +178,19 @@ export default function RagPage() {
 
         {results.length === 0 && !running && (
           <p className="text-sm ink-2 text-center py-6">
-            {runId ? 'Enter a query and click Rechercher to find endpoints.' : 'Select a run first, then search.'}
+            {runId ? 'Saisissez une requête et cliquez sur Rechercher pour trouver des endpoints.' : 'Sélectionnez d\'abord un run, puis lancez la recherche.'}
           </p>
+        )}
+
+        {lowRelevance && results.length > 0 && (
+          <div className="p-3 rounded-xl flex items-start gap-2 text-xs"
+            style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', color: '#92400e', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
+            <div>
+              <p className="font-semibold">Résultats de faible pertinence — la requête ne semble pas correspondre aux endpoints indexés.</p>
+              <p className="mt-1 opacity-80">La recherche sémantique retourne toujours les {results.length} endpoints les plus proches, même sans correspondance réelle. Reformulez avec des termes métier précis (ex : "créer un employé", "récupérer les commandes").</p>
+            </div>
+          </div>
         )}
 
         <div className="space-y-3">
@@ -134,40 +214,90 @@ export default function RagPage() {
                     <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
-                {isOpen && (
-                  <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4" style={{ borderTop: '1px solid var(--line)', background: 'color-mix(in oklch, var(--brand) 2%, var(--card))' }}>
-                    <div>
-                      <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Texte d&apos;embedding</p>
-                      <pre className="font-mono text-xs whitespace-pre-wrap p-3 rounded-xl" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', color: 'var(--ink)', border: '1px solid var(--line)' }}>
-                        {r.embedding}
-                      </pre>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Contexte</p>
-                      <div className="space-y-2 text-xs">
-                        {[['canonical', r.canonical], ['tags', r.tags.join(', ') || '—'], ['échantillons', r.samples]].map(([k, v]) => (
-                          <div key={String(k)} className="flex justify-between p-2 rounded-xl" style={{ background: 'var(--card)', border: '1px solid var(--line)' }}>
-                            <span className="ink-2">{k}</span><span className="font-mono" style={{ color: 'var(--ink)' }}>{String(v)}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between p-2 rounded-xl" style={{ background: 'var(--card)', border: '1px solid var(--line)' }}>
-                          <span className="ink-2">risque</span><SeverityBadge s={r.risk} />
+                {isOpen && (() => {
+                  const emb = parseEmbedding(r.embedding)
+                  const reqFields  = (emb['Request fields']  || '').split(',').map(s => s.trim()).filter(Boolean)
+                  const respFields = (emb['Response fields'] || '').split(',').map(s => s.trim()).filter(Boolean)
+                  const tags       = (emb['Tags'] || '').split(',').map(s => s.trim()).filter(Boolean)
+                  return (
+                    <div className="px-4 pb-4 pt-3 space-y-4"
+                      style={{ borderTop: '1px solid var(--line)', background: 'color-mix(in oklch, var(--brand) 2%, var(--card))' }}>
+
+                      {/* Summary */}
+                      {emb['Summary'] && (
+                        <div className="flex gap-2.5">
+                          <AlignLeft className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: 'var(--brand)' }} />
+                          <p className="text-sm" style={{ color: 'var(--ink)' }}>{emb['Summary']}</p>
                         </div>
+                      )}
+
+                      {/* Description */}
+                      {emb['Description'] && emb['Description'] !== emb['Summary'] && (
+                        <p className="text-xs ink-2 leading-relaxed pl-6">{emb['Description']}</p>
+                      )}
+
+                      {/* Tags */}
+                      {tags.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap pl-6">
+                          <Tag className="w-3 h-3 ink-2 shrink-0" />
+                          {tags.map(t => (
+                            <span key={t} className="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                              style={{ background: 'color-mix(in oklch, var(--brand) 10%, var(--card))', color: 'var(--brand)', border: '1px solid color-mix(in oklch, var(--brand) 20%, var(--line))' }}>
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Fields */}
+                      {(reqFields.length > 0 || respFields.length > 0) && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+                          {reqFields.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Champs requête</p>
+                              <div className="flex flex-wrap gap-1">
+                                {reqFields.map(f => (
+                                  <span key={f} className="px-1.5 py-0.5 rounded text-[11px] font-mono"
+                                    style={{ background: 'color-mix(in oklch, var(--ink) 5%, var(--card))', color: 'var(--ink)', border: '1px solid var(--line)' }}>
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {respFields.length > 0 && (
+                            <div>
+                              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Champs réponse</p>
+                              <div className="flex flex-wrap gap-1">
+                                {respFields.map(f => (
+                                  <span key={f} className="px-1.5 py-0.5 rounded text-[11px] font-mono"
+                                    style={{ background: 'color-mix(in oklch, var(--ink) 5%, var(--card))', color: 'var(--ink)', border: '1px solid var(--line)' }}>
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Footer row: risque + canonical */}
+                      <div className="flex items-center gap-4 pl-6 pt-1 flex-wrap">
+                        <div className="flex items-center gap-2 text-xs">
+                          <Layers className="w-3 h-3 ink-2" />
+                          <span className="ink-2">Risque</span>
+                          <SeverityBadge s={r.risk} />
+                        </div>
+                        <p className="text-[11px] font-mono ink-2 truncate">{r.canonical}</p>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
               </div>
             )
           })}
         </div>
 
-        <div className="card pad text-xs space-y-1">
-          <p className="text-[10px] font-bold tracking-widest uppercase ink-2">Détails techniques</p>
-          <p className="font-mono"><span className="ink-2">run_id</span> <span style={{ color: 'var(--ink)' }}>{runId || '—'}</span></p>
-          <p className="font-mono"><span className="ink-2">Endpoint</span> <span style={{ color: 'var(--ink)' }}>POST /rag/search</span></p>
-          <p className="font-mono"><span className="ink-2">top_k</span> <span style={{ color: 'var(--ink)' }}>{topK}</span></p>
-        </div>
       </div>
     </AppLayout>
   )

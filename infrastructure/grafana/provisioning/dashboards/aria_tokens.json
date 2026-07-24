@@ -1,8 +1,8 @@
 {
   "title": "ARIA — LLM Token Usage (All Providers)",
   "uid": "aria-tokens",
-  "description": "Vue globale tous fournisseurs IA. Utilisez les dashboards Azure OpenAI et Groq pour le détail par provider.",
-  "version": 2,
+  "description": "Vue globale tous fournisseurs IA. Utilisez les dashboards Azure OpenAI, Groq et Bedrock pour le détail par provider.",
+  "version": 3,
   "refresh": "30s",
   "time": { "from": "now-24h", "to": "now" },
   "tags": ["aria", "llm", "overview"],
@@ -77,7 +77,7 @@
       "id": 3,
       "title": "Azure OpenAI — Tokens (24h)",
       "type": "stat",
-      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -102,7 +102,7 @@
       "id": 4,
       "title": "Groq — Tokens (24h)",
       "type": "stat",
-      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
       "options": {
         "colorMode": "background",
         "graphMode": "none",
@@ -120,6 +120,31 @@
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "expr": "sum(increase(aria_llm_tokens_total{provider=\"groq\"}[24h]))",
           "legendFormat": "Groq"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Bedrock — Tokens (24h)",
+      "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "reduceOptions": { "calcs": ["sum"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "purple", "mode": "fixed" }
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(aria_llm_tokens_total{provider=\"bedrock\"}[24h]))",
+          "legendFormat": "Bedrock"
         }
       ]
     },

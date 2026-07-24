@@ -2,7 +2,10 @@
 AI client protocols — structural subtyping via typing.Protocol.
 
 Two protocols are defined:
-  AIClientProtocol     — completion methods (Groq primary, Azure fallback)
+  AIClientProtocol     — completion methods. GroqClient is the primary
+    provider (AI_PROVIDER=groq, the default); AzureOpenAIClient is a
+    separate standalone provider (AI_PROVIDER=azure), not a fallback that
+    GroqClient reaches for internally.
   EmbeddingClientProtocol — embedding methods (LocalEmbeddingClient only)
 
 Both GroqClient and AzureOpenAIClient satisfy AIClientProtocol without
@@ -19,6 +22,12 @@ from typing import Any, List, Optional
 from typing import runtime_checkable, Protocol
 
 from sqlalchemy.orm import Session
+
+
+class StructuredResponseError(Exception):
+    """Raised when an LLM's structured_chat response doesn't satisfy the
+    required schema fields even after a retry — see GroqClient.structured_chat.
+    Callers should catch this and surface a clean error, not a raw KeyError."""
 
 
 @runtime_checkable

@@ -28,6 +28,11 @@ class PlanStep(BaseModel):
     response_schema: Optional[Dict[str, Any]] = None
     auth_required: bool = False
     risk_level: str = "low"
+    # ARIA-WORKFLOW-V2: populated from generate_plan_selection()'s "steps"
+    # (app/planner/plan_generator.py), matched by canonical_key, in
+    # plan_builder.py. Empty when no CSV/mapping was involved or the LLM
+    # call fell back. e.g. {"prénom": "first_name", "type_contrat": None}
+    field_mapping: Dict[str, Optional[str]] = Field(default_factory=dict)
 
 
 class AutomationPlan(BaseModel):

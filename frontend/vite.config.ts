@@ -25,7 +25,7 @@ export default defineConfig({
       '/users':       FASTAPI,
       '/approvals':   FASTAPI,
       '/reports':     FASTAPI,
-      '/automation':  FASTAPI,
+      '^/automation/': FASTAPI,
       '/bulk':        FASTAPI,
       '/openapi':     FASTAPI,
       '/audit-logs':  FASTAPI,

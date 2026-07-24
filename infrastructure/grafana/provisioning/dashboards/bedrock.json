@@ -1,0 +1,159 @@
+{
+  "title": "ARIA — Amazon Bedrock (Claude)",
+  "uid": "aria-bedrock",
+  "description": "Tokens et coûts pour le provider Bedrock (Claude Haiku 4.5 / Sonnet 5 / Opus 4.8). N'affiche aucune donnée tant que AI_PROVIDER=bedrock n'est pas actif et qu'un client Bedrock n'émet pas de métriques avec provider=\"bedrock\" via record_llm_tokens().",
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "tags": ["aria", "bedrock", "claude", "llm"],
+  "schemaVersion": 38,
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "📊 Résumé Bedrock", "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+
+    {
+      "id": 1, "title": "Tokens totaux (24h)", "type": "stat",
+      "gridPos": { "x": 0, "y": 1, "w": 8, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 50000 },
+            { "color": "red", "value": 500000 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(increase(aria_llm_tokens_total{provider=\"bedrock\"}[24h]))",
+        "legendFormat": "Tokens"
+      }]
+    },
+
+    {
+      "id": 2, "title": "Coût estimé (24h)", "type": "stat",
+      "gridPos": { "x": 8, "y": 1, "w": 8, "h": 4 },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 4,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 1 },
+            { "color": "red", "value": 5 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(increase(aria_llm_cost_total{provider=\"bedrock\"}[24h]))",
+        "legendFormat": "Coût USD"
+      }]
+    },
+
+    {
+      "id": 3, "title": "Tokens/min (actuel)", "type": "stat",
+      "gridPos": { "x": 16, "y": 1, "w": 8, "h": 4 },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 5000 },
+            { "color": "red", "value": 20000 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(rate(aria_llm_tokens_total{provider=\"bedrock\"}[1m])) * 60",
+        "legendFormat": "Tokens/min"
+      }]
+    },
+
+    { "id": 200, "type": "row", "title": "📈 Consommation dans le temps", "collapsed": false,
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 } },
+
+    {
+      "id": 4, "title": "Tokens/min — par tâche", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (task_name) (rate(aria_llm_tokens_total{provider=\"bedrock\"}[1m]) * 60)",
+        "legendFormat": "{{task_name}}"
+      }]
+    },
+
+    {
+      "id": 5, "title": "Coût/heure — par modèle Claude", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 6,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (model_name) (rate(aria_llm_cost_total{provider=\"bedrock\"}[5m]) * 3600)",
+        "legendFormat": "{{model_name}}"
+      }]
+    },
+
+    {
+      "id": 6, "title": "Répartition tokens par modèle Claude", "type": "piechart",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (model_name) (aria_llm_tokens_total{provider=\"bedrock\"})",
+        "legendFormat": "{{model_name}}"
+      }]
+    },
+
+    {
+      "id": 7, "title": "Répartition tokens par tâche", "type": "piechart",
+      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "fieldConfig": { "defaults": { "unit": "short" } },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum by (task_name) (aria_llm_tokens_total{provider=\"bedrock\"})",
+        "legendFormat": "{{task_name}}"
+      }]
+    },
+
+    {
+      "id": 8,
+      "title": "📋 Note — statut de la migration",
+      "type": "text",
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
+      "options": {
+        "mode": "markdown",
+        "content": "## 🚧 Bedrock pas encore actif\n\nCe dashboard reste vide (\"No data\") tant qu'aucun client Bedrock n'appelle `record_llm_tokens(..., provider=\"bedrock\")`.\n\n**État actuel :**\n- `AI_PROVIDER=groq` (voir le dashboard Groq)\n- Tarifs Bedrock déjà réperториés dans `app/llm_observability/pricing.py` (`anthropic.claude-haiku-4-5` / `-sonnet-5` / `-opus-4-8`)\n- Comparaison de coûts disponible via `GET /llm/compare-models` ou `python -m scripts.compare_llm_models`\n\n**Reste à faire pour peupler ce dashboard :**\n1. Implémenter `BedrockClient` (boto3 / AnthropicBedrock)\n2. Passer `AI_PROVIDER=bedrock` en config\n3. S'assurer que `record_llm_tokens(provider=\"bedrock\")` est bien appelé après chaque appel"
+      }
+    }
+  ]
+}

@@ -48,9 +48,16 @@ PRICING: dict[str, ModelPrice] = {
     # ── Amazon Bedrock candidates for the Groq → AWS migration ─────────────
     # Bedrock model IDs take the "anthropic." prefix (vs. bare "claude-..."
     # on the first-party Anthropic API) — use these exact strings when
-    # calling AnthropicBedrock / bedrock-runtime.
-    "anthropic.claude-haiku-4-5": ModelPrice(
-        provider="bedrock", model="anthropic.claude-haiku-4-5",
+    # calling bedrock-runtime.converse(). Keys here are the PRICING lookup
+    # form (region prefix "eu."/"global." stripped — see
+    # evaluation/run_scripts/run_normalization_eval.py::_pricing_key()),
+    # NOT necessarily the literal inference-profile ID the API call itself
+    # needs. Re-verified against a live account 2026-08-04 via
+    # bedrock.list_inference_profiles() — Haiku 4.5 requires the dated
+    # suffix, Sonnet 5 doesn't (as returned by that account at that date;
+    # re-check before trusting for a different account/date).
+    "anthropic.claude-haiku-4-5-20251001-v1:0": ModelPrice(
+        provider="bedrock", model="anthropic.claude-haiku-4-5-20251001-v1:0",
         input_per_1k=0.00100, output_per_1k=0.00500,
         note="Cheapest Claude tier — fastest, best fit for high-volume classification/extraction",
     ),
@@ -63,6 +70,23 @@ PRICING: dict[str, ModelPrice] = {
         provider="bedrock", model="anthropic.claude-opus-4-8",
         input_per_1k=0.00500, output_per_1k=0.02500,
         note="Most capable Claude tier — priced accordingly",
+    ),
+    # ── Non-Anthropic Bedrock candidate (provider-agnostic via Converse) ──
+    "amazon.nova-lite-v1:0": ModelPrice(
+        provider="bedrock", model="amazon.nova-lite-v1:0",
+        input_per_1k=0.00006, output_per_1k=0.00024,
+        note="Verified via web search earlier in this session, not re-checked live on Bedrock pricing page — "
+             "re-verify before a final production cost decision. ~15-40x cheaper than Haiku 4.5; early test "
+             "(n=1) showed it returning the raw segment value instead of a semantic name — watch naming_accuracy.",
+    ),
+    # ── Production default (AI_PROVIDER=bedrock) ───────────────────────────
+    "deepseek.v3.2": ModelPrice(
+        provider="bedrock", model="deepseek.v3.2",
+        input_per_1k=0.00200, output_per_1k=0.01000,
+        note="Not verified on a live Bedrock pricing page (deepseek.v3.2 absent from the 4 models "
+             "spot-checked for this table) — same prudent default rate used by evaluation/run_scripts/"
+             "run_niveau0_sweep.py and run_param_detection_eval.py for unpriced candidates. Re-verify "
+             "before trusting aria_llm_cost_total for a real budget decision.",
     ),
 }
 

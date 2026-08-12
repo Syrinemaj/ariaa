@@ -17,8 +17,12 @@ No hand-verified expected_names here — that doesn't scale to hundreds of
 cases. Deterministic generation (no LLM), so the input is reproducible
 across runs even though it's synthetic.
 
-    python -m evaluation.run_normalization_stress_test
-    python -m evaluation.run_normalization_stress_test --with-ai
+    python -m evaluation.run_scripts.run_normalization_stress_test
+    python -m evaluation.run_scripts.run_normalization_stress_test --with-ai
+
+# ARIA-EVAL: evaluation/ folder restructuring (Phase 2) — this file used to
+# be evaluation/run_normalization_stress_test.py. Moved into run_scripts/;
+# output CSVs now write into evaluation/results/. No behavior change.
 """
 from __future__ import annotations
 
@@ -33,10 +37,12 @@ from app.ingestion.models import TrafficEntry
 from app.normalization.deduplication import deduplicate_endpoints
 from app.normalization.service import normalize_entries
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-RESULTS_CSV_PATH = os.path.join(_HERE, "normalization_stress_results.csv")
-LOW_CONFIDENCE_CSV_PATH = os.path.join(_HERE, "normalization_stress_low_confidence.csv")
-CATALOG_CSV_PATH = os.path.join(_HERE, "normalization_stress_catalog_deduplicated.csv")
+_RUN_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_EVAL_ROOT = os.path.dirname(_RUN_SCRIPTS_DIR)
+_RESULTS_DIR = os.path.join(_EVAL_ROOT, "results")
+RESULTS_CSV_PATH = os.path.join(_RESULTS_DIR, "normalization_stress_results.csv")
+LOW_CONFIDENCE_CSV_PATH = os.path.join(_RESULTS_DIR, "normalization_stress_low_confidence.csv")
+CATALOG_CSV_PATH = os.path.join(_RESULTS_DIR, "normalization_stress_catalog_deduplicated.csv")
 
 _PLACEHOLDER_RE = re.compile(r"^\{.+\}$")
 _RAW_ID_LEAK_RE = re.compile(r"^[a-z]+_\d+_id$")

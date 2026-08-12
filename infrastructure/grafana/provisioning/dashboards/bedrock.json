@@ -1,11 +1,11 @@
 {
-  "title": "ARIA — Amazon Bedrock (Claude)",
+  "title": "ARIA — Amazon Bedrock",
   "uid": "aria-bedrock",
-  "description": "Tokens et coûts pour le provider Bedrock (Claude Haiku 4.5 / Sonnet 5 / Opus 4.8). N'affiche aucune donnée tant que AI_PROVIDER=bedrock n'est pas actif et qu'un client Bedrock n'émet pas de métriques avec provider=\"bedrock\" via record_llm_tokens().",
-  "version": 1,
+  "description": "Tokens et coûts pour le provider Bedrock (AI_PROVIDER=bedrock, actif par défaut — modèle courant : deepseek.v3.2, voir app/core/config.py::BEDROCK_MODEL). Fonctionne avec n'importe quel modèle Bedrock configuré, pas seulement Claude — les panels 'par modèle' se réajustent automatiquement si BEDROCK_MODEL change.",
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
-  "tags": ["aria", "bedrock", "claude", "llm"],
+  "tags": ["aria", "bedrock", "deepseek", "llm"],
   "schemaVersion": 38,
   "panels": [
 
@@ -99,7 +99,7 @@
     },
 
     {
-      "id": 5, "title": "Coût/heure — par modèle Claude", "type": "timeseries",
+      "id": 5, "title": "Coût/heure — par modèle", "type": "timeseries",
       "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
       "fieldConfig": {
@@ -116,7 +116,7 @@
     },
 
     {
-      "id": 6, "title": "Répartition tokens par modèle Claude", "type": "piechart",
+      "id": 6, "title": "Répartition tokens par modèle", "type": "piechart",
       "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
       "options": {
         "displayLabels": ["name", "percent"],
@@ -152,7 +152,7 @@
       "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
       "options": {
         "mode": "markdown",
-        "content": "## 🚧 Bedrock pas encore actif\n\nCe dashboard reste vide (\"No data\") tant qu'aucun client Bedrock n'appelle `record_llm_tokens(..., provider=\"bedrock\")`.\n\n**État actuel :**\n- `AI_PROVIDER=groq` (voir le dashboard Groq)\n- Tarifs Bedrock déjà réperториés dans `app/llm_observability/pricing.py` (`anthropic.claude-haiku-4-5` / `-sonnet-5` / `-opus-4-8`)\n- Comparaison de coûts disponible via `GET /llm/compare-models` ou `python -m scripts.compare_llm_models`\n\n**Reste à faire pour peupler ce dashboard :**\n1. Implémenter `BedrockClient` (boto3 / AnthropicBedrock)\n2. Passer `AI_PROVIDER=bedrock` en config\n3. S'assurer que `record_llm_tokens(provider=\"bedrock\")` est bien appelé après chaque appel"
+        "content": "## ✅ Bedrock actif — provider par défaut\n\n**État actuel :**\n- `AI_PROVIDER=bedrock`, `BEDROCK_MODEL=deepseek.v3.2` (app/core/config.py, .env)\n- deepseek.v3.2 choisi après comparaison avec moonshotai.kimi-k2.5 sur le golden dataset param-detection (140 cas, `evaluation/run_scripts/run_param_detection_eval.py`)\n- `app/ai/bedrock_client.py` implémente `classify_api_call` + `structured_chat`, avec retry-once sur absence de tool call (deepseek consomme parfois des tokens de raisonnement avant l'appel d'outil — max_tokens par défaut relevé à 1500)\n- Tarification dans `app/llm_observability/pricing.py` (`deepseek.v3.2`, taux `default_estimated` — non vérifié sur une page de pricing Bedrock en direct)\n- Rollback vers Groq/Azure : changer `AI_PROVIDER` dans `.env`, aucun changement de code requis\n\nComparaison de coûts inter-modèles : `GET /llm/compare-models` ou `python -m scripts.compare_llm_models`"
       }
     }
   ]

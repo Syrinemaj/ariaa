@@ -21,6 +21,7 @@ from app.workers.tasks.deduplication import deduplicated_task, har_pipeline_key
 logger = logging.getLogger(__name__)
 
 _JOB_TTL = 86_400
+_AI_ENRICHMENT_CONCURRENCY = 8
 
 
 def _set_job_status(job_id: str, status: str, **extra) -> None:
@@ -55,6 +56,7 @@ def process_har_pipeline(
     org_id: str,
     user_id: str,
     options: dict,
+    team_id: str | None = None,
 ) -> dict:
     """
     Pipeline complet : parse HAR → normalise → schémas → workflows → BDD.
@@ -70,6 +72,7 @@ def process_har_pipeline(
             org_id=org_id,
             user_id=user_id,
             options=options,
+            team_id=team_id,
         ))
 
         # Enqueue embedding BEFORE marking completed so a Redis flush between
@@ -99,6 +102,7 @@ async def _run_ingestion_async(
     org_id: str,
     user_id: str,
     options: dict,
+    team_id: str | None = None,
 ) -> dict:
     # Create a task-local async engine so each asyncio.run() call has its own
     # connection pool bound to the current event loop. The global async_engine
@@ -115,7 +119,7 @@ async def _run_ingestion_async(
         _local_engine, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False,
     )
 
-    from app.ai.groq_client import GroqClient
+    from app.ai.base_client import create_ai_client
     from app.ingestion.service import process_har_file
     from app.normalization.service import normalize_entries
     from app.registry.repository import (
@@ -142,6 +146,7 @@ async def _run_ingestion_async(
             org_id=org_id,
             created_by_user_id=user_id,
             status="processing",
+            team_id=team_id,
         )
         run_id = run.id
         await db.commit()
@@ -168,15 +173,18 @@ async def _run_ingestion_async(
         # naming itself stays keyword-based at this stage regardless (see
         # clustering.py docstring) — the LLM-refined name/domain/confidence
         # is set once, authoritatively, in Step 5 below.
-        workflows = discover_workflows(normalized_endpoints, ai_client=GroqClient(), redis=get_redis())
+        workflows = discover_workflows(normalized_endpoints, ai_client=create_ai_client(), redis=get_redis())
 
-        # ── Step 3 : persist results and mark completed ───────────────────────
+        # ── Step 3 : persist results ────────────────────────────────────────────
+        # status stays "processing" here — Steps 4/5 below (AI enrichment) still
+        # have to run. Flipping to "completed" this early let pollers see a
+        # run as done while its business_domain/tags/workflow names were still
+        # being written for another 1-2 minutes.
         async with AsyncSessionLocal() as db:
             run = await get_run_by_id(db, run_id)
             run.total_cleaned_api_calls = len(cleaned_entries)
             run.total_normalized_endpoints = len(normalized_endpoints)
             run.total_schema_results = len(schema_results)
-            run.status = "completed"
 
             saved_endpoints = []
             for result in schema_results:
@@ -204,13 +212,13 @@ async def _run_ingestion_async(
         await _local_engine.dispose()
         raise
 
-    # ── Step 4 : AI enrichment (endpoint_understanding via Groq) ─────────────
+    # ── Step 4 : AI enrichment (endpoint_understanding) ──────────────────────
     enriched_count = 0
     try:
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
         from app.models.endpoint import Endpoint
-        from app.ai.groq_client import GroqClient
+        from app.ai.base_client import create_ai_client
         from app.ai.endpoint_understanding import enrich_endpoint_with_ai
         from app.rag.pipeline import enrich_endpoints_metadata
 
@@ -222,15 +230,25 @@ async def _run_ingestion_async(
             )
             fresh_endpoints = list(ep_res.scalars().all())
 
-            groq_client = GroqClient()
-            enrichment_results = {}
-            for ep in fresh_endpoints:
-                try:
-                    enrichment_results[ep.id] = await asyncio.to_thread(
-                        enrich_endpoint_with_ai, ep, groq_client
-                    )
-                except Exception as ep_exc:
-                    logger.warning("endpoint_enrichment.failed endpoint=%s error=%s", ep.id, ep_exc)
+            ai_client = create_ai_client()
+
+            # One AI call per endpoint (up to ~70+ on a large HAR) — run
+            # concurrently instead of sequentially, this loop alone was the
+            # single largest contributor to ingestion wall time.
+            enrich_sem = asyncio.Semaphore(_AI_ENRICHMENT_CONCURRENCY)
+
+            async def _enrich_one(ep):
+                async with enrich_sem:
+                    try:
+                        return ep.id, await asyncio.to_thread(
+                            enrich_endpoint_with_ai, ep, ai_client
+                        )
+                    except Exception as ep_exc:
+                        logger.warning("endpoint_enrichment.failed endpoint=%s error=%s", ep.id, ep_exc)
+                        return ep.id, None
+
+            enrich_pairs = await asyncio.gather(*[_enrich_one(ep) for ep in fresh_endpoints])
+            enrichment_results = {eid: result for eid, result in enrich_pairs if result is not None}
 
             if enrichment_results:
                 enriched_count = await enrich_endpoints_metadata(
@@ -254,7 +272,7 @@ async def _run_ingestion_async(
         from sqlalchemy.orm import selectinload
         from app.models.workflow import WorkflowModel, WorkflowStepModel
         from app.models.endpoint import Endpoint
-        from app.ai.groq_client import GroqClient
+        from app.ai.base_client import create_ai_client
         from app.ai.workflow_understanding import enrich_workflow_with_ai
 
         async with AsyncSessionLocal() as db:
@@ -273,25 +291,35 @@ async def _run_ingestion_async(
                 ep.canonical_key: ep for ep in ep_res.scalars().all()
             }
 
-            groq_client = GroqClient()
+            ai_client = create_ai_client()
             wf_enriched = 0
 
-            for wf in db_workflows:
-                steps_payload = []
+            def _steps_payload(wf):
+                payload = []
                 for s in sorted(wf.steps, key=lambda x: x.step_order):
                     ep = ep_by_canonical.get(s.canonical_key)
-                    steps_payload.append({
+                    payload.append({
                         "order":           s.step_order,
                         "method":          s.method,
                         "path":            s.path,
                         "action":          s.action or (ep.business_action if ep else ""),
                         "business_domain": ep.business_domain if ep else "",
                     })
+                return payload
 
-                enriched = await asyncio.to_thread(
-                    enrich_workflow_with_ai, wf.id, steps_payload, groq_client
-                )
+            # Concurrent AI calls, applied sequentially afterward — keeps
+            # ORM attribute mutation off the concurrent section entirely.
+            wf_sem = asyncio.Semaphore(_AI_ENRICHMENT_CONCURRENCY)
 
+            async def _enrich_wf(wf):
+                async with wf_sem:
+                    return await asyncio.to_thread(
+                        enrich_workflow_with_ai, wf.id, _steps_payload(wf), ai_client
+                    )
+
+            enriched_list = await asyncio.gather(*[_enrich_wf(wf) for wf in db_workflows])
+
+            for wf, enriched in zip(db_workflows, enriched_list):
                 if enriched:
                     wf.name            = enriched["name"]
                     wf.business_domain = enriched["business_domain"]
@@ -308,6 +336,15 @@ async def _run_ingestion_async(
 
     except Exception as wf_exc:
         logger.warning("workflow_enrichment.step_failed run=%s error=%s", run_id, wf_exc)
+
+    # ── Step 6 : mark completed — only now that enrichment (Steps 4/5) has
+    # actually finished, best-effort or not (their own try/except above
+    # already swallows and logs enrichment failures without failing the run).
+    async with AsyncSessionLocal() as db:
+        run = await get_run_by_id(db, run_id)
+        if run:
+            run.status = "completed"
+            await db.commit()
 
     await _local_engine.dispose()
     return {

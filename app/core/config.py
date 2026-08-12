@@ -67,7 +67,6 @@ class Settings(BaseSettings):
 
     DEFAULT_ORG_NAME: str = "ARIA Demo Organization"
 
-    HAR_MAX_SIZE_MB: int = 50
     BULK_FILE_MAX_SIZE_MB: int = 20
     BULK_MAX_ROWS: int = 10000
     # Rows per Celery batch task — small enough for one task to finish in seconds
@@ -123,9 +122,10 @@ class Settings(BaseSettings):
     CLEANUP_DRY_RUN: bool = False
 
     # ── AI provider selection ────────────────────────────────────────────────
-    # "azure" (default) → AzureOpenAIClient (embeddings + structured outputs)
-    # "groq"            → GroqClient (no embeddings, json_object fallback)
-    AI_PROVIDER: str = "groq"
+    # "bedrock" (default) → BedrockClient (Converse API, model = BEDROCK_MODEL)
+    # "groq"              → GroqClient (no embeddings, json_object fallback)
+    # "azure"             → AzureOpenAIClient (embeddings + structured outputs)
+    AI_PROVIDER: str = "bedrock"
     GROQ_API_KEY: str | None = None
     # Second Groq account/key, tried before Azure when GROQ_API_KEY hits its
     # per-key rate limit (Groq's free tier caps tokens-per-day per key) —
@@ -138,10 +138,37 @@ class Settings(BaseSettings):
     GROQ_API_KEY_3: str | None = None
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
+    # ── AWS Bedrock ─────────────────────────────────────────────────────────
+    AWS_REGION: str = "eu-west-2"
+    # Chosen over moonshotai.kimi-k2.5 after a 140-case comparison on the
+    # param-detection golden dataset (evaluation/golden_dataset/
+    # param_detection_golden_dataset.jsonl) — kimi scored slightly higher on
+    # accuracy/recall/trap-accuracy, deepseek scored slightly higher on
+    # naming accuracy; deepseek.v3.2 selected as the production default per
+    # explicit choice. Needs max_tokens >= ~1200 in practice: it spends
+    # tokens on internal reasoning before emitting the tool call, and gets
+    # truncated (no toolUse block at all) below that — see
+    # BedrockClient.structured_chat's retry-once-then-raise handling.
+    BEDROCK_MODEL: str = "deepseek.v3.2"
+
     OTEL_ENABLED: bool = True
     OTEL_SERVICE_NAME: str = "aria-api"
     OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://otel-collector:4317"
     PROMETHEUS_METRICS_ENABLED: bool = True
+
+    # ── AWS real billed cost sync ────────────────────────────────────────────
+    # aria_llm_cost_total (Prometheus) only reflects calls that go through
+    # app/llm_observability/service.py — production API traffic. It does NOT
+    # see evaluation/run_scripts/* sweeps (evaluation/tracer/normalization_tracer.py
+    # calls Bedrock directly via boto3 and intentionally skips app/ instrumentation),
+    # so Grafana can show near-$0 while the real AWS bill is real dollars.
+    # This polls Cost Explorer directly so Grafana reflects what AWS actually
+    # billed, independent of which code path made the call.
+    # Cost Explorer's GetCostAndUsage API costs $0.01/request and its data has
+    # ~24h lag — polling faster than every few hours wastes money for no new
+    # information. Default 6h = 4 calls/day ≈ $0.04/day.
+    AWS_COST_SYNC_ENABLED: bool = True
+    AWS_COST_SYNC_INTERVAL_SECONDS: int = 21600
 
     # /metrics endpoint — IP whitelist (comma-separated) OR Bearer token auth
     # Set METRICS_BEARER_TOKEN to "" to disable token auth and use IP only.

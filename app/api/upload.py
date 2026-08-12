@@ -16,15 +16,18 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin_or_operator
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db.redis_client import get_redis
+from app.db.session import get_db
 from app.ingestion.service import process_har_file
 from app.models.user import User
 from app.normalization.service import normalize_entries
 from app.security.upload_limits import save_har_file_with_limit
+from app.teams.service import resolve_single_team_id
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -104,6 +107,7 @@ async def upload_har_and_analyze(
         description="Human-readable name for this analysis run (e.g. 'Production API – June 2026'). Defaults to the uploaded file name.",
     ),
     current_user: User = Depends(require_admin_or_operator),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Accepts a HAR file, saves it, enqueues the full pipeline as a Celery task,
@@ -111,6 +115,8 @@ async def upload_har_and_analyze(
 
     Poll GET /jobs/{job_id} for status and results.
     """
+    team_id = await resolve_single_team_id(db, current_user.id)
+
     file_id = str(uuid4())
     job_id = str(uuid4())
     file_path = UPLOAD_DIR / f"{file_id}.har"
@@ -140,6 +146,7 @@ async def upload_har_and_analyze(
             "file_name": file_name,
             "org_id": current_user.org_id,
             "user_id": current_user.id,
+            "team_id": team_id,
             "options": {
                 "use_phase2_ai": True,
                 "use_normalization_ai": True,

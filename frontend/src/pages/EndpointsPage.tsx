@@ -88,7 +88,7 @@ export default function EndpointsPage() {
               a.download = `endpoints-${selectedRunId || 'export'}.json`
               a.click()
               URL.revokeObjectURL(url)
-              toast({ type: 'success', message: `Fichier téléchargé · ${filtered.length} endpoints` })
+              toast({ type: 'success', message: `File downloaded · ${filtered.length} endpoints` })
             }} className="btn-secondary"><Download className="w-4 h-4" /> Export JSON</button>
             <button onClick={() => nav('/openapi')} className="btn-secondary"><FileCode2 className="w-4 h-4" /> View OpenAPI</button>
             {selectedRunId && (
@@ -98,7 +98,7 @@ export default function EndpointsPage() {
             )}
             {selectedRunId && (
               <button onClick={() => nav(`/bulk?run=${selectedRunId}`)} className="btn-primary">
-                <Layers className="w-4 h-4" /> Automatiser
+                <Layers className="w-4 h-4" /> Automate
               </button>
             )}
           </div>
@@ -207,7 +207,7 @@ export default function EndpointsPage() {
                                   )}
                                 </>
                               ) : (
-                                <p className="text-xs ink-2 italic">Non enrichi — relancer l&apos;ingestion pour obtenir l&apos;analyse Groq.</p>
+                                <p className="text-xs ink-2 italic">Not enriched — rerun ingestion to get the Groq analysis.</p>
                               )}
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {tags.map(t => (
@@ -219,16 +219,26 @@ export default function EndpointsPage() {
                             <div>
                               <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Details</p>
                               <div className="space-y-1.5">
-                                {([
-                                  ['canonical',      e.canonical_key],
-                                  ['confidence',     `${Math.round(e.confidence * 100)}%`],
-                                  ['statuses',       (e.status_codes ?? []).join(', ') || '—'],
-                                  ['ai_confidence',  e.ai_confidence != null ? `${Math.round(e.ai_confidence * 100)}%` : '—'],
-                                ] as [string, string][]).map(([k, v]) => (
-                                  <div key={k} className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
-                                    <span className="ink-2">{k}</span><span className="font-mono" style={{ color: 'var(--ink)' }}>{v}</span>
-                                  </div>
-                                ))}
+                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
+                                  <span className="ink-2">canonical</span>
+                                  <span className="font-mono text-right" style={{ color: 'var(--ink)' }}>{e.canonical_key}</span>
+                                </div>
+                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
+                                  <span className="ink-2 flex items-center gap-1">
+                                    confidence
+                                    {e.ai_confidence != null && <Sparkles className="w-3 h-3 text-violet-400" />}
+                                  </span>
+                                  {(() => {
+                                    const confidence = e.ai_confidence ?? e.confidence
+                                    const pct = Math.round(confidence * 100)
+                                    const color = confidence >= 0.9 ? 'text-emerald-600' : confidence >= 0.7 ? 'text-amber-600' : 'text-rose-600'
+                                    return <span className={`font-mono font-bold ${color}`}>{pct}%</span>
+                                  })()}
+                                </div>
+                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
+                                  <span className="ink-2">statuses</span>
+                                  <span className="font-mono" style={{ color: 'var(--ink)' }}>{(e.status_codes ?? []).join(', ') || '—'}</span>
+                                </div>
                               </div>
                             </div>
                             {/* Auth & Risk */}

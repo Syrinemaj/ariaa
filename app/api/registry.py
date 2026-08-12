@@ -10,12 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.events import AuditEvent
 from app.audit.service import log_audit_event
-from app.auth.dependencies import require_admin_or_operator
+from app.auth.dependencies import get_current_user_team_ids, require_admin_or_operator
 from app.db.session import get_db
 from app.models.analysis_run import AnalysisRun
 from app.models.endpoint import Endpoint
 from app.models.user import User
 from app.models.workflow import WorkflowModel, WorkflowStepModel
+from app.security.tenancy import team_visibility_clause
 
 router = APIRouter(prefix="/registry", tags=["Registry"])
 
@@ -134,24 +135,26 @@ async def list_runs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    team_ids = await get_current_user_team_ids(current_user, db)
+
     stmt = (
         select(AnalysisRun)
         .where(AnalysisRun.org_id == current_user.org_id)
+        .where(team_visibility_clause(AnalysisRun, current_user, team_ids))
         .order_by(AnalysisRun.created_at.desc())
     )
     if status:
         stmt = stmt.where(AnalysisRun.status == status)
-    if current_user.role != "ADMIN":
-        stmt = stmt.where(AnalysisRun.created_by_user_id == current_user.id)
 
     from sqlalchemy import func
-    count_stmt = select(func.count()).select_from(AnalysisRun).where(
-        AnalysisRun.org_id == current_user.org_id
+    count_stmt = (
+        select(func.count())
+        .select_from(AnalysisRun)
+        .where(AnalysisRun.org_id == current_user.org_id)
+        .where(team_visibility_clause(AnalysisRun, current_user, team_ids))
     )
     if status:
         count_stmt = count_stmt.where(AnalysisRun.status == status)
-    if current_user.role != "ADMIN":
-        count_stmt = count_stmt.where(AnalysisRun.created_by_user_id == current_user.id)
     total_result = await db.execute(count_stmt)
     total = total_result.scalar_one()
 
@@ -187,13 +190,14 @@ async def update_run(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     run = result.scalar_one_or_none()
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
     if current_user.role != "ADMIN" and run.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Vous ne pouvez modifier que vos propres analyses")
+        raise HTTPException(status_code=403, detail="You can only modify your own analyses")
     if body.file_name is not None:
         run.file_name = body.file_name.strip() or run.file_name
     await db.commit()
@@ -210,13 +214,14 @@ async def delete_run(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     run = result.scalar_one_or_none()
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
     if current_user.role != "ADMIN" and run.created_by_user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Vous ne pouvez supprimer que vos propres analyses")
+        raise HTTPException(status_code=403, detail="You can only delete your own analyses")
     await db.delete(run)
     await db.commit()
 
@@ -231,6 +236,7 @@ async def get_run(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     run = result.scalar_one_or_none()
@@ -257,6 +263,7 @@ async def list_endpoints(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     if not run_result.scalar_one_or_none():
@@ -311,6 +318,7 @@ async def list_workflows(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     if not run_result.scalar_one_or_none():
@@ -353,6 +361,7 @@ async def create_workflow(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     if not run_res.scalar_one_or_none():
@@ -429,7 +438,7 @@ async def update_workflow(
 ):
     from sqlalchemy.orm import selectinload
 
-    # BUG-007 IDOR: join AnalysisRun to verify workflow belongs to the caller's org
+    # BUG-007 IDOR: join AnalysisRun to verify workflow belongs to the caller's org (+ team)
     res = await db.execute(
         select(WorkflowModel)
         .join(AnalysisRun, AnalysisRun.id == WorkflowModel.run_id)
@@ -437,6 +446,7 @@ async def update_workflow(
         .where(
             WorkflowModel.id == workflow_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     wf = res.scalar_one_or_none()
@@ -547,7 +557,7 @@ async def restore_workflow(
 ):
     from sqlalchemy.orm import selectinload
 
-    # BUG-007 IDOR: join AnalysisRun to verify workflow belongs to the caller's org
+    # BUG-007 IDOR: join AnalysisRun to verify workflow belongs to the caller's org (+ team)
     res = await db.execute(
         select(WorkflowModel)
         .join(AnalysisRun, AnalysisRun.id == WorkflowModel.run_id)
@@ -555,6 +565,7 @@ async def restore_workflow(
         .where(
             WorkflowModel.id == workflow_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     wf = res.scalar_one_or_none()
@@ -563,7 +574,7 @@ async def restore_workflow(
 
     original = (wf.metadata_json or {}).get("_original")
     if not original:
-        raise HTTPException(status_code=400, detail="Aucune version originale disponible pour ce workflow")
+        raise HTTPException(status_code=400, detail="No original version available for this workflow")
 
     wf.name            = original["name"]
     wf.business_domain = original.get("business_domain")
@@ -628,13 +639,14 @@ async def delete_workflow(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    # BUG-007 IDOR: verify workflow belongs to the caller's org before deleting
+    # BUG-007 IDOR: verify workflow belongs to the caller's org before deleting (+ team)
     res = await db.execute(
         select(WorkflowModel)
         .join(AnalysisRun, AnalysisRun.id == WorkflowModel.run_id)
         .where(
             WorkflowModel.id == workflow_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
         )
     )
     wf = res.scalar_one_or_none()

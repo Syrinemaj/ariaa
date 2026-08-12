@@ -24,8 +24,8 @@ function formatDuration(sec?: number) {
 function formatDate(iso: string) {
   const d = new Date(iso)
   return {
-    date: d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }),
-    time: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+    date: d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
   }
 }
 
@@ -70,8 +70,8 @@ function DeleteModal({
             <TriangleAlert className="w-5 h-5 text-rose-500" />
           </div>
           <div>
-            <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>Supprimer cette automation ?</p>
-            <p className="text-xs ink-2 mt-0.5">Cette action est irréversible — tous les logs seront perdus.</p>
+            <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>Delete this automation?</p>
+            <p className="text-xs ink-2 mt-0.5">This action is irreversible — all logs will be lost.</p>
           </div>
         </div>
 
@@ -81,11 +81,11 @@ function DeleteModal({
         </div>
 
         <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onCancel} disabled={deleting} className="btn-secondary">Annuler</button>
+          <button onClick={onCancel} disabled={deleting} className="btn-secondary">Cancel</button>
           <button onClick={onConfirm} disabled={deleting} className="btn-danger" style={{ minWidth: '7rem' }}>
             {deleting
-              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Suppression…</>
-              : <><Trash2 className="w-3.5 h-3.5" /> Supprimer</>
+              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Deleting…</>
+              : <><Trash2 className="w-3.5 h-3.5" /> Delete</>
             }
           </button>
         </div>
@@ -126,7 +126,7 @@ export default function AutomationListPage() {
     const statusOk = statusFilter === 'all' || r.status === statusFilter
     const modeOk   = modeFilter === 'all'
       || (modeFilter === 'simulation' && r.dry_run)
-      || (modeFilter === 'reelle' && !r.dry_run)
+      || (modeFilter === 'live' && !r.dry_run)
     return statusOk && modeOk
   })
 
@@ -184,11 +184,11 @@ export default function AutomationListPage() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Automation Simple</h2>
-            <p className="text-sm ink-2 mt-1">Historique de tous les runs d&apos;automation — simulations et exécutions réelles.</p>
+            <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Simple Automation</h2>
+            <p className="text-sm ink-2 mt-1">History of all automation runs — simulations and live executions.</p>
           </div>
           <button onClick={() => nav('/automation')} className="btn-primary">
-            <Plus className="w-4 h-4" /> Nouvelle automation
+            <Plus className="w-4 h-4" /> New automation
           </button>
         </div>
 
@@ -200,10 +200,10 @@ export default function AutomationListPage() {
                 <FlaskConical className="w-5 h-5" />
               </div>
               <div>
-                <p className="font-bold" style={{ color: 'var(--ink)' }}>Automation Simple — une ligne à la fois</p>
+                <p className="font-bold" style={{ color: 'var(--ink)' }}>Simple Automation — one row at a time</p>
                 <p className="text-sm ink-2 mt-1 max-w-xl">
-                  Chaque run correspond à un test d&apos;un workflow API sur une ou quelques lignes JSON.
-                  Pour des exécutions massives, utilisez <span className="font-semibold">Bulk Execution</span>.
+                  Each run corresponds to a test of an API workflow on one or a few JSON rows.
+                  For large-scale executions, use <span className="font-semibold">Bulk Execution</span>.
                 </p>
               </div>
             </div>
@@ -219,22 +219,22 @@ export default function AutomationListPage() {
         {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap">
           <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1">Statut</p>
+            <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1">Status</p>
             <select value={statusFilter} onChange={e => handleFilterChange(setStatusFilter)(e.target.value)}
               className="input !py-1.5 text-xs">
-              <option value="all">Tous</option>
-              <option value="completed">Terminé</option>
-              <option value="running">En cours</option>
-              <option value="failed">Échoué</option>
+              <option value="all">All</option>
+              <option value="completed">Completed</option>
+              <option value="running">In progress</option>
+              <option value="failed">Failed</option>
             </select>
           </div>
           <div>
             <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1">Mode</p>
             <select value={modeFilter} onChange={e => handleFilterChange(setModeFilter)(e.target.value)}
               className="input !py-1.5 text-xs">
-              <option value="all">Tous</option>
+              <option value="all">All</option>
               <option value="simulation">Simulation</option>
-              <option value="reelle">Réelle</option>
+              <option value="live">Live</option>
             </select>
           </div>
           {!loading && (
@@ -250,7 +250,7 @@ export default function AutomationListPage() {
             <table className="w-full text-sm">
               <thead className="aria-thead">
                 <tr>
-                  {['Workflow', 'Instruction', 'Mode', 'Statut', 'Succès / Total', 'Durée', 'Date', 'Actions'].map(h => (
+                  {['Workflow', 'Instruction', 'Mode', 'Status', 'Success / Total', 'Duration', 'Date', 'Actions'].map(h => (
                     <th key={h} className="text-left px-3 py-2.5 text-xs">{h}</th>
                   ))}
                 </tr>
@@ -267,10 +267,10 @@ export default function AutomationListPage() {
                               style={{ background: 'color-mix(in oklch, var(--brand) 10%, var(--card))' }}>
                               <FlaskConical className="w-7 h-7" style={{ color: 'var(--brand)' }} />
                             </div>
-                            <p className="font-semibold" style={{ color: 'var(--ink)' }}>Aucun run trouvé</p>
-                            <p className="text-xs ink-2">Modifiez les filtres ou lancez votre première automation.</p>
+                            <p className="font-semibold" style={{ color: 'var(--ink)' }}>No runs found</p>
+                            <p className="text-xs ink-2">Adjust the filters or start your first automation.</p>
                             <button onClick={() => nav('/automation')} className="btn-primary mt-1">
-                              <Plus className="w-4 h-4" /> Nouvelle automation
+                              <Plus className="w-4 h-4" /> New automation
                             </button>
                           </div>
                         </td>
@@ -298,11 +298,11 @@ export default function AutomationListPage() {
                                   className="input !py-1 !px-2 text-xs w-44"
                                 />
                                 <button onClick={e => { e.stopPropagation(); doSaveEdit() }} disabled={savingEdit}
-                                  className="btn-ghost !p-1 text-emerald-600 disabled:opacity-40" title="Sauvegarder">
+                                  className="btn-ghost !p-1 text-emerald-600 disabled:opacity-40" title="Save">
                                   {savingEdit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                 </button>
                                 <button onClick={e => { e.stopPropagation(); doCancelEdit() }}
-                                  className="btn-ghost !p-1 hover:text-rose-500" title="Annuler">
+                                  className="btn-ghost !p-1 hover:text-rose-500" title="Cancel">
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -329,16 +329,16 @@ export default function AutomationListPage() {
                           <td className="px-3 py-2.5">
                             {run.dry_run
                               ? <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>
-                              : <span className="pill bg-rose-50 text-rose-700 border-rose-200 font-bold">Réelle</span>
+                              : <span className="pill bg-rose-50 text-rose-700 border-rose-200 font-bold">Live</span>
                             }
                           </td>
 
-                          {/* Statut */}
+                          {/* Status */}
                           <td className="px-3 py-2.5">
                             <StatusBadge s={run.status as 'completed' | 'running' | 'failed' | 'pending'} />
                           </td>
 
-                          {/* Succès / Total */}
+                          {/* Success / Total */}
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1.5 text-xs">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
@@ -354,7 +354,7 @@ export default function AutomationListPage() {
                             </div>
                           </td>
 
-                          {/* Durée */}
+                          {/* Duration */}
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-1 text-xs ink-2">
                               <Clock className="w-3 h-3 flex-shrink-0" />
@@ -371,30 +371,30 @@ export default function AutomationListPage() {
                           {/* Actions */}
                           <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
-                              {/* Renommer */}
+                              {/* Rename */}
                               <button
                                 onClick={e => startEdit(run, e)}
                                 className="btn-ghost !p-1.5 text-xs"
-                                title="Renommer"
+                                title="Rename"
                                 disabled={isEditing}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
 
-                              {/* Supprimer */}
+                              {/* Delete */}
                               <button
                                 onClick={e => handleDelete(run, e)}
                                 className="btn-ghost !p-1.5 text-xs hover:text-rose-600 hover:border-rose-200"
-                                title="Supprimer">
+                                title="Delete">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
 
-                              {/* Voir rapport */}
+                              {/* View report */}
                               <button
                                 onClick={() => nav(`/reports?tab=automation&run=${run.id}`)}
                                 className="btn-ghost !p-1.5 !px-2 text-xs"
-                                title="Voir le rapport">
+                                title="View report">
                                 <BarChart2 className="w-3.5 h-3.5" />
-                                <span className="ml-1 hidden sm:inline">Rapport</span>
+                                <span className="ml-1 hidden sm:inline">Report</span>
                               </button>
                             </div>
                           </td>
@@ -411,7 +411,7 @@ export default function AutomationListPage() {
         {!loading && totalPages > 1 && (
           <div className="flex items-center justify-between gap-4">
             <p className="text-xs ink-2">
-              Page {safePage} / {totalPages} · {filtered.length} résultats
+              Page {safePage} / {totalPages} · {filtered.length} results
             </p>
             <div className="flex items-center gap-2">
               <button

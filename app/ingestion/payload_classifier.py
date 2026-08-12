@@ -8,6 +8,9 @@ BUSINESS_KEYWORDS = {
     "order", "orders", "invoice", "invoices", "payment", "payments",
     "contract", "contracts", "department", "departments", "salary",
     "hire", "hiring", "onboarding", "cart", "checkout", "product", "products",
+    "absence", "absences", "conge", "conges", "dossier", "dossiers",
+    "matricule", "paie", "effectif", "effectifs", "collaborateur",
+    "collaborateurs", "rh", "poste", "workflow", "indicator", "indicateur",
 }
 
 

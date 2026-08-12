@@ -1,12 +1,12 @@
 import type { Risk, Role } from '../../lib/aria-data'
 import { ROLES } from '../../lib/aria-data'
 
-const METHOD_CLS: Record<string, string> = {
-  GET:    'bg-emerald-50 text-emerald-700 border-emerald-200',
-  POST:   'bg-indigo-50 text-indigo-700 border-indigo-200',
-  PUT:    'bg-amber-50 text-amber-700 border-amber-200',
-  PATCH:  'bg-violet-50 text-violet-700 border-violet-200',
-  DELETE: 'bg-rose-50 text-rose-700 border-rose-200',
+const METHOD_SWATCH: Record<string, string> = {
+  GET:    '#10b981',
+  POST:   '#6366f1',
+  PUT:    '#f59e0b',
+  PATCH:  '#8b5cf6',
+  DELETE: '#f43f5e',
 }
 const RISK_CLS: Record<Risk, string> = {
   low:      'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -21,6 +21,7 @@ const STATUS_CLS: Record<string, string> = {
   failed:    'bg-rose-50 text-rose-700 border-rose-200',
   parsing:   'bg-amber-50 text-amber-700 border-amber-200',
   active:    'bg-emerald-50 text-emerald-700 border-emerald-200',
+  approved:  'bg-emerald-50 text-emerald-700 border-emerald-200',
   rejected:  'bg-rose-50 text-rose-700 border-rose-200',
 }
 const STATUS_DOT: Record<string, string> = {
@@ -30,12 +31,15 @@ const STATUS_DOT: Record<string, string> = {
   failed:    'bg-rose-500',
   parsing:   'bg-amber-500',
   active:    'bg-emerald-500',
+  approved:  'bg-emerald-500',
   rejected:  'bg-rose-500',
 }
 
 export function MethodBadge({ m }: { m: string }) {
+  const swatch = METHOD_SWATCH[m] ?? '#64748b'
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold border ${METHOD_CLS[m] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-bold border"
+      style={{ color: swatch, background: `${swatch}18`, borderColor: `${swatch}40` }}>
       {m}
     </span>
   )

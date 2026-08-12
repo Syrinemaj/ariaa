@@ -26,8 +26,8 @@ def validate_file_extension(filename: str, allowed_suffixes: set[str]) -> None:
 async def save_upload_file_with_limit(
     upload_file: UploadFile,
     destination: Path,
-    max_size_mb: int,
     allowed_suffixes: set[str],
+    max_size_mb: int | None = None,
 ) -> int:
     if not upload_file.filename:
         raise HTTPException(
@@ -37,7 +37,7 @@ async def save_upload_file_with_limit(
 
     validate_file_extension(upload_file.filename, allowed_suffixes)
 
-    max_size_bytes = mb_to_bytes(max_size_mb)
+    max_size_bytes = mb_to_bytes(max_size_mb) if max_size_mb is not None else None
     total_size = 0
 
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -51,7 +51,7 @@ async def save_upload_file_with_limit(
 
             total_size += len(chunk)
 
-            if total_size > max_size_bytes:
+            if max_size_bytes is not None and total_size > max_size_bytes:
                 destination.unlink(missing_ok=True)
                 raise HTTPException(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -64,10 +64,10 @@ async def save_upload_file_with_limit(
 
 
 async def save_har_file_with_limit(upload_file: UploadFile, destination: Path) -> int:
+    # No size cap on HAR ingestion — files can be arbitrarily large.
     return await save_upload_file_with_limit(
         upload_file=upload_file,
         destination=destination,
-        max_size_mb=settings.HAR_MAX_SIZE_MB,
         allowed_suffixes=HAR_ALLOWED_SUFFIXES,
     )
 

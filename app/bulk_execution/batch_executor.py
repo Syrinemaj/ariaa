@@ -119,7 +119,11 @@ async def execute_batch(
             ):
                 continue
 
-            payload = map_payload_for_step(
+            # field_sources (provenance per field) intentionally unused here —
+            # app/automation/batch_processor.py's stale-update-field guard
+            # isn't wired into the bulk pipeline yet (different retry/
+            # idempotency semantics, out of scope for now).
+            payload, _field_sources = map_payload_for_step(
                 step=step,
                 input_row=data_row.normalized_data,
                 state=state,

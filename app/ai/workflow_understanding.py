@@ -60,8 +60,8 @@ def enrich_workflow_with_ai(
         return None
 
     if client is None:
-        from app.ai.groq_client import GroqClient
-        client = GroqClient()
+        from app.ai.base_client import create_ai_client
+        client = create_ai_client()
 
     payload = {
         "steps": [

@@ -14,6 +14,12 @@ export default defineConfig({
     },
   },
   server: {
+    // Polling requis : les événements inotify ne traversent pas les volumes
+    // montés Windows → Docker Desktop, donc chokidar ne voit jamais les writes.
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     // Dev only — proxied vers FastAPI. Ignoré dans `npm run build`.
     proxy: {
       '/auth':        FASTAPI,

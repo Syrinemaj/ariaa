@@ -18,6 +18,13 @@ httpx==0.27.0
 
 openai==1.42.0
 
+# Amazon Bedrock (Converse API — Claude, Nova, ...) — comparaison de
+# modèles pour la migration Groq -> Bedrock (voir app/ai/bedrock_client.py).
+# AWS credentials via boto3 standard (env vars / ~/.aws/credentials / IAM
+# role). Pas le SDK `anthropic` : son client Bedrock (Mantle) renvoyait
+# 404 sur ce compte pour tout ID testé ; boto3.converse() natif fonctionne.
+boto3==1.43.51
+
 # Local embeddings (all-MiniLM-L6-v2, 384 dims) — no API key, no cost
 sentence-transformers>=2.7.0
 # CPU-only torch is sufficient; GPU is detected automatically if available

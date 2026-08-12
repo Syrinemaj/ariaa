@@ -41,8 +41,10 @@ async def execute_valid_rows_in_batches(
     allow_partial_execution: bool = True,
     org_id: Optional[str] = None,
     created_by_user_id: Optional[str] = None,
+    team_id: Optional[str] = None,
     resume: bool = False,
     existing_automation_run_id: Optional[str] = None,
+    har_file_name: Optional[str] = None,
 ) -> dict:
     """
     Validate rows, create AutomationRun, enqueue batch Celery tasks.
@@ -92,6 +94,7 @@ async def execute_valid_rows_in_batches(
             plan_json=plan.model_dump(),
             org_id=org_id or "",
             created_by_user_id=created_by_user_id,
+            team_id=team_id,
         )
         db.add(automation_run)
         db.commit()
@@ -119,6 +122,8 @@ async def execute_valid_rows_in_batches(
             "data_file_id": data_file_id,
             "dry_run": "1" if dry_run else "0",
             "org_id": org_id or "",  # stored for cross-org ownership checks in GET /jobs/
+            "created_by_user_id": created_by_user_id or "",  # who to notify on completion
+            "har_file_name": har_file_name or "",
         },
     )
     redis.expire(f"job:{job_id}", _JOB_TTL)

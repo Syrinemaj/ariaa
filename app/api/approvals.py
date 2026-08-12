@@ -8,7 +8,9 @@ from app.auth.dependencies import require_admin_or_operator
 from app.db.session import get_sync_db
 from app.models.approval import AutomationApproval
 from app.models.automation import AutomationRun
+from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
+from app.security.tenancy import team_visibility_clause
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 
@@ -21,10 +23,15 @@ class RejectRequest(BaseModel):
     comment: str | None = None
 
 
-def _assert_run_owned(db: Session, automation_run_id: str, org_id: str) -> AutomationRun:
+def _user_team_ids(db: Session, user_id: str) -> list:
+    return [row[0] for row in db.query(TeamMember.team_id).filter(TeamMember.user_id == user_id).all()]
+
+
+def _assert_run_owned(db: Session, automation_run_id: str, current_user: User) -> AutomationRun:
     run = db.query(AutomationRun).filter(
         AutomationRun.id == automation_run_id,
-        AutomationRun.org_id == org_id,
+        AutomationRun.org_id == current_user.org_id,
+        team_visibility_clause(AutomationRun, current_user, _user_team_ids(db, current_user.id)),
     ).first()
     if not run:
         raise HTTPException(status_code=404, detail="Automation run not found")
@@ -38,10 +45,12 @@ def list_approvals(
     current_user: User = Depends(require_admin_or_operator),
 ):
     # BUG-007: filter by org via join — operators must not see other orgs' approvals
+    # (+ team scoping: operators only see their team's runs, plus unassigned ones)
     run_ids = [
         row.id
         for row in db.query(AutomationRun.id).filter(
-            AutomationRun.org_id == current_user.org_id
+            AutomationRun.org_id == current_user.org_id,
+            team_visibility_clause(AutomationRun, current_user, _user_team_ids(db, current_user.id)),
         ).all()
     ]
 
@@ -94,7 +103,7 @@ def approve(
         raise HTTPException(status_code=403, detail="Only admin users can approve automation runs")
 
     # BUG-007: verify the run belongs to the caller's org
-    _assert_run_owned(db, automation_run_id, current_user.org_id)
+    _assert_run_owned(db, automation_run_id, current_user)
 
     result = approve_automation(
         db=db,
@@ -119,7 +128,7 @@ def reject(
         raise HTTPException(status_code=403, detail="Only admin users can reject automation runs")
 
     # BUG-007: verify the run belongs to the caller's org
-    _assert_run_owned(db, automation_run_id, current_user.org_id)
+    _assert_run_owned(db, automation_run_id, current_user)
 
     approval = (
         db.query(AutomationApproval)

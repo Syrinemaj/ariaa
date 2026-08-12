@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import {
   Home, Upload, Package, Network, FileCode2, Sparkles,
-  Layers, Inbox, BarChart2, Settings2, Users,
+  Layers, Inbox, BarChart2, Users,
   LogOut, ChevronLeft, ChevronRight, Zap, History, FlaskConical, ClipboardList,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -12,8 +12,7 @@ import { listAutomationRuns } from '../../lib/reportsApi'
 // ── Role labels ───────────────────────────────────────────────────────────────
 const ROLE_LABELS: Record<string, string> = {
   ADMIN:    'Admin',
-  OPERATOR: 'Opérateur',
-  VIEWER:   'Lecteur',
+  OPERATOR: 'Operator',
 }
 
 // ── Nav definition ────────────────────────────────────────────────────────────
@@ -31,15 +30,15 @@ type NavGroup = { label: string; items: NavItem[] }
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Principal',
+    label: 'Main',
     items: [
       { path: '/dashboard', label: 'Dashboard',   icon: Home },
-      { path: '/analysis',  label: 'Analyser HAR', icon: Upload,  roles: ['ADMIN', 'OPERATOR'] },
-      { path: '/runs',      label: 'Historique',   icon: History },
+      { path: '/analysis',  label: 'Analyze HAR', icon: Upload,  roles: ['ADMIN', 'OPERATOR'] },
+      { path: '/runs',      label: 'History',   icon: History },
     ],
   },
   {
-    label: 'Catalogues',
+    label: 'Catalogs',
     items: [
       { path: '/endpoints', label: 'Endpoints',      icon: Package },
       { path: '/workflows', label: 'Workflows',      icon: Network,   roles: ['ADMIN', 'OPERATOR'] },
@@ -48,9 +47,9 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Automatisation',
+    label: 'Automation',
     items: [
-      { path: '/automation',      label: 'Automation Simple', icon: FlaskConical,  roles: ['ADMIN', 'OPERATOR'] },
+      { path: '/automation',      label: 'Simple Automation', icon: FlaskConical,  roles: ['ADMIN', 'OPERATOR'] },
       { path: '/automation-list', label: 'Automations',       icon: ClipboardList, roles: ['ADMIN', 'OPERATOR'] },
       { path: '/bulk',            label: 'Bulk execution',    icon: Layers,        roles: ['ADMIN', 'OPERATOR'], dynamic: 'bulk' },
       { path: '/approvals',       label: 'Approvals',         icon: Inbox,         roles: ['ADMIN'], dynamic: 'approvals' },
@@ -60,8 +59,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Admin',
     items: [
-      { path: '/settings', label: 'Paramètres',   icon: Settings2, roles: ['ADMIN'] },
-      { path: '/users',    label: 'Utilisateurs', icon: Users,     roles: ['ADMIN'] },
+      { path: '/users',    label: 'Users', icon: Users,     roles: ['ADMIN'] },
     ],
   },
 ]
@@ -72,7 +70,7 @@ export default function Sidebar() {
   const [collapsed, setCollapsed]     = useState(false)
   const [runningJobs, setRunningJobs] = useState(0)
 
-  const role     = (user?.role ?? 'VIEWER').toUpperCase()
+  const role     = (user?.role ?? 'OPERATOR').toUpperCase()
   const initials = user?.name
     ? user.name.split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
     : 'U'
@@ -108,15 +106,15 @@ export default function Sidebar() {
       <div className="px-4 py-4 flex items-center justify-between min-h-[60px]" style={{ borderBottom: '1px solid var(--line)' }}>
         {!collapsed && (
           <div className="flex items-center gap-2.5 select-none">
-            <img src="/logo.png" alt="ARIA" style={{ height: 32, width: 'auto' }} />
+            <img src="/sopra.png" alt="Sopra" className="w-7 h-7 object-contain shrink-0" />
             <div className="flex flex-col leading-none">
-              <span className="text-[17px] font-black tracking-tight" style={{ color: '#1E318A' }}>aria</span>
+              <span className="text-[17px] font-black tracking-tight" style={{ color: 'var(--ink)' }}>aria</span>
               <span className="text-[9px] font-mono tracking-[0.2em] uppercase mt-0.5" style={{ color: 'var(--ink-2)' }}>api.reverse.intel</span>
             </div>
           </div>
         )}
         {collapsed && (
-          <img src="/logo.png" alt="ARIA" style={{ height: 32, width: 'auto', margin: '0 auto' }} />
+          <img src="/sopra.png" alt="Sopra" className="w-7 h-7 object-contain mx-auto" />
         )}
         {!collapsed && (
           <button onClick={() => setCollapsed(true)} className="p-1.5 rounded-lg transition hover:opacity-70" style={{ color: 'var(--ink-2)' }}>
@@ -195,7 +193,7 @@ export default function Sidebar() {
         <div className="mx-2 mb-1 px-3 py-2 rounded-xl flex items-center justify-between gap-2"
           style={{ background: 'color-mix(in oklch, var(--brand) 8%, var(--card))', border: '1px solid color-mix(in oklch, var(--brand) 20%, transparent)' }}>
           <div className="min-w-0">
-            <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: 'var(--brand)' }}>Run actif</p>
+            <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: 'var(--brand)' }}>Active run</p>
             <p className="text-xs font-mono truncate mt-0.5" style={{ color: 'var(--ink)' }}>{activeRun.name}</p>
           </div>
           <button onClick={() => setActiveRun(null)} className="shrink-0 text-xs opacity-50 hover:opacity-100 transition-opacity" style={{ color: 'var(--ink-2)' }}>
@@ -221,7 +219,7 @@ export default function Sidebar() {
                 <p className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{user?.name ?? 'User'}</p>
                 <p className="text-xs" style={{ color: 'var(--ink-2)' }}>{ROLE_LABELS[role] ?? role}</p>
               </div>
-              <button onClick={logout} className="p-1.5 rounded-lg transition hover:opacity-70" style={{ color: 'var(--ink-2)' }} title="Déconnexion">
+              <button onClick={logout} className="p-1.5 rounded-lg transition hover:opacity-70" style={{ color: 'var(--ink-2)' }} title="Log out">
                 <LogOut className="w-4 h-4" />
               </button>
             </>

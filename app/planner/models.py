@@ -31,8 +31,15 @@ class PlanStep(BaseModel):
     # ARIA-WORKFLOW-V2: populated from generate_plan_selection()'s "steps"
     # (app/planner/plan_generator.py), matched by canonical_key, in
     # plan_builder.py. Empty when no CSV/mapping was involved or the LLM
-    # call fell back. e.g. {"prénom": "first_name", "type_contrat": None}
-    field_mapping: Dict[str, Optional[str]] = Field(default_factory=dict)
+    # call fell back. Keyed by SOURCE column (row field / CSV column), value
+    # is one of: a target API param name (str, direct rename), a conditional
+    # dict {"maps_to", "when_equals", "then", "else"} (value derived from a
+    # same-row business rule — see payload_mapper.py::_invert_field_mapping),
+    # or None (source column not used by this step).
+    # e.g. {"prénom": "first_name", "type_contrat": None,
+    #       "type": {"maps_to": "statut", "when_equals": "congé",
+    #                 "then": "approuvée", "else": "en attente"}}
+    field_mapping: Dict[str, Any] = Field(default_factory=dict)
 
 
 class AutomationPlan(BaseModel):

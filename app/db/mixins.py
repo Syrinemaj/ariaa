@@ -62,3 +62,19 @@ class UserOwnedMixin:
         nullable=True,
         index=True,
     )
+
+
+class TeamScopedMixin:
+    """
+    NULL team_id means "no team assigned / org-wide visible" — set when the
+    creating user belongs to zero or more than one team (see
+    app.teams.service.resolve_single_team_id). Rows with team_id=NULL stay
+    visible to every operator in the org, matching pre-team-feature behavior.
+    """
+
+    team_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("teams.id"),
+        nullable=True,
+        index=True,
+    )

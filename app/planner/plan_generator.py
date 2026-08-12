@@ -92,10 +92,27 @@ RÈGLES STRICTES
 ❌ N'invente aucun endpoint, paramètre, ou mapping non visible dans les candidats
 ❌ Aucun texte avant ou après le JSON
 ❌ Aucun bloc markdown (pas de ```json)
-❌ Si data_source n'est PAS "csv" ou "excel", field_mapping doit être {{}}
-   pour CHAQUE step, même si des paramètres API existent.
-   Le mapping n'a de sens que lorsqu'une source de données ligne-par-ligne
-   est fournie.
+✅ field_mapping — deux usages distincts, ne les confonds pas :
+   1. Correspondance directe colonne→paramètre (uniquement si data_source
+      est "csv" ou "excel") : {{"colonne_csv": "nom_parametre_api"}}.
+      Si data_source n'est PAS csv/excel, n'utilise JAMAIS cette forme.
+   2. Règle conditionnelle PAR LIGNE, portée par l'INSTRUCTION elle-même
+      (utilisable quelle que soit data_source, y compris sans CSV) :
+      quand l'instruction dit explicitement "fais X pour celles qui sont Y,
+      sinon Z" (ex: "approuve automatiquement celles de type congé, laisse
+      les autres en attente"), et qu'une étape PATCH/PUT a besoin de cette
+      valeur, code-la comme :
+      {{"<colonne_source>": {{"maps_to": "<param_api_cible>",
+                             "when_equals": "<valeur_qui_declenche_then>",
+                             "then": "<valeur_si_egal>",
+                             "else": "<valeur_sinon>"}}}}
+      <colonne_source> est le nom du champ tel qu'il apparaît dans les
+      données de ligne (ex: "type"). N'invente PAS de règle non présente
+      dans l'instruction — si aucune condition n'est explicitement énoncée
+      pour un paramètre requis, laisse-le simplement absent de field_mapping
+      (ne mets JAMAIS une valeur par défaut de ton cru).
+❌ N'utilise field_mapping (les deux formes) que pour un besoin explicitement
+   déductible de l'instruction ou de data_source — jamais par supposition.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FEW-SHOT EXAMPLES
@@ -287,6 +304,67 @@ RÉPONSE ATTENDUE :
   "reasoning": "L'instruction cible un seul employé (ID 42) pour une mise à jour de salaire. PUT /employees/{{id}}/salary correspond exactement. POST /employees/{{id}}/leaves est hors scope (congés, pas salaire) — éliminé malgré sa présence dans les candidats.",
   "missing_endpoints": [],
   "confidence": 0.97
+}}
+
+---
+
+## EXEMPLE 4 — Création multi-lignes + règle conditionnelle par ligne (pas de CSV)
+
+ENDPOINTS CANDIDATS :
+Endpoint #1
+Method: POST
+Path: /api/requests
+Canonical key: POST /api/requests
+Business domain: human_resources
+Business action: create_time_off_request
+Score: 0.9180
+Details: Creates an absence request. Body params: nom_employe, type, date_debut, date_fin, motif.
+
+---
+
+Endpoint #2
+Method: PATCH
+Path: /api/requests/{{request_id}}
+Canonical key: PATCH /api/requests/{{request_id}}
+Business domain: human_resources
+Business action: update_request_status
+Score: 0.8340
+Details: Updates the status of an absence request. Path param: request_id. Body param: statut.
+
+INSTRUCTION : "Créer 5 demandes d'absence pour les employés suivants, puis approuve automatiquement celles de type \"congé\" et laisse les autres en attente : ..."
+CONTEXTE : action=bulk_create, entités=[absence_request], volume=5, source=non précisé, colonnes=aucune
+
+RÉPONSE ATTENDUE :
+{{
+  "selected_canonical_keys": [
+    "POST /api/requests",
+    "PATCH /api/requests/{{request_id}}"
+  ],
+  "steps": [
+    {{
+      "order": 1,
+      "canonical_key": "POST /api/requests",
+      "action": "Créer la demande d'absence",
+      "required": true,
+      "depends_on": [],
+      "loop": null,
+      "field_mapping": {{}}
+    }},
+    {{
+      "order": 2,
+      "canonical_key": "PATCH /api/requests/{{request_id}}",
+      "action": "Approuver automatiquement si type=congé, sinon laisser en attente",
+      "required": true,
+      "depends_on": [1],
+      "loop": null,
+      "field_mapping": {{
+        "type": {{"maps_to": "statut", "when_equals": "congé", "then": "approuvée", "else": "en attente"}}
+      }}
+    }}
+  ],
+  "reasoning": "L'instruction énonce explicitement une règle conditionnelle sur le champ 'type' pour décider du statut à appliquer — codée en field_mapping sur l'étape 2 plutôt que laissée à une valeur par défaut, pour que l'exécution reflète réellement la règle demandée au lieu de réécrire le statut déjà posé par la création.",
+  "missing_endpoints": [],
+  "confidence": 0.9
 }}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

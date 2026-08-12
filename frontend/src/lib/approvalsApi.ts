@@ -27,10 +27,10 @@ export interface BackendApproval {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
-export function listApprovals() {
+export function listApprovals(status: string = 'pending') {
   return api
-    .get<{ approvals: BackendApproval[]; total: number }>('/approvals')
-    .then(r => r.approvals)
+    .get<{ items: BackendApproval[]; total: number }>(`/approvals?status=${status}`)
+    .then(r => r.items)
 }
 
 export function approveApproval(id: string, comment?: string) {

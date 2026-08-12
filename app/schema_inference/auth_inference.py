@@ -15,6 +15,7 @@ AUTH_HEADER_NAMES = {
 def infer_auth_from_headers(
     request_headers: Optional[Dict[str, str]] = None,
     response_headers: Optional[Dict[str, str]] = None,
+    app_has_session_auth: bool = False,
 ) -> AuthInfo:
     request_headers = request_headers or {}
     response_headers = response_headers or {}
@@ -42,5 +43,15 @@ def infer_auth_from_headers(
     normalized_response = {k.lower(): v for k, v in response_headers.items()}
     if normalized_response.get("www-authenticate"):
         return AuthInfo(auth_required=True, auth_type="www_authenticate", location="response_header", header_name="www-authenticate", confidence=0.75)
+
+    # No direct evidence in THIS call — common when the HAR was exported by
+    # a browser that strips the Cookie/Set-Cookie headers by default (seen
+    # on real Edge/Chrome exports: request.cookies stays [] and no
+    # Set-Cookie ever appears, even though the app is clearly session-based).
+    # If the same run also contains a login/session-management endpoint,
+    # report a low-confidence inferred cookie session instead of a flat
+    # "no auth" that would be misleading for every other endpoint in the run.
+    if app_has_session_auth:
+        return AuthInfo(auth_required=True, auth_type="inferred_cookie_session", location="cookie", header_name=None, confidence=0.40)
 
     return AuthInfo(auth_required=False, confidence=0.0)

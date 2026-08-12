@@ -89,7 +89,7 @@ async def update_user_role(
     if payload.role.upper() not in UserRole.values():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Rôle invalide. Valeurs acceptées : {', '.join(UserRole.values())}",
+            detail=f"Invalid role. Accepted values: {', '.join(UserRole.values())}",
         )
 
     result = await db.execute(
@@ -103,7 +103,7 @@ async def update_user_role(
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Vous ne pouvez pas modifier votre propre rôle",
+            detail="You cannot change your own role",
         )
 
     user.role = payload.role.upper()

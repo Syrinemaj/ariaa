@@ -1,6 +1,6 @@
 """
 Mock API CRUD — simule un vrai système RH.
-Lance avec :  python mock_api.py
+Lance avec :  python scripts/dev/mock_api.py
 Base URL :    http://localhost:9000
 
 Stockage en mémoire (perdu au redémarrage).

@@ -76,7 +76,7 @@ function KeyValueEditor({ label, rows, setRows }: { label: string; rows: HeaderR
                   onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, v: e.target.value } : x))} />
                 {s && (
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 pill text-[9px] bg-rose-50 text-rose-700 border-rose-200">
-                    <Lock className="w-2.5 h-2.5" />masqué
+                    <Lock className="w-2.5 h-2.5" />masked
                   </span>
                 )}
               </div>
@@ -87,7 +87,7 @@ function KeyValueEditor({ label, rows, setRows }: { label: string; rows: HeaderR
           )
         })}
         <button onClick={() => setRows([...rows, { k: '', v: '' }])} className="btn-ghost text-xs">
-          <Plus className="w-3.5 h-3.5" /> Ajouter
+          <Plus className="w-3.5 h-3.5" /> Add
         </button>
       </div>
     </div>
@@ -113,12 +113,12 @@ function PlanStep({ step }: { step: BackendPlanStep }) {
         </div>
         <p className="mt-2 text-sm" style={{ color: 'var(--ink)' }}>{step.action ?? '—'}</p>
         <div className="mt-1 flex items-center gap-2 text-xs ink-2 flex-wrap">
-          <span>Domaine : <span className="font-semibold" style={{ color: 'var(--ink)' }}>{step.business_domain ?? '—'}</span></span>
-          {step.depends_on.length > 0 && <span>· Dépend de l&apos;étape {step.depends_on.join(', ')}</span>}
+          <span>Domain: <span className="font-semibold" style={{ color: 'var(--ink)' }}>{step.business_domain ?? '—'}</span></span>
+          {step.depends_on.length > 0 && <span>· Depends on step {step.depends_on.join(', ')}</span>}
         </div>
         <button onClick={() => setOpen(o => !o)} className="mt-2 text-xs ink-2 inline-flex items-center gap-1 hover:opacity-80">
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-          {open ? 'Masquer les schémas' : 'Voir request/response schemas'}
+          {open ? 'Hide schemas' : 'View request/response schemas'}
         </button>
         {open && (
           <div className="mt-3 grid grid-cols-1 gap-3">
@@ -141,11 +141,11 @@ function PlanStep({ step }: { step: BackendPlanStep }) {
 // ── Instruction helpers ────────────────────────────────────────────────────────
 
 const INSTRUCTION_EXAMPLES = [
-  'Créer un employé Bob Martin avec contrat CDI et envoyer un email de bienvenue',
-  'Ouvrir un compte paie et calculer le salaire du mois de janvier',
-  'Récupérer la liste des employés actifs du département Engineering',
-  'Mettre à jour le poste et le salaire d\'un employé existant',
-  'Créer un utilisateur avec rôle OPERATOR et activer son accès',
+  'Create an employee Bob Martin with a CDI contract and send a welcome email',
+  'Open a payroll account and calculate the salary for January',
+  'Retrieve the list of active employees in the Engineering department',
+  'Update the position and salary of an existing employee',
+  'Create a user with the OPERATOR role and activate their access',
 ]
 
 type ScoreLevel = 'low' | 'medium' | 'good'
@@ -167,12 +167,12 @@ const ENTITY_WORDS = [
 function validateInstruction(v: string): string {
   const t = v.trim()
   const lower = t.toLowerCase()
-  if (t.length < 10) return `Trop court — ${t.length}/10 caractères minimum.`
-  if (t.length > 500) return `Trop long — ${t.length}/500 caractères maximum.`
+  if (t.length < 10) return `Too short — ${t.length}/10 characters minimum.`
+  if (t.length > 500) return `Too long — ${t.length}/500 characters maximum.`
   if (!ACTION_WORDS.some(w => lower.includes(w)))
-    return 'Ajoutez un verbe d\'action : créer, envoyer, récupérer, mettre à jour, supprimer…'
+    return 'Add an action verb: create, send, retrieve, update, delete…'
   if (!ENTITY_WORDS.some(w => lower.includes(w)) && t.split(/\s+/).length < 5)
-    return 'Précisez l\'objet : employé, contrat, compte, email, utilisateur…'
+    return 'Specify the object: employee, contract, account, email, user…'
   return ''
 }
 
@@ -184,10 +184,10 @@ function scoreInstruction(v: string): { level: ScoreLevel; hint: string } {
   const hasAction = ACTION_WORDS.some(w => lower.includes(w))
   const hasEntity = ENTITY_WORDS.some(w => lower.includes(w))
   const isDetailed = words.length >= 7 && t.length >= 50
-  if (!hasAction) return { level: 'low', hint: 'Verbe d\'action manquant' }
-  if (!hasEntity) return { level: 'medium', hint: 'Précisez l\'objet (employé, contrat…)' }
-  if (isDetailed) return { level: 'good', hint: 'Instruction détaillée ✓' }
-  return { level: 'medium', hint: 'Ajoutez des détails pour de meilleurs résultats' }
+  if (!hasAction) return { level: 'low', hint: 'Missing action verb' }
+  if (!hasEntity) return { level: 'medium', hint: 'Specify the object (employee, contract…)' }
+  if (isDetailed) return { level: 'good', hint: 'Detailed instruction ✓' }
+  return { level: 'medium', hint: 'Add more details for better results' }
 }
 
 // ── Main drawer component ──────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ interface Props {
 export default function AutomationSimpleDrawer({ open, onClose }: Props) {
   const [runs, setRuns]                       = useState<AnalysisRun[]>([])
   const [selectedRunId, setSelectedRunId]     = useState('')
-  const [instruction, setInstruction]         = useState('Créer un employé nommé Bob avec contrat CDI, ouvrir un compte paie et envoyer un email de bienvenue')
+  const [instruction, setInstruction]         = useState('Create an employee named Bob with a CDI contract, open a payroll account and send a welcome email')
   const [searchLevel, setSearchLevel]         = useState<'precise' | 'balanced' | 'wide'>('balanced')
   const [generating, setGenerating]           = useState(false)
   const [executing, setExecuting]             = useState(false)
@@ -257,12 +257,12 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
       if (e instanceof ApiError && e.status === 400 && e.body) {
         const d = (e.body as { detail?: { code?: string; message?: string; suggestion?: string } }).detail
         if (d && typeof d === 'object') {
-          setPlanError(d.message ?? 'Instruction invalide ou aucun endpoint correspondant.')
+          setPlanError(d.message ?? 'Invalid instruction or no matching endpoint.')
           setPlanSuggestion(d.suggestion ?? '')
           return
         }
       }
-      setApiError(e instanceof Error ? e.message : 'Erreur lors de la génération du plan')
+      setApiError(e instanceof Error ? e.message : 'Error generating the plan')
     } finally {
       setGenerating(false)
     }
@@ -282,7 +282,7 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
       const result = await executePlan(planResult.plan, parsedRows, baseUrl, headersObj, dryRun, approved)
       setExecutionResult(result)
     } catch (e) {
-      setApiError(e instanceof Error ? e.message : "Erreur lors de l'exécution")
+      setApiError(e instanceof Error ? e.message : "Error during execution")
     } finally {
       setExecuting(false)
     }
@@ -320,11 +320,11 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
               <FlaskConical className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-black text-sm" style={{ color: 'var(--ink)' }}>Automation Simple</p>
-              <p className="text-[11px] ink-2">Test sur une seule ligne JSON</p>
+              <p className="font-black text-sm" style={{ color: 'var(--ink)' }}>Simple Automation</p>
+              <p className="text-[11px] ink-2">Test on a single JSON line</p>
             </div>
           </div>
-          <button onClick={onClose} className="btn-ghost !p-2" title="Fermer (Échap)">
+          <button onClick={onClose} className="btn-ghost !p-2" title="Close (Esc)">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -353,12 +353,12 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
 
           {/* Plan generation card */}
           <div className="card pad">
-            <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Générer un plan</p>
-            <p className="text-xs ink-2 mb-4">Décrivez l&apos;action à effectuer.</p>
+            <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Generate a plan</p>
+            <p className="text-xs ink-2 mb-4">Describe the action to perform.</p>
             <div className="space-y-3">
               {runs.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Run d&apos;analyse</p>
+                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Analysis run</p>
                   <select value={selectedRunId} onChange={e => setSelectedRunId(e.target.value)}
                     className="input !py-1.5 text-xs font-mono w-full">
                     {runs.map(r => <option key={r.id} value={r.id}>{r.file_name}</option>)}
@@ -374,7 +374,7 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
                   onBlur={() => setInstructionFocused(false)}
                   rows={3}
                   className="input resize-none"
-                  placeholder="Décrivez l'action à automatiser…"
+                  placeholder="Describe the action to automate…"
                 />
                 {instruction.trim().length > 0 && (
                   <div className="mt-2 flex items-center gap-2">
@@ -396,7 +396,7 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
                 )}
                 {(instructionFocused || instruction.trim().length === 0) && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="text-xs ink-2 self-center">Exemples :</span>
+                    <span className="text-xs ink-2 self-center">Examples:</span>
                     {INSTRUCTION_EXAMPLES.map(ex => (
                       <button key={ex} type="button"
                         onMouseDown={e => { e.preventDefault(); setInstruction(ex); setPlanError(''); setPlanSuggestion('') }}
@@ -409,9 +409,9 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
                 )}
               </div>
               <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Niveau de recherche</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Search level</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {([['precise', 'Précis', '5 endpoints'], ['balanced', 'Équilibré', '8 · recommandé'], ['wide', 'Large', '12 endpoints']] as const).map(([v, l, d]) => (
+                  {([['precise', 'Precise', '5 endpoints'], ['balanced', 'Balanced', '8 · recommended'], ['wide', 'Wide', '12 endpoints']] as const).map(([v, l, d]) => (
                     <button key={v} onClick={() => setSearchLevel(v)}
                       className="text-left p-2.5 rounded-xl border transition"
                       style={{
@@ -427,7 +427,7 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
               <div className="flex justify-end">
                 <button onClick={handleGeneratePlan} disabled={!selectedRunId || generating || !!instructionError} className="btn-primary"
                   style={{ opacity: !selectedRunId || generating || !!instructionError ? 0.6 : 1 }}>
-                  <Sparkles className="w-4 h-4" /> {generating ? 'Génération…' : 'Générer le plan'}
+                  <Sparkles className="w-4 h-4" /> {generating ? 'Generating…' : 'Generate plan'}
                 </button>
               </div>
             </div>
@@ -436,43 +436,43 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
           {/* Execution card */}
           <div className="card pad">
             <div className="flex items-start justify-between mb-1">
-              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Exécuter</p>
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Run</p>
               {dryRun
                 ? <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>
-                : <span className="pill bg-rose-50 text-rose-700 border-rose-200 font-bold">Exécution réelle</span>
+                : <span className="pill bg-rose-50 text-rose-700 border-rose-200 font-bold">Live execution</span>
               }
             </div>
-            <p className="text-xs ink-2 mb-4">L&apos;instruction sera envoyée à l&apos;API cible si vous désactivez la simulation.</p>
+            <p className="text-xs ink-2 mb-4">The instruction will be sent to the target API if you disable the simulation.</p>
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">URL de l&apos;API cible</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Target API URL</p>
                 <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
                   className="input !py-2 font-mono text-xs" placeholder="https://hr-api.company.com" />
               </div>
-              <KeyValueEditor label="En-têtes d'authentification" rows={headers} setRows={setHeaders} />
+              <KeyValueEditor label="Authentication headers" rows={headers} setRows={setHeaders} />
               <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Données d&apos;entrée (JSON) · optionnel</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Input data (JSON) · optional</p>
                 <textarea value={inputRows} onChange={e => setInputRows(e.target.value)}
                   rows={4} className="input resize-none font-mono text-xs" />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <ToggleBig label="Mode simulation" hint="ARIA prépare les requêtes sans les envoyer"
+                <ToggleBig label="Simulation mode" hint="ARIA prepares the requests without sending them"
                   checked={dryRun} onChange={v => { setDryRun(v); if (v) setApproved(false) }} />
-                <ToggleBig label="Approuvé" hint={dryRun ? 'Non nécessaire en simulation' : "Requis pour l'exécution réelle"}
+                <ToggleBig label="Approved" hint={dryRun ? 'Not required in simulation' : "Required for live execution"}
                   disabled={dryRun} checked={approved} onChange={setApproved} />
               </div>
               {!dryRun && (
                 <div className="p-3 rounded-xl flex items-start gap-2 text-xs"
                   style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
                   <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>L&apos;exécution réelle enverra des requêtes à <span className="font-mono">{baseUrl}</span>. Ceci ne peut pas être annulé.</span>
+                  <span>Live execution will send requests to <span className="font-mono">{baseUrl}</span>. This cannot be undone.</span>
                 </div>
               )}
               <div className="flex justify-end">
                 <button onClick={handleExecute} disabled={!canExecute || executing}
                   className={dryRun ? 'btn-primary' : 'btn-danger'}
                   style={{ opacity: canExecute && !executing ? 1 : 0.6 }}>
-                  <Play className="w-4 h-4" /> {executing ? 'Exécution…' : dryRun ? 'Lancer la simulation' : 'Exécuter pour de vrai'}
+                  <Play className="w-4 h-4" /> {executing ? 'Running…' : dryRun ? 'Run simulation' : 'Execute for real'}
                 </button>
               </div>
             </div>
@@ -486,13 +486,13 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <h3 className="font-black text-base" style={{ color: 'var(--ink)' }}>{planResult.plan.workflow_name}</h3>
                     {planResult.plan.requires_approval && (
-                      <span className="pill bg-amber-50 text-amber-700 border-amber-200">Approbation requise</span>
+                      <span className="pill bg-amber-50 text-amber-700 border-amber-200">Approval required</span>
                     )}
                     {planResult.plan.dry_run_default && (
-                      <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation par défaut</span>
+                      <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation by default</span>
                     )}
                   </div>
-                  <p className="text-sm ink-2">Automation Simple · {steps.length} étapes</p>
+                  <p className="text-sm ink-2">Simple Automation · {steps.length} steps</p>
                 </div>
               </div>
 
@@ -502,7 +502,7 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
                   {planResult.validation.issues.map((issue, i) => (
                     <p key={i} style={{ color: issue.level === 'error' ? '#9f1239' : '#92400e' }}>
                       <span className="font-bold uppercase">{issue.level}</span>{' '}
-                      {issue.step_order != null ? `[étape ${issue.step_order}] ` : ''}{issue.message}
+                      {issue.step_order != null ? `[step ${issue.step_order}] ` : ''}{issue.message}
                     </p>
                   ))}
                 </div>
@@ -520,22 +520,22 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
             <div className="card pad">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
-                  <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Résultat — Automation simple</p>
+                  <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Result — Simple Automation</p>
                   <div className="flex items-center gap-2 flex-wrap mt-1">
                     <StatusBadge s={executionResult.status === 'completed' ? 'completed' : executionResult.status === 'failed' ? 'failed' : 'running'} />
                     {executionResult.dry_run && <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>}
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
-                  <div><p className="text-xs ink-2">Succès</p><p className="text-xl font-black text-emerald-600">{executionResult.success_count}</p></div>
-                  <div><p className="text-xs ink-2">Échecs</p><p className="text-xl font-black text-rose-600">{executionResult.failed_count}</p></div>
+                  <div><p className="text-xs ink-2">Success</p><p className="text-xl font-black text-emerald-600">{executionResult.success_count}</p></div>
+                  <div><p className="text-xs ink-2">Failures</p><p className="text-xl font-black text-rose-600">{executionResult.failed_count}</p></div>
                   <div><p className="text-xs ink-2">Total</p><p className="text-xl font-black" style={{ color: 'var(--ink)' }}>{executionResult.total_steps}</p></div>
                 </div>
               </div>
               <div className="overflow-hidden rounded-xl" style={{ border: '1px solid var(--line)' }}>
                 <table className="w-full text-sm">
                   <thead className="aria-thead">
-                    <tr>{['Étape', 'Méthode', 'Path', 'Code', 'Risk'].map(h => (
+                    <tr>{['Step', 'Method', 'Path', 'Code', 'Risk'].map(h => (
                       <th key={h} className="text-left px-3 py-2">{h}</th>
                     ))}</tr>
                   </thead>

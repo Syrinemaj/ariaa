@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
-
+import { useTheme } from '../contexts/ThemeContext'
+import ThemeToggleButton from '../components/ThemeToggleButton'
 
 const ResetPasswordPage: React.FC = () => {
   const [searchParams]                  = useSearchParams()
@@ -16,6 +17,34 @@ const ResetPasswordPage: React.FC = () => {
   const [loading, setLoading]           = useState(false)
   const [success, setSuccess]           = useState(false)
   const [error, setError]               = useState('')
+  const { theme }                       = useTheme()
+  const isLight                         = theme === 'light'
+
+  // Only the page background follows the theme — the card itself always
+  // renders in its light appearance (same decision as AuthPage's form panel).
+  const t = {
+    pageBg:     isLight ? '#f8faff' : '#0d0f1b',
+    cardBg:     '#ffffff',
+    cardBorder: '#e2e8f0',
+    cardShadow: '0 8px 32px rgba(15,23,42,0.08)',
+    heading:    '#0f172a',
+    body:       '#64748b',
+    subtitle:   '#64748b',
+    hint:       '#94a3b8',
+    footer:     isLight ? '#94a3b8' : 'rgba(255,255,255,0.2)',
+    accent:     '#dc2626',
+    inputBg:    '#ffffff',
+    inputText:  'text-[#0f172a]',
+    inputPh:    'placeholder-[#94a3b8]',
+    inputBorder:'#e2e8f0',
+    trackEmpty: '#e2e8f0',
+    errBg:      '#fef2f2',
+    errBorder:  '#fecaca',
+    errText:    '#b91c1c',
+    orbOpacity1:isLight ? 0.1 : 0.18,
+    orbOpacity2:isLight ? 0.08 : 0.15,
+    gridOpacity:isLight ? 0.035 : 0.07,
+  }
 
   // Rediriger vers /forgot-password si pas de token
   useEffect(() => {
@@ -27,11 +56,11 @@ const ResetPasswordPage: React.FC = () => {
     setError('')
 
     if (password.length < 8) {
-      setError('Le mot de passe doit contenir au moins 8 caractères.')
+      setError('Password must be at least 8 characters long.')
       return
     }
     if (password !== confirm) {
-      setError('Les mots de passe ne correspondent pas.')
+      setError('Passwords do not match.')
       return
     }
 
@@ -43,80 +72,74 @@ const ResetPasswordPage: React.FC = () => {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       if (msg.includes('400')) {
-        setError('Ce lien de réinitialisation est invalide ou a expiré. Veuillez refaire une demande.')
+        setError('This reset link is invalid or has expired. Please request a new one.')
       } else {
-        setError('Une erreur est survenue. Veuillez réessayer.')
+        setError('An error occurred. Please try again.')
       }
     } finally {
       setLoading(false)
     }
   }
 
-  const inputBase = "w-full pl-10 pr-10 py-2.5 rounded-xl text-sm text-white placeholder-[rgba(255,255,255,0.3)] bg-[#1a1d2e] transition-all duration-150"
-  const inputStyle = { border: '1.5px solid rgba(255,255,255,0.1)', outline: 'none' }
-  const onFocus = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = '#6366f1')
-  const onBlur  = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')
+  const inputBase = `w-full pl-10 pr-10 py-2.5 rounded-xl text-sm ${t.inputText} ${t.inputPh} transition-all duration-150 force-light-autofill`
+  const inputStyle = { background: t.inputBg, border: `1.5px solid ${t.inputBorder}`, outline: 'none' }
+  const onFocus = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = '#dc2626')
+  const onBlur  = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = t.inputBorder)
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10 relative overflow-hidden" style={{ background: '#0d0f1b' }}>
-      <div className="absolute top-[-8%] right-[-4%] w-[480px] h-[480px] rounded-full animate-blob pointer-events-none" style={{ background: '#6366f1', opacity: 0.18, filter: 'blur(90px)' }} />
-      <div className="absolute bottom-[-10%] left-[-6%] w-[400px] h-[400px] rounded-full animate-blob-delay pointer-events-none" style={{ background: '#8b5cf6', opacity: 0.15, filter: 'blur(80px)' }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.5) 1px, transparent 1px)', backgroundSize: '28px 28px', opacity: 0.07 }} />
+    <div className="min-h-screen flex items-center justify-center px-4 py-10 relative overflow-hidden" style={{ background: t.pageBg }}>
+      <ThemeToggleButton />
+      <div className="absolute top-[-8%] right-[-4%] w-[480px] h-[480px] rounded-full animate-blob pointer-events-none" style={{ background: '#dc2626', opacity: t.orbOpacity1, filter: 'blur(90px)' }} />
+      <div className="absolute bottom-[-10%] left-[-6%] w-[400px] h-[400px] rounded-full animate-blob-delay pointer-events-none" style={{ background: '#f97316', opacity: t.orbOpacity2, filter: 'blur(80px)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, rgba(220,38,38,0.5) 1px, transparent 1px)', backgroundSize: '28px 28px', opacity: t.gridOpacity }} />
 
       <div className="relative w-full max-w-md animate-fade-up">
-        <div className="rounded-2xl px-8 py-9" style={{ background: '#13151f', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }}>
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <img src="/logo.png" alt="ARIA" style={{ height: 40, width: 'auto' }} />
-            <span className="text-3xl font-bold tracking-tight mt-3" style={{ color: '#1E318A' }}>aria</span>
-            <p className="text-sm mt-1 font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>Intelligence API Inversée</p>
-          </div>
-
+        <div className="rounded-2xl px-8 py-9" style={{ background: t.cardBg, border: `1px solid ${t.cardBorder}`, boxShadow: t.cardShadow, colorScheme: 'light' }}>
           {success ? (
             <div className="flex flex-col items-center text-center animate-fade-up">
               <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)' }}>
                 <CheckCircle2 size={28} style={{ color: '#22c55e' }} />
               </div>
-              <h2 className="text-lg font-semibold mb-2" style={{ color: '#e2e8f0' }}>Mot de passe modifié !</h2>
-              <p className="text-sm mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                Votre mot de passe a été mis à jour avec succès.<br />
-                Vous allez être redirigé vers la connexion…
+              <h2 className="text-lg font-semibold mb-2" style={{ color: t.heading }}>Password changed!</h2>
+              <p className="text-sm mb-6" style={{ color: t.body }}>
+                Your password has been successfully updated.<br />
+                You will be redirected to login…
               </p>
-              <Link to="/login" className="text-sm font-medium flex items-center gap-1.5 transition-colors" style={{ color: '#818cf8' }}>
+              <Link to="/login" className="text-sm font-medium flex items-center gap-1.5 transition-colors" style={{ color: t.accent }}>
                 <ArrowLeft size={14} />
-                Aller à la connexion
+                Go to login
               </Link>
             </div>
           ) : (
             <>
               <div className="mb-6">
-                <h2 className="text-xl font-semibold mb-1" style={{ color: '#e2e8f0' }}>Nouveau mot de passe</h2>
-                <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                  Choisissez un nouveau mot de passe sécurisé.
+                <h2 className="text-xl font-semibold mb-1" style={{ color: t.heading }}>New password</h2>
+                <p className="text-sm" style={{ color: t.body }}>
+                  Choose a new, secure password.
                 </p>
               </div>
 
               {error && (
-                <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 mb-5" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-                  <AlertCircle size={15} style={{ color: '#f87171', marginTop: 1, flexShrink: 0 }} />
-                  <p className="text-xs leading-relaxed" style={{ color: '#f87171' }}>{error}</p>
+                <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 mb-5" style={{ background: t.errBg, border: `1px solid ${t.errBorder}` }}>
+                  <AlertCircle size={15} style={{ color: t.errText, marginTop: 1, flexShrink: 0 }} />
+                  <p className="text-xs leading-relaxed" style={{ color: t.errText }}>{error}</p>
                 </div>
               )}
 
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 {/* Nouveau mot de passe */}
                 <div>
-                  <label htmlFor="rp-password" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>
-                    Nouveau mot de passe
+                  <label htmlFor="rp-password" className="block text-sm font-medium mb-1.5" style={{ color: t.hint }}>
+                    New password
                   </label>
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8] pointer-events-none" />
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: t.hint }} />
                     <input
                       id="rp-password"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      placeholder="Min. 8 caractères"
+                      placeholder="Min. 8 characters"
                       autoComplete="new-password"
                       className={inputBase}
                       style={inputStyle}
@@ -126,7 +149,7 @@ const ResetPasswordPage: React.FC = () => {
                     <button
                       type="button"
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer transition-colors"
-                      style={{ color: '#94a3b8' }}
+                      style={{ color: t.hint }}
                       onClick={() => setShowPassword(!showPassword)}
                     >
                       {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -141,8 +164,8 @@ const ResetPasswordPage: React.FC = () => {
                           className="h-1 flex-1 rounded-full transition-colors"
                           style={{
                             background: password.length >= threshold
-                              ? i === 0 ? '#f59e0b' : i === 1 ? '#22c55e' : '#6366f1'
-                              : 'rgba(255,255,255,0.1)',
+                              ? i === 0 ? '#f59e0b' : i === 1 ? '#22c55e' : '#dc2626'
+                              : t.trackEmpty,
                           }}
                         />
                       ))}
@@ -152,17 +175,17 @@ const ResetPasswordPage: React.FC = () => {
 
                 {/* Confirmer */}
                 <div>
-                  <label htmlFor="rp-confirm" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>
-                    Confirmer le mot de passe
+                  <label htmlFor="rp-confirm" className="block text-sm font-medium mb-1.5" style={{ color: t.hint }}>
+                    Confirm password
                   </label>
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8] pointer-events-none" />
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: t.hint }} />
                     <input
                       id="rp-confirm"
                       type={showConfirm ? 'text' : 'password'}
                       value={confirm}
                       onChange={e => setConfirm(e.target.value)}
-                      placeholder="Répéter le mot de passe"
+                      placeholder="Repeat password"
                       autoComplete="new-password"
                       className={inputBase}
                       style={inputStyle}
@@ -172,7 +195,7 @@ const ResetPasswordPage: React.FC = () => {
                     <button
                       type="button"
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer transition-colors"
-                      style={{ color: '#94a3b8' }}
+                      style={{ color: t.hint }}
                       onClick={() => setShowConfirm(!showConfirm)}
                     >
                       {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -184,26 +207,26 @@ const ResetPasswordPage: React.FC = () => {
                   type="submit"
                   disabled={loading || !password || !confirm}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed mt-2"
-                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 14px 0 rgba(99, 102, 241, 0.35)' }}
+                  style={{ background: 'linear-gradient(135deg, #dc2626, #f97316)', boxShadow: '0 4px 14px 0 rgba(220, 38, 38, 0.35)' }}
                   onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-2px)' }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}
                 >
                   {loading ? (
-                    <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Modification en cours…</>
-                  ) : 'Changer le mot de passe'}
+                    <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Updating…</>
+                  ) : 'Change password'}
                 </button>
               </form>
 
               <div className="text-center mt-6">
-                <Link to="/forgot-password" className="text-sm font-medium flex items-center justify-center gap-1.5 transition-colors" style={{ color: '#818cf8' }}>
+                <Link to="/forgot-password" className="text-sm font-medium flex items-center justify-center gap-1.5 transition-colors" style={{ color: t.accent }}>
                   <ArrowLeft size={14} />
-                  Renvoyer un lien
+                  Resend link
                 </Link>
               </div>
             </>
           )}
         </div>
-        <p className="text-center text-xs mt-4" style={{ color: 'rgba(255,255,255,0.2)' }}>© 2026 ARIA · PFE</p>
+        <p className="text-center text-xs mt-4" style={{ color: t.footer }}>© 2026 ARIA · Final Year Project</p>
       </div>
     </div>
   )

@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import { StatusBadge } from '../components/aria/Badges'
-import { listRuns, AnalysisRun } from '../lib/registryApi'
+import { listRuns, AnalysisRun, getWorkflows, BackendWorkflow } from '../lib/registryApi'
 import {
-  createPlan, executePlan,
+  createPlan, executePlan, planFromWorkflow,
   BackendPlanStep, CreatePlanResponse, ExecutePlanResponse,
 } from '../lib/automationApi'
 import { ApiError } from '../lib/api'
-import { FlaskConical, Layers, Sparkles, Play, Lock, Unlock, ChevronDown, Plus, X, TriangleAlert, AlertCircle } from 'lucide-react'
+import { FlaskConical, Layers, Sparkles, Play, Lock, Unlock, ChevronDown, Plus, X, TriangleAlert, AlertCircle, Loader2 } from 'lucide-react'
+
+function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
+  return <Loader2 className={`${className} animate-spin`} />
+}
 
 function MethodBadge({ m }: { m: string }) {
   const cls: Record<string, string> = { GET:'bg-emerald-50 text-emerald-700 border-emerald-200', POST:'bg-indigo-50 text-indigo-700 border-indigo-200', PUT:'bg-amber-50 text-amber-700 border-amber-200', PATCH:'bg-violet-50 text-violet-700 border-violet-200', DELETE:'bg-rose-50 text-rose-700 border-rose-200' }
@@ -49,13 +53,13 @@ function KeyValueEditor({ label, rows, setRows }: { label: string; rows: HeaderR
               <input value={h.k} className="input !py-1.5 font-mono text-xs" onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, k: e.target.value } : x))} />
               <div className="relative">
                 <input type={s ? 'password' : 'text'} value={h.v} className="input !py-1.5 font-mono text-xs" onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, v: e.target.value } : x))} />
-                {s && <span className="absolute right-2 top-1/2 -translate-y-1/2 pill text-[9px] bg-rose-50 text-rose-700 border-rose-200"><Lock className="w-2.5 h-2.5" />masqué</span>}
+                {s && <span className="absolute right-2 top-1/2 -translate-y-1/2 pill text-[9px] bg-rose-50 text-rose-700 border-rose-200"><Lock className="w-2.5 h-2.5" />hidden</span>}
               </div>
               <button className="btn-ghost !p-1.5" onClick={() => setRows(rows.filter((_, j) => j !== i))}><X className="w-4 h-4" /></button>
             </div>
           )
         })}
-        <button onClick={() => setRows([...rows, { k: '', v: '' }])} className="btn-ghost text-xs"><Plus className="w-3.5 h-3.5" /> Ajouter</button>
+        <button onClick={() => setRows([...rows, { k: '', v: '' }])} className="btn-ghost text-xs"><Plus className="w-3.5 h-3.5" /> Add</button>
       </div>
     </div>
   )
@@ -77,12 +81,12 @@ function PlanStep({ step }: { step: BackendPlanStep }) {
         </div>
         <p className="mt-2 text-sm" style={{ color: 'var(--ink)' }}>{step.action ?? '—'}</p>
         <div className="mt-1 flex items-center gap-2 text-xs ink-2 flex-wrap">
-          <span>Domaine : <span className="font-semibold" style={{ color: 'var(--ink)' }}>{step.business_domain ?? '—'}</span></span>
-          {step.depends_on.length > 0 && <span>· Dépend de l&apos;étape {step.depends_on.join(', ')}</span>}
+          <span>Domain: <span className="font-semibold" style={{ color: 'var(--ink)' }}>{step.business_domain ?? '—'}</span></span>
+          {step.depends_on.length > 0 && <span>· Depends on step {step.depends_on.join(', ')}</span>}
         </div>
         <button onClick={() => setOpen(o => !o)} className="mt-2 text-xs ink-2 inline-flex items-center gap-1 hover:opacity-80">
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-          {open ? 'Masquer les schémas' : 'Voir request/response schemas'}
+          {open ? 'Hide schemas' : 'View request/response schemas'}
         </button>
         {open && (
           <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -103,11 +107,11 @@ function PlanStep({ step }: { step: BackendPlanStep }) {
 }
 
 const INSTRUCTION_EXAMPLES = [
-  'Créer un employé Bob Martin avec contrat CDI et envoyer un email de bienvenue',
-  'Ouvrir un compte paie et calculer le salaire du mois de janvier',
-  'Récupérer la liste des employés actifs du département Engineering',
-  'Mettre à jour le poste et le salaire d\'un employé existant',
-  'Créer un utilisateur avec rôle OPERATOR et activer son accès',
+  'Create employee Bob Martin with a permanent contract and send a welcome email',
+  'Open a payroll account and calculate the salary for January',
+  'Retrieve the list of active employees in the Engineering department',
+  'Update the position and salary of an existing employee',
+  'Create a user with the OPERATOR role and activate their access',
 ]
 
 type ScoreLevel = 'low' | 'medium' | 'good'
@@ -129,12 +133,12 @@ const ENTITY_WORDS = [
 function validateInstruction(v: string): string {
   const t = v.trim()
   const lower = t.toLowerCase()
-  if (t.length < 10) return `Trop court — ${t.length}/10 caractères minimum.`
-  if (t.length > 500) return `Trop long — ${t.length}/500 caractères maximum.`
+  if (t.length < 10) return `Too short — ${t.length}/10 characters minimum.`
+  if (t.length > 500) return `Too long — ${t.length}/500 characters maximum.`
   if (!ACTION_WORDS.some(w => lower.includes(w)))
-    return 'Ajoutez un verbe d\'action : créer, envoyer, récupérer, mettre à jour, supprimer…'
+    return 'Add an action verb: create, send, retrieve, update, delete…'
   if (!ENTITY_WORDS.some(w => lower.includes(w)) && t.split(/\s+/).length < 5)
-    return 'Précisez l\'objet : employé, contrat, compte, email, utilisateur…'
+    return 'Specify the object: employee, contract, account, email, user…'
   return ''
 }
 
@@ -146,10 +150,10 @@ function scoreInstruction(v: string): { level: ScoreLevel; hint: string } {
   const hasAction = ACTION_WORDS.some(w => lower.includes(w))
   const hasEntity = ENTITY_WORDS.some(w => lower.includes(w))
   const isDetailed = words.length >= 7 && t.length >= 50
-  if (!hasAction) return { level: 'low', hint: 'Verbe d\'action manquant' }
-  if (!hasEntity) return { level: 'medium', hint: 'Précisez l\'objet (employé, contrat…)' }
-  if (isDetailed) return { level: 'good', hint: 'Instruction détaillée ✓' }
-  return { level: 'medium', hint: 'Ajoutez des détails pour de meilleurs résultats' }
+  if (!hasAction) return { level: 'low', hint: 'Missing action verb' }
+  if (!hasEntity) return { level: 'medium', hint: 'Specify the object (employee, contract…)' }
+  if (isDetailed) return { level: 'good', hint: 'Detailed instruction ✓' }
+  return { level: 'medium', hint: 'Add more details for better results' }
 }
 
 export default function AutomationPage() {
@@ -157,7 +161,10 @@ export default function AutomationPage() {
 
   const [runs, setRuns]                       = useState<AnalysisRun[]>([])
   const [selectedRunId, setSelectedRunId]     = useState('')
-  const [instruction, setInstruction]         = useState('Créer un employé nommé Bob avec contrat CDI, ouvrir un compte paie et envoyer un email de bienvenue')
+  const [workflows, setWorkflows]             = useState<BackendWorkflow[]>([])
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('')
+  const [loadingWorkflowPlan, setLoadingWorkflowPlan] = useState(false)
+  const [instruction, setInstruction]         = useState('Create an employee named Bob with a permanent contract, open a payroll account, and send a welcome email')
   const [searchLevel, setSearchLevel]         = useState<'precise' | 'balanced' | 'wide'>('balanced')
   const [generating, setGenerating]           = useState(false)
   const [executing, setExecuting]             = useState(false)
@@ -191,6 +198,14 @@ export default function AutomationPage() {
     }).catch(() => {})
   }, [])
 
+  // Reload the workflow picker whenever the analysis run changes — workflows
+  // are scoped to the run they were detected/saved in.
+  useEffect(() => {
+    if (!selectedRunId) { setWorkflows([]); return }
+    setSelectedWorkflowId('')
+    getWorkflows(selectedRunId).then(setWorkflows).catch(() => setWorkflows([]))
+  }, [selectedRunId])
+
   async function handleGeneratePlan() {
     if (!selectedRunId || instructionError) return
     setGenerating(true)
@@ -206,14 +221,32 @@ export default function AutomationPage() {
       if (e instanceof ApiError && e.status === 400 && e.body) {
         const d = (e.body as { detail?: { code?: string; message?: string; suggestion?: string } }).detail
         if (d && typeof d === 'object') {
-          setPlanError(d.message ?? 'Instruction invalide ou aucun endpoint correspondant.')
+          setPlanError(d.message ?? 'Invalid instruction or no matching endpoint.')
           setPlanSuggestion(d.suggestion ?? '')
           return
         }
       }
-      setApiError(e instanceof Error ? e.message : 'Erreur lors de la génération du plan')
+      setApiError(e instanceof Error ? e.message : 'Error generating the plan')
     } finally {
       setGenerating(false)
+    }
+  }
+
+  async function handleUseWorkflow() {
+    if (!selectedWorkflowId) return
+    setLoadingWorkflowPlan(true)
+    setApiError('')
+    setPlanError('')
+    setPlanSuggestion('')
+    setPlanResult(null)
+    setExecutionResult(null)
+    try {
+      const result = await planFromWorkflow(selectedWorkflowId)
+      setPlanResult(result)
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Error converting workflow')
+    } finally {
+      setLoadingWorkflowPlan(false)
     }
   }
 
@@ -231,7 +264,7 @@ export default function AutomationPage() {
       const result = await executePlan(planResult.plan, parsedRows, baseUrl, headersObj, dryRun, approved)
       setExecutionResult(result)
     } catch (e) {
-      setApiError(e instanceof Error ? e.message : "Erreur lors de l'exécution")
+      setApiError(e instanceof Error ? e.message : "Error during execution")
     } finally {
       setExecuting(false)
     }
@@ -241,8 +274,8 @@ export default function AutomationPage() {
     <AppLayout>
       <div className="p-6 space-y-6">
         <div>
-          <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Automation Simple</h2>
-          <p className="text-sm ink-2 mt-1">Mode test · une seule action ou quelques lignes manuelles.</p>
+          <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Simple Automation</h2>
+          <p className="text-sm ink-2 mt-1">Test mode · a single action or a few manual rows.</p>
         </div>
 
         <div className="card overflow-hidden">
@@ -250,12 +283,12 @@ export default function AutomationPage() {
             <div className="p-5 flex items-start gap-4">
               <div className="w-10 h-10 rounded-xl grad-bg text-white flex items-center justify-center flex-shrink-0"><FlaskConical className="w-5 h-5" /></div>
               <div>
-                <p className="font-bold" style={{ color: 'var(--ink)' }}>Tester un workflow sur une action unique</p>
-                <p className="text-sm ink-2 mt-1 max-w-xl">Utilisez ce mode pour exécuter un workflow API sur une ou quelques lignes JSON. Pour un fichier CSV/Excel, basculez en mode <span className="font-semibold">Automation Bulk</span>.</p>
+                <p className="font-bold" style={{ color: 'var(--ink)' }}>Test a workflow on a single action</p>
+                <p className="text-sm ink-2 mt-1 max-w-xl">Use this mode to run an API workflow on one or a few JSON rows. For a CSV/Excel file, switch to <span className="font-semibold">Bulk Automation</span> mode.</p>
               </div>
             </div>
             <div className="p-5 flex items-center" style={{ background: 'color-mix(in oklch, var(--brand) 4%, var(--card))', borderLeft: '1px solid var(--line)' }}>
-              <button onClick={() => nav('/bulk')} className="btn-secondary"><Layers className="w-4 h-4" /> Passer à Automation Bulk</button>
+              <button onClick={() => nav('/bulk')} className="btn-secondary"><Layers className="w-4 h-4" /> Switch to Bulk Automation</button>
             </div>
           </div>
         </div>
@@ -279,16 +312,33 @@ export default function AutomationPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="card pad">
-            <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Générer un plan</p>
-            <p className="text-xs ink-2 mb-4">Décrivez l&apos;action à effectuer.</p>
+            <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Generate a plan</p>
+            <p className="text-xs ink-2 mb-4">Pick an existing workflow to run it as-is, or describe the action for AI plan generation.</p>
             <div className="space-y-3">
               {runs.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Run d&apos;analyse</p>
+                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Analysis run</p>
                   <select value={selectedRunId} onChange={e => setSelectedRunId(e.target.value)}
                     className="input !py-1.5 text-xs font-mono w-full">
                     {runs.map(r => <option key={r.id} value={r.id}>{r.file_name}</option>)}
                   </select>
+                </div>
+              )}
+              {workflows.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Existing workflow (optional)</p>
+                  <select value={selectedWorkflowId} onChange={e => setSelectedWorkflowId(e.target.value)}
+                    className="input !py-1.5 text-xs w-full">
+                    <option value="">— Write an instruction instead —</option>
+                    {workflows.map(w => <option key={w.id} value={w.id}>{w.name} · {w.steps.length} steps</option>)}
+                  </select>
+                  {selectedWorkflowId && (
+                    <button onClick={handleUseWorkflow} disabled={loadingWorkflowPlan}
+                      className="btn-secondary text-xs mt-2 w-full justify-center"
+                      title="Convert the selected workflow to a plan without an AI call">
+                      {loadingWorkflowPlan ? <><Spinner /> Converting…</> : <><Layers className="w-3.5 h-3.5" /> Use this workflow</>}
+                    </button>
+                  )}
                 </div>
               )}
               <div>
@@ -300,7 +350,7 @@ export default function AutomationPage() {
                   onBlur={() => setInstructionFocused(false)}
                   rows={3}
                   className="input resize-none"
-                  placeholder="Décrivez l'action à automatiser…"
+                  placeholder="Describe the action to automate…"
                 />
                 {instruction.trim().length > 0 && (
                   <div className="mt-2 flex items-center gap-2">
@@ -322,7 +372,7 @@ export default function AutomationPage() {
                 )}
                 {(instructionFocused || instruction.trim().length === 0) && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="text-xs ink-2 self-center">Exemples :</span>
+                    <span className="text-xs ink-2 self-center">Examples:</span>
                     {INSTRUCTION_EXAMPLES.map(ex => (
                       <button key={ex} type="button"
                         onMouseDown={e => { e.preventDefault(); setInstruction(ex); setPlanError(''); setPlanSuggestion('') }}
@@ -335,9 +385,9 @@ export default function AutomationPage() {
                 )}
               </div>
               <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Niveau de recherche</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Search level</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {([['precise', 'Précis', '5 endpoints'], ['balanced', 'Équilibré', '8 endpoints · recommandé'], ['wide', 'Large', '12 endpoints']] as const).map(([v, l, d]) => (
+                  {([['precise', 'Precise', '5 endpoints'], ['balanced', 'Balanced', '8 endpoints · recommended'], ['wide', 'Wide', '12 endpoints']] as const).map(([v, l, d]) => (
                     <button key={v} onClick={() => setSearchLevel(v)}
                       className="text-left p-2.5 rounded-xl border transition"
                       style={{ borderColor: searchLevel === v ? 'var(--brand)' : 'var(--line)', background: searchLevel === v ? 'color-mix(in oklch, var(--brand) 6%, var(--card))' : 'var(--card)' }}>
@@ -350,48 +400,44 @@ export default function AutomationPage() {
               <div className="flex justify-end">
                 <button onClick={handleGeneratePlan} disabled={!selectedRunId || generating || !!instructionError} className="btn-primary"
                   style={{ opacity: !selectedRunId || generating || !!instructionError ? 0.6 : 1 }}>
-                  <Sparkles className="w-4 h-4" /> {generating ? 'Génération…' : 'Générer le plan'}
+                  <Sparkles className="w-4 h-4" /> {generating ? 'Generating…' : 'Generate plan'}
                 </button>
               </div>
             </div>
-            <div className="mt-4 pt-4 text-xs space-y-1" style={{ borderTop: '1px solid var(--line)' }}>
-              <p className="font-mono"><span className="ink-2">Endpoint</span> <span style={{ color: 'var(--ink)' }}>POST /automation/plan</span></p>
-              <p className="font-mono"><span className="ink-2">run_id</span> <span style={{ color: 'var(--ink)' }}>{selectedRunId || '—'}</span></p>
-              <p className="font-mono"><span className="ink-2">top_k</span> <span style={{ color: 'var(--ink)' }}>{topK}</span></p>
-            </div>
+           
           </div>
 
           <div className="card pad">
             <div className="flex items-start justify-between mb-1">
-              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Exécuter</p>
+              <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Execute</p>
               {dryRun ? <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>
-                : <span className="pill bg-rose-50 text-rose-700 border-rose-200 font-bold">Exécution réelle</span>}
+                : <span className="pill bg-rose-50 text-rose-700 border-rose-200 font-bold">Live execution</span>}
             </div>
-            <p className="text-xs ink-2 mb-4">L&apos;instruction sera envoyée à l&apos;API cible si vous désactivez la simulation.</p>
+            <p className="text-xs ink-2 mb-4">The instruction will be sent to the target API if you disable simulation.</p>
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">URL de l&apos;API cible</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Target API URL</p>
                 <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} className="input !py-2 font-mono text-xs" placeholder="https://hr-api.company.com" />
               </div>
-              <KeyValueEditor label="En-têtes d'authentification" rows={headers} setRows={setHeaders} />
+              <KeyValueEditor label="Authentication headers" rows={headers} setRows={setHeaders} />
               <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Données d&apos;entrée (JSON) · optionnel</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Input data (JSON) · optional</p>
                 <textarea value={inputRows} onChange={e => setInputRows(e.target.value)} rows={4} className="input resize-none font-mono text-xs" />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <ToggleBig label="Mode simulation" hint="ARIA prépare les requêtes sans les envoyer" checked={dryRun} onChange={v => { setDryRun(v); if (v) setApproved(false) }} />
-                <ToggleBig label="Approuvé" hint={dryRun ? 'Non nécessaire en simulation' : "Requis pour l'exécution réelle"} disabled={dryRun} checked={approved} onChange={setApproved} />
+                <ToggleBig label="Simulation mode" hint="ARIA prepares the requests without sending them" checked={dryRun} onChange={v => { setDryRun(v); if (v) setApproved(false) }} />
+                <ToggleBig label="Approved" hint={dryRun ? 'Not required in simulation' : "Required for live execution"} disabled={dryRun} checked={approved} onChange={setApproved} />
               </div>
               {!dryRun && (
                 <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
                   <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>L&apos;exécution réelle enverra des requêtes POST/PUT à <span className="font-mono">{baseUrl}</span>. Ceci ne peut pas être annulé.</span>
+                  <span>Live execution will send POST/PUT requests to <span className="font-mono">{baseUrl}</span>. This cannot be undone.</span>
                 </div>
               )}
               <div className="flex justify-end">
                 <button onClick={handleExecute} disabled={!canExecute || executing}
                   className={dryRun ? 'btn-primary' : 'btn-danger'} style={{ opacity: canExecute && !executing ? 1 : 0.6 }}>
-                  <Play className="w-4 h-4" /> {executing ? 'Exécution…' : dryRun ? 'Lancer la simulation' : 'Exécuter pour de vrai'}
+                  <Play className="w-4 h-4" /> {executing ? 'Executing…' : dryRun ? 'Run simulation' : 'Execute for real'}
                 </button>
               </div>
             </div>
@@ -404,14 +450,14 @@ export default function AutomationPage() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <h3 className="font-black text-lg" style={{ color: 'var(--ink)' }}>{planResult.plan.workflow_name}</h3>
-                  {planResult.plan.requires_approval && <span className="pill bg-amber-50 text-amber-700 border-amber-200">Approbation requise</span>}
-                  {planResult.plan.dry_run_default && <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation par défaut</span>}
+                  {planResult.plan.requires_approval && <span className="pill bg-amber-50 text-amber-700 border-amber-200">Approval required</span>}
+                  {planResult.plan.dry_run_default && <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation by default</span>}
                 </div>
-                <p className="text-sm ink-2">Type : <span className="font-semibold" style={{ color: 'var(--ink)' }}>Automation Simple</span> · {steps.length} étapes</p>
+                <p className="text-sm ink-2">Type: <span className="font-semibold" style={{ color: 'var(--ink)' }}>Simple Automation</span> · {steps.length} steps</p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2">Estimé</p>
-                <p className="font-mono text-sm" style={{ color: 'var(--ink)' }}>~ {steps.length} appels</p>
+                <p className="text-[10px] font-bold tracking-widest uppercase ink-2">Estimated</p>
+                <p className="font-mono text-sm" style={{ color: 'var(--ink)' }}>~ {steps.length} calls</p>
               </div>
             </div>
 
@@ -419,7 +465,7 @@ export default function AutomationPage() {
               <div className="mb-4 p-3 rounded-xl space-y-1 text-xs" style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
                 {planResult.validation.issues.map((issue, i) => (
                   <p key={i} style={{ color: issue.level === 'error' ? '#9f1239' : '#92400e' }}>
-                    <span className="font-bold uppercase">{issue.level}</span> {issue.step_order != null ? `[étape ${issue.step_order}] ` : ''}{issue.message}
+                    <span className="font-bold uppercase">{issue.level}</span> {issue.step_order != null ? `[step ${issue.step_order}] ` : ''}{issue.message}
                   </p>
                 ))}
               </div>
@@ -436,21 +482,21 @@ export default function AutomationPage() {
           <div className="card pad">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
-                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Résultat — Automation simple</p>
+                <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Result — Simple Automation</p>
                 <div className="flex items-center gap-2 flex-wrap mt-1">
                   <StatusBadge s={executionResult.status === 'completed' ? 'completed' : executionResult.status === 'failed' ? 'failed' : 'running'} />
                   {executionResult.dry_run && <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4 text-center">
-                <div><p className="text-xs ink-2">Succès</p><p className="text-xl font-black text-emerald-600">{executionResult.success_count}</p></div>
-                <div><p className="text-xs ink-2">Échecs</p><p className="text-xl font-black text-rose-600">{executionResult.failed_count}</p></div>
+                <div><p className="text-xs ink-2">Success</p><p className="text-xl font-black text-emerald-600">{executionResult.success_count}</p></div>
+                <div><p className="text-xs ink-2">Failures</p><p className="text-xl font-black text-rose-600">{executionResult.failed_count}</p></div>
                 <div><p className="text-xs ink-2">Total</p><p className="text-xl font-black" style={{ color: 'var(--ink)' }}>{executionResult.total_steps}</p></div>
               </div>
             </div>
             <div className="overflow-hidden rounded-xl" style={{ border: '1px solid var(--line)' }}>
               <table className="w-full text-sm">
-                <thead className="aria-thead"><tr>{['Étape', 'Méthode', 'Path', 'Statut', 'Code', 'Risk'].map(h => <th key={h} className="text-left px-3 py-2">{h}</th>)}</tr></thead>
+                <thead className="aria-thead"><tr>{['Step', 'Method', 'Path', 'Status', 'Code', 'Risk'].map(h => <th key={h} className="text-left px-3 py-2">{h}</th>)}</tr></thead>
                 <tbody>
                   {steps.map(s => (
                     <tr key={s.order} className="border-t" style={{ borderColor: 'var(--line)' }}>

@@ -21,6 +21,7 @@ from app.auth.token_store import is_jti_blocklisted
 from app.core.cache import ARIACache, get_aria_cache
 from app.db.redis_client import get_redis
 from app.db.session import get_db
+from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
 
 
@@ -138,6 +139,25 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="Admin role required",
         )
     return current_user
+
+
+async def get_current_user_team_ids(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[str]:
+    """Team ids the current user belongs to. ADMIN gets [] (unrestricted —
+    callers should treat ADMIN as bypassing team scoping entirely, not as
+    "member of zero teams")."""
+    role_value = (
+        current_user.role
+        if isinstance(current_user.role, str)
+        else current_user.role.value
+    )
+    if role_value == UserRole.ADMIN.value:
+        return []
+
+    result = await db.execute(select(TeamMember.team_id).where(TeamMember.user_id == current_user.id))
+    return [row[0] for row in result.all()]
 
 
 async def require_admin_or_operator(current_user: User = Depends(get_current_user)) -> User:

@@ -77,13 +77,13 @@ function renumber(steps: DraftStep[]): DraftStep[] {
 
 function OriginBadge({ wf }: { wf: Workflow }) {
   if (wf.isManual) return (
-    <span className="pill text-[10px]" style={{ background: 'color-mix(in oklch, var(--ink) 6%, var(--card))', borderColor: 'var(--line)', color: 'var(--ink-2)' }}>Manuel</span>
+    <span className="pill text-[10px]" style={{ background: 'color-mix(in oklch, var(--ink) 6%, var(--card))', borderColor: 'var(--line)', color: 'var(--ink-2)' }}>Manual</span>
   )
   if (wf.hasOriginal) return (
-    <span className="pill text-[10px]" style={{ background: 'color-mix(in oklch, #f59e0b 12%, var(--card))', borderColor: '#f59e0b', color: '#b45309' }}>Modifié</span>
+    <span className="pill text-[10px]" style={{ background: 'color-mix(in oklch, #f59e0b 12%, var(--card))', borderColor: '#f59e0b', color: '#b45309' }}>Modified</span>
   )
   return (
-    <span className="pill text-[10px]" style={{ background: 'color-mix(in oklch, #22c55e 12%, var(--card))', borderColor: '#22c55e', color: '#15803d' }}>IA</span>
+    <span className="pill text-[10px]" style={{ background: 'color-mix(in oklch, #22c55e 12%, var(--card))', borderColor: '#22c55e', color: '#15803d' }}>AI</span>
   )
 }
 
@@ -205,7 +205,7 @@ export default function WorkflowsPage() {
         setWorkflows(mapped)
         if (mapped.length > 0) setActiveId(mapped[0].id)
       })
-      .catch((err) => setLoadError(err?.message ?? 'Erreur lors du chargement des workflows.'))  // [F10]
+      .catch((err) => setLoadError(err?.message ?? 'Error loading workflows.'))  // [F10]
       .finally(() => setLoading(false))
   }
 
@@ -301,9 +301,9 @@ export default function WorkflowsPage() {
       setWorkflows(prev => prev.map(w => w.id === activeId ? mapWorkflow(updated) : w))
       setIsDirty(false)
       setMode('view')
-      addToast('Workflow sauvegardé avec succès.', 'success')
+      addToast('Workflow saved successfully.', 'success')
     } catch (err: unknown) {
-      addToast((err as Error)?.message ?? 'Erreur lors de la sauvegarde.', 'error')
+      addToast((err as Error)?.message ?? 'Error while saving.', 'error')
     } finally {
       setSaving(false)
     }
@@ -324,9 +324,9 @@ export default function WorkflowsPage() {
       setActiveId(mapped.id)
       setIsDirty(false)
       setMode('view')
-      addToast('Workflow créé avec succès.', 'success')
+      addToast('Workflow created successfully.', 'success')
     } catch (err: unknown) {
-      addToast((err as Error)?.message ?? 'Erreur lors de la création.', 'error')
+      addToast((err as Error)?.message ?? 'Error while creating.', 'error')
     } finally {
       setSaving(false)
     }
@@ -340,9 +340,9 @@ export default function WorkflowsPage() {
     try {
       const restored = await restoreWorkflow(activeId)
       setWorkflows(prev => prev.map(w => w.id === activeId ? mapWorkflow(restored) : w))
-      addToast('Version originale restaurée.', 'success')
+      addToast('Original version restored.', 'success')
     } catch (err: unknown) {
-      addToast((err as Error)?.message ?? 'Erreur lors de la restauration.', 'error')
+      addToast((err as Error)?.message ?? 'Error while restoring.', 'error')
     } finally {
       setRestoring(false)
     }
@@ -359,9 +359,9 @@ export default function WorkflowsPage() {
       setWorkflows(remaining)
       setActiveId(remaining[0]?.id ?? '')
       setMode('view')
-      addToast('Workflow supprimé.', 'success')
+      addToast('Workflow deleted.', 'success')
     } catch (err: unknown) {
-      addToast((err as Error)?.message ?? 'Erreur lors de la suppression.', 'error')
+      addToast((err as Error)?.message ?? 'Error while deleting.', 'error')
     } finally {
       setDeleting(false)
     }
@@ -408,19 +408,19 @@ export default function WorkflowsPage() {
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 shrink-0" style={{ color: 'var(--brand)' }} />
           <span className="text-sm font-bold" style={{ color: 'var(--ink)' }}>
-            {mode === 'create' ? 'Nouveau workflow' : 'Modifier le workflow'}
+            {mode === 'create' ? 'New workflow' : 'Edit workflow'}
           </span>
         </div>
         <div className="flex gap-2">
           <button onClick={cancel} className="btn-ghost !py-1 !px-3 text-xs">
-            <X className="w-3.5 h-3.5" /> Annuler
+            <X className="w-3.5 h-3.5" /> Cancel
           </button>
           <button
             onClick={mode === 'create' ? saveCreate : saveEdit}
             disabled={saving || !draftName.trim()}
             className="btn-primary !py-1 !px-3 text-xs disabled:opacity-50">
             {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            Sauvegarder
+            Save
           </button>
         </div>
       </div>
@@ -429,10 +429,10 @@ export default function WorkflowsPage() {
       {pendingSelectId && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-sm"
           style={{ background: 'color-mix(in oklch, #f59e0b 10%, var(--card))', border: '1px solid #f59e0b' }}>
-          <span style={{ color: 'var(--ink)' }}>Modifications non sauvegardées — continuer ?</span>
+          <span style={{ color: 'var(--ink)' }}>Unsaved changes — continue?</span>
           <div className="flex gap-2 shrink-0">
-            <button onClick={confirmLeave} className="btn-ghost !py-0.5 !px-2 text-xs hover:text-red-500">Quitter</button>
-            <button onClick={() => setPendingSelectId(null)} className="btn-primary !py-0.5 !px-2 text-xs">Rester</button>
+            <button onClick={confirmLeave} className="btn-ghost !py-0.5 !px-2 text-xs hover:text-red-500">Leave</button>
+            <button onClick={() => setPendingSelectId(null)} className="btn-primary !py-0.5 !px-2 text-xs">Stay</button>
           </div>
         </div>
       )}
@@ -440,16 +440,16 @@ export default function WorkflowsPage() {
       {/* Name + Domain */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Nom du workflow *</p>
+          <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Workflow name *</p>
           <input value={draftName}
             onChange={e => { setDraftName(e.target.value); setIsDirty(true) }}
-            className="input" placeholder="ex. employee_onboarding" />
+            className="input" placeholder="e.g. employee_onboarding" />
         </div>
         <div>
-          <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Domaine métier</p>
+          <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Business domain</p>
           <input value={draftDomain}
             onChange={e => { setDraftDomain(e.target.value); setIsDirty(true) }}
-            className="input" placeholder="ex. HR, Finance, Auth…" />
+            className="input" placeholder="e.g. HR, Finance, Auth…" />
         </div>
       </div>
 
@@ -460,7 +460,7 @@ export default function WorkflowsPage() {
         </p>
 
         {draftSteps.length === 0 && (
-          <p className="text-xs ink-2 py-4 text-center">Aucun step — ajoutez des endpoints ci-dessous.</p>
+          <p className="text-xs ink-2 py-4 text-center">No steps yet — add endpoints below.</p>
         )}
 
         <div className="space-y-2">
@@ -494,11 +494,11 @@ export default function WorkflowsPage() {
               {/* [F14] Up / Down buttons */}
               <div className="flex flex-col gap-0.5 shrink-0" onMouseDown={e => e.stopPropagation()}>
                 <button onClick={() => moveStep(i, 'up')} disabled={i === 0}
-                  className="btn-ghost !p-0.5 disabled:opacity-20" title="Monter" style={{ cursor: 'pointer' }}>
+                  className="btn-ghost !p-0.5 disabled:opacity-20" title="Move up" style={{ cursor: 'pointer' }}>
                   <ChevronUp className="w-3 h-3" />
                 </button>
                 <button onClick={() => moveStep(i, 'down')} disabled={i === draftSteps.length - 1}
-                  className="btn-ghost !p-0.5 disabled:opacity-20" title="Descendre" style={{ cursor: 'pointer' }}>
+                  className="btn-ghost !p-0.5 disabled:opacity-20" title="Move down" style={{ cursor: 'pointer' }}>
                   <ChevronDown className="w-3 h-3" />
                 </button>
               </div>
@@ -506,7 +506,7 @@ export default function WorkflowsPage() {
                 onMouseDown={e => e.stopPropagation()}
                 onClick={() => removeStep(i)}
                 className="btn-ghost !p-1 shrink-0 hover:text-red-500"
-                title="Supprimer" style={{ cursor: 'pointer' }}>
+                title="Delete" style={{ cursor: 'pointer' }}>
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -516,16 +516,16 @@ export default function WorkflowsPage() {
 
       {/* [F4] Combobox endpoint picker */}
       <div style={{ borderTop: '1px solid var(--line)', paddingTop: '1rem' }}>
-        <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Ajouter un endpoint</p>
+        <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Add an endpoint</p>
         {availableEps.length === 0 ? (
-          <p className="text-xs ink-2">Tous les endpoints de ce run sont déjà dans le workflow.</p>
+          <p className="text-xs ink-2">All endpoints in this run are already in the workflow.</p>
         ) : (
           <div className="relative" ref={epComboRef}>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ink-2 pointer-events-none" />
               <input
                 className="input !pl-8 text-xs font-mono w-full"
-                placeholder="Filtrer les endpoints…"
+                placeholder="Filter endpoints…"
                 value={epSearch}
                 onFocus={() => setShowEpList(true)}
                 onChange={e => { setEpSearch(e.target.value); setShowEpList(true) }}
@@ -565,16 +565,16 @@ export default function WorkflowsPage() {
             style={{ background: 'var(--card)', border: '1px solid var(--line)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
             <div className="flex items-center gap-2">
               <Trash2 className="w-5 h-5 text-red-500 shrink-0" />
-              <span className="font-bold text-sm" style={{ color: 'var(--ink)' }}>Supprimer ce workflow ?</span>
+              <span className="font-bold text-sm" style={{ color: 'var(--ink)' }}>Delete this workflow?</span>
             </div>
-            <p className="text-xs ink-2">Cette action est irréversible. Le workflow <strong>{wf.name}</strong> sera définitivement supprimé.</p>
+            <p className="text-xs ink-2">This action is irreversible. The workflow <strong>{wf.name}</strong> will be permanently deleted.</p>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setConfirmDeleteOpen(false)} className="btn-ghost !py-1.5 !px-3 text-xs">Annuler</button>
+              <button onClick={() => setConfirmDeleteOpen(false)} className="btn-ghost !py-1.5 !px-3 text-xs">Cancel</button>
               <button onClick={doDelete} disabled={deleting}
                 className="btn-ghost !py-1.5 !px-3 text-xs hover:text-red-500 disabled:opacity-40"
                 style={{ color: '#ef4444', border: '1px solid #ef4444' }}>
                 {deleting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                Confirmer
+                Confirm
               </button>
             </div>
           </div>
@@ -602,21 +602,21 @@ export default function WorkflowsPage() {
           <div className="flex gap-2 items-center">
             {wf.hasOriginal && !confirmRestore && (
               <button onClick={() => setConfirmRestore(true)} disabled={restoring}
-                className="btn-ghost !py-1.5 !px-3 text-xs disabled:opacity-40" title="Restaurer la version originale AI">
+                className="btn-ghost !py-1.5 !px-3 text-xs disabled:opacity-40" title="Restore the original AI version">
                 {restoring ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                Restaurer
+                Restore
               </button>
             )}
             {confirmRestore && (
               <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
                 style={{ background: 'color-mix(in oklch, var(--brand) 8%, var(--card))', border: '1px solid var(--brand)' }}>
-                <span style={{ color: 'var(--ink)' }}>Restaurer la version AI ?</span>
-                <button onClick={doRestore} className="btn-primary !py-0.5 !px-2 text-[11px]">Oui</button>
-                <button onClick={() => setConfirmRestore(false)} className="btn-ghost !py-0.5 !px-2 text-[11px]">Non</button>
+                <span style={{ color: 'var(--ink)' }}>Restore the AI version?</span>
+                <button onClick={doRestore} className="btn-primary !py-0.5 !px-2 text-[11px]">Yes</button>
+                <button onClick={() => setConfirmRestore(false)} className="btn-ghost !py-0.5 !px-2 text-[11px]">No</button>
               </div>
             )}
             <button onClick={enterEdit} className="btn-secondary !py-1.5 !px-3 text-xs">
-              <Pencil className="w-3.5 h-3.5" /> Modifier
+              <Pencil className="w-3.5 h-3.5" /> Edit
             </button>
             <button onClick={() => setConfirmDeleteOpen(true)} disabled={deleting}
               className="btn-ghost !py-1.5 !px-3 text-xs hover:text-red-500 disabled:opacity-40">
@@ -626,7 +626,7 @@ export default function WorkflowsPage() {
             <button
               onClick={() => nav(`/bulk?run=${selectedRunId}&workflow=${wf.id}`, { state: { workflowId: wf.id, steps: wf.steps } })}
               className="btn-primary !py-1.5 !px-3 text-xs">
-              <Layers className="w-3.5 h-3.5" /> Automatiser
+              <Layers className="w-3.5 h-3.5" /> Automate
             </button>
           </div>
         </div>
@@ -665,7 +665,7 @@ export default function WorkflowsPage() {
                           <span className="text-xs ink-2 italic">{s.action}</span>
                         )}
                         {s.depends.length > 0 && (
-                          <span className="text-xs ink-2">· dépend du step {s.depends.join(', ')}</span>
+                          <span className="text-xs ink-2">· depends on step {s.depends.join(', ')}</span>
                         )}
                       </div>
                     </div>
@@ -679,7 +679,7 @@ export default function WorkflowsPage() {
     </div>
   ) : (
     <div className="card pad flex items-center justify-center text-sm ink-2 py-16">
-      Sélectionnez un workflow ou créez-en un nouveau.
+      Select a workflow or create a new one.
     </div>
   )
 
@@ -709,13 +709,13 @@ export default function WorkflowsPage() {
         {/* Header */}
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-xs font-semibold tracking-wider uppercase ink-2">Automatisation</p>
+            <p className="text-xs font-semibold tracking-wider uppercase ink-2">Automation</p>
             <h2 className="text-xl font-black mt-0.5" style={{ color: 'var(--ink)' }}>Workflows</h2>
             {/* [F3] Show filtered count */}
             <p className="text-sm ink-2 mt-1">
               {searchQuery
                 ? `${filteredWorkflows.length} / ${workflows.length} workflow${workflows.length !== 1 ? 's' : ''}`
-                : `${workflows.length} workflow${workflows.length !== 1 ? 's' : ''} détectés`}
+                : `${workflows.length} workflow${workflows.length !== 1 ? 's' : ''} detected`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -731,7 +731,7 @@ export default function WorkflowsPage() {
               </button>
             )}
             <button onClick={enterCreate} className="btn-primary">
-              <Plus className="w-4 h-4" /> Nouveau workflow
+              <Plus className="w-4 h-4" /> New workflow
             </button>
           </div>
         </div>
@@ -750,7 +750,7 @@ export default function WorkflowsPage() {
             <AlertCircle className="w-8 h-8 text-red-400" />
             <p className="text-sm" style={{ color: 'var(--ink)' }}>{loadError}</p>
             <button onClick={() => loadWorkflows(selectedRunId)} className="btn-secondary text-xs">
-              <RefreshCw className="w-3.5 h-3.5" /> Réessayer
+              <RefreshCw className="w-3.5 h-3.5" /> Retry
             </button>
           </div>
         )}
@@ -766,7 +766,7 @@ export default function WorkflowsPage() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ink-2 pointer-events-none" />
                   <input
                     className="input !pl-8 text-xs w-full"
-                    placeholder="Rechercher un workflow…"
+                    placeholder="Search workflows…"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                   />
@@ -776,11 +776,11 @@ export default function WorkflowsPage() {
               {filteredWorkflows.length === 0 && mode !== 'create' && (
                 <div className="card pad text-center py-8 space-y-3">
                   <p className="text-sm ink-2">
-                    {runs.length === 0 ? 'Aucune analyse trouvée.' : searchQuery ? 'Aucun résultat pour cette recherche.' : 'Aucun workflow détecté pour ce run.'}
+                    {runs.length === 0 ? 'No analysis found.' : searchQuery ? 'No results for this search.' : 'No workflow detected for this run.'}
                   </p>
                   {runs.length === 0 && (
                     <button onClick={() => nav('/analysis')} className="btn-primary mx-auto text-xs">
-                      <Package className="w-3.5 h-3.5" /> Analyser un HAR
+                      <Package className="w-3.5 h-3.5" /> Analyze a HAR
                     </button>
                   )}
                 </div>
@@ -819,7 +819,7 @@ export default function WorkflowsPage() {
                 <button onClick={enterCreate} className="w-full card pad transition" style={{ borderStyle: 'dashed', cursor: 'pointer' }}>
                   <div className="text-center py-2">
                     <Plus className="w-5 h-5 mx-auto ink-2 mb-1" />
-                    <p className="text-xs ink-2 font-medium">Créer un workflow</p>
+                    <p className="text-xs ink-2 font-medium">Create a workflow</p>
                   </div>
                 </button>
               )}

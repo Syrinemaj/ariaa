@@ -35,6 +35,7 @@ def normalize_entry(
     canonical_key = build_canonical_key(
         method=entry.method,
         normalized_path=normalized_path,
+        request_body=entry.request_body,
     )
 
     return NormalizedEndpoint(

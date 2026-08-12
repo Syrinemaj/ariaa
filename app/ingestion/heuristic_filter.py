@@ -10,7 +10,11 @@ API_HINTS = {
     "/v3/",
     "/backend/",
     "/services/",
+    "/cxf/",
+    "servlet",
 }
+
+XML_CONTENT_TYPES = ("application/xml", "text/xml", "application/soap+xml")
 
 
 def has_json_content(entry: TrafficEntry) -> bool:
@@ -22,6 +26,22 @@ def has_json_content(entry: TrafficEntry) -> bool:
         or entry.mime_type == "application/json"
         or isinstance(entry.request_body, (dict, list))
         or isinstance(entry.response_body, (dict, list))
+    )
+
+
+def has_structured_content(entry: TrafficEntry) -> bool:
+    """True for JSON or XML/SOAP bodies — legacy servlet-style APIs
+    (e.g. this app's hr-rich-client) commonly return text/xml instead
+    of JSON for genuine business calls, which has_json_content misses."""
+    if has_json_content(entry):
+        return True
+    content_type = entry.response_headers.get("content-type", "")
+    request_content_type = entry.request_headers.get("content-type", "")
+    mime_type = entry.mime_type or ""
+    return any(
+        xml_type in value
+        for value in (content_type, request_content_type, mime_type)
+        for xml_type in XML_CONTENT_TYPES
     )
 
 
@@ -39,7 +59,7 @@ def compute_heuristic_score(entry: TrafficEntry) -> float:
     if entry.method == "GET":
         score += 0.05
 
-    if has_json_content(entry):
+    if has_structured_content(entry):
         score += 0.35
 
     if has_api_hint(entry.path):

@@ -70,7 +70,7 @@ class ResetPasswordRequest(BaseModel):
     @classmethod
     def validate_password(cls, v: str) -> str:
         if len(v) < 8:
-            raise ValueError("Le mot de passe doit contenir au moins 8 caractères")
+            raise ValueError("Password must be at least 8 characters long")
         return v
 
 
@@ -83,14 +83,14 @@ class RequestAccessRequest(BaseModel):
     @classmethod
     def validate_password(cls, v: str) -> str:
         if len(v) < 8:
-            raise ValueError("Le mot de passe doit contenir au moins 8 caractères")
+            raise ValueError("Password must be at least 8 characters long")
         return v
 
     @field_validator("full_name")
     @classmethod
     def validate_name(cls, v: str) -> str:
         if len(v.strip()) < 2:
-            raise ValueError("Le nom doit contenir au moins 2 caractères")
+            raise ValueError("Name must be at least 2 characters long")
         return v.strip()
 
 
@@ -280,7 +280,7 @@ async def reset_password(
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token invalide ou expiré. Veuillez refaire une demande.",
+            detail="Invalid or expired token. Please request a new one.",
         )
 
     result = await db.execute(
@@ -291,7 +291,7 @@ async def reset_password(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token invalide ou expiré. Veuillez refaire une demande.",
+            detail="Invalid or expired token. Please request a new one.",
         )
 
     user.hashed_password = hash_password(payload.new_password)

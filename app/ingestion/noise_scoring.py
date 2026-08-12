@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional
 
 from app.ingestion.models import TrafficEntry
@@ -9,11 +10,17 @@ from app.ingestion.semantic_filter import semantic_filter_with_azure
 LOW_THRESHOLD = 0.30
 HIGH_THRESHOLD = 0.70
 
+# Ambiguous entries each cost one network-bound AI call (~2-10s); run them
+# concurrently instead of one at a time — a HAR with hundreds of entries was
+# otherwise spending most of process_har_file()'s wall time waiting on
+# calls that don't touch shared state (each gets its own TrafficEntry).
+_AI_CONCURRENCY = 8
+
 
 def score_entry(
     entry: TrafficEntry,
     use_ai: bool = True,
-    client=None,  # AIClientProtocol (GroqClient) shared across all entries in the batch
+    client=None,  # AIClientProtocol (create_ai_client()) shared across all entries in the batch
 ) -> TrafficEntry:
     heuristic_score = compute_heuristic_score(entry)
     payload_score = compute_payload_score(entry)
@@ -57,15 +64,22 @@ def score_entries(
 ) -> List[TrafficEntry]:
     """
     Score all entries using a single shared AI client instance.
-    One GroqClient is created for the whole batch instead of one per ambiguous
+    One client is created for the whole batch instead of one per ambiguous
     entry, avoiding redundant SSL handshakes and connection pools.
     """
     client: Optional[object] = None
     if use_ai:
         try:
-            from app.ai.groq_client import GroqClient
-            client = GroqClient()
+            from app.ai.base_client import create_ai_client
+            client = create_ai_client()
         except Exception:
             client = None
 
-    return [score_entry(entry, use_ai=use_ai, client=client) for entry in entries]
+    if len(entries) <= 1:
+        return [score_entry(entry, use_ai=use_ai, client=client) for entry in entries]
+
+    with ThreadPoolExecutor(max_workers=_AI_CONCURRENCY) as pool:
+        return list(pool.map(
+            lambda entry: score_entry(entry, use_ai=use_ai, client=client),
+            entries,
+        ))

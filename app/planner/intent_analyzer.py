@@ -109,15 +109,16 @@ def analyze_business_intent(
     """
     Analyse an instruction and return a structured BusinessIntent.
 
-    client — an AIClientProtocol instance (GroqClient or AzureOpenAIClient).
-    Falls back to GroqClient() when not provided (Celery / standalone usage).
+    client — an AIClientProtocol instance (BedrockClient, GroqClient or
+    AzureOpenAIClient). Falls back to create_ai_client() when not provided
+    (Celery / standalone usage).
     known_domains — business domains already discovered for the target run
     (see planner/service.py::_get_known_domains). Grounds the domain guess in
     what actually exists instead of a fixed hr/payroll/auth/crm/other enum.
     """
     if client is None:
-        from app.ai.groq_client import GroqClient
-        client = GroqClient()
+        from app.ai.base_client import create_ai_client
+        client = create_ai_client()
 
     system_prompt = SYSTEM_PROMPT_TEMPLATE.replace(
         "{domain_instructions}", _domain_instructions(known_domains)

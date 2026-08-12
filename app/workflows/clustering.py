@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 
 from app.normalization.models import NormalizedEndpoint
@@ -43,6 +44,11 @@ logger = logging.getLogger(__name__)
 
 _CATCHALL_DOMAIN   = "__ungrouped__"
 _MIN_CLUSTER_SIZE  = 2
+
+# Each cluster costs up to 2 sequential LLM calls (reorder + description) in
+# _build_workflow_from_cluster — run clusters concurrently instead of one at
+# a time, same rationale as app/ingestion/noise_scoring.py's _AI_CONCURRENCY.
+_CLUSTER_CONCURRENCY = 8
 
 
 def _path_prefix(path: str, depth: int = 2) -> str:
@@ -257,11 +263,18 @@ def discover_workflows(
     if not endpoints:
         return []
 
-    clusters = _cluster_endpoints(endpoints)
-    return [
-        _build_workflow_from_cluster(
-            cluster, idx, ai_client=ai_client, redis=redis
-        )
-        for idx, cluster in enumerate(clusters)
-        if cluster
-    ]
+    clusters = [(idx, cluster) for idx, cluster in enumerate(_cluster_endpoints(endpoints)) if cluster]
+    if not clusters:
+        return []
+
+    if len(clusters) == 1 or ai_client is None:
+        return [
+            _build_workflow_from_cluster(cluster, idx, ai_client=ai_client, redis=redis)
+            for idx, cluster in clusters
+        ]
+
+    with ThreadPoolExecutor(max_workers=_CLUSTER_CONCURRENCY) as pool:
+        return list(pool.map(
+            lambda item: _build_workflow_from_cluster(item[1], item[0], ai_client=ai_client, redis=redis),
+            clusters,
+        ))

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import AppLayout from '../components/layout/AppLayout'
-import { MethodBadge, SeverityBadge } from '../components/aria/Badges'
+import { MethodBadge, SeverityBadge, StatusBadge } from '../components/aria/Badges'
 import { Approval, Method, Risk } from '../lib/aria-data'
 import { listApprovals, approveApproval, rejectApproval, BackendApproval } from '../lib/approvalsApi'
-import { Filter, TriangleAlert, Check, X } from 'lucide-react'
+import { Filter, TriangleAlert, Check, X, CheckCheck } from 'lucide-react'
 
 // Map backend approval → UI Approval shape
 function mapApproval(ba: BackendApproval): Approval {
@@ -15,34 +15,40 @@ function mapApproval(ba: BackendApproval): Approval {
     invalid:     0,
     risk:        'medium' as Risk,
     requestedBy: ba.approved_by ?? 'system',
-    requestedAt: new Date(ba.created_at).toLocaleDateString('fr-FR'),
+    requestedAt: new Date(ba.created_at).toLocaleDateString('en-US'),
     methods:     ['POST'] as Method[],
     targets:     [],
   }
 }
 
 export default function ApprovalsPage() {
-  const [pending, setPending] = useState<Approval[]>([])
-  const [modal, setModal]     = useState<{ kind: 'approve' | 'reject'; a: Approval; idx: number } | null>(null)
-  const [comment, setComment] = useState('')
+  const [pending, setPending]   = useState<Approval[]>([])
+  const [approved, setApproved] = useState<BackendApproval[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [modal, setModal]       = useState<{ kind: 'approve' | 'reject'; a: Approval; idx: number } | null>(null)
+  const [comment, setComment]   = useState('')
 
-  // Load pending approvals on mount
-  useEffect(() => {
-    listApprovals()
-      .then(data => setPending(data.filter(a => a.status === 'pending').map(mapApproval)))
-      .catch(() => {})
+  const load = useCallback(() => {
+    setLoading(true)
+    return Promise.all([
+      listApprovals('pending').then(data => setPending(data.map(mapApproval))).catch(() => setPending([])),
+      listApprovals('approved').then(data => setApproved(data)).catch(() => setApproved([])),
+    ]).finally(() => setLoading(false))
   }, [])
+
+  // Load both queues on mount
+  useEffect(() => { load() }, [load])
 
   const approve = async (id: string) => {
     try { await approveApproval(id, comment || undefined) } catch { /* silent */ }
-    setPending(p => p.filter(a => a.id !== id))
     setModal(null)
+    void load()
   }
 
   const reject = async (id: string) => {
     try { await rejectApproval(id, comment || 'Rejected') } catch { /* silent */ }
-    setPending(p => p.filter(a => a.id !== id))
     setModal(null)
+    void load()
   }
 
   const riskBg    = (r: string) => r === 'critical' ? 'color-mix(in oklch, #f43f5e 10%, var(--card))' : r === 'high' ? 'color-mix(in oklch, #f97316 10%, var(--card))' : 'color-mix(in oklch, #f59e0b 10%, var(--card))'
@@ -82,7 +88,7 @@ export default function ApprovalsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-black text-lg" style={{ color: 'var(--ink)' }}>{a.workflow}</p>
-                    <p className="text-xs ink-2 mt-1">Run #{String(idx + 1).padStart(3, '0')} · demandé par <span className="font-mono">{a.requestedBy}</span></p>
+                    <p className="text-xs ink-2 mt-1">Run #{String(idx + 1).padStart(3, '0')} · requested by <span className="font-mono">{a.requestedBy}</span></p>
                   </div>
                   <SeverityBadge s={a.risk} />
                 </div>
@@ -115,12 +121,71 @@ export default function ApprovalsPage() {
                 </div>
 
                 <div className="flex items-center gap-2 mt-5">
-                  <button onClick={() => { setComment(''); setModal({ kind: 'reject', a, idx }) }} className="btn-secondary flex-1 justify-center"><X className="w-4 h-4" /> Rejeter</button>
-                  <button onClick={() => { setComment('Reviewed dry-run. Looks good.'); setModal({ kind: 'approve', a, idx }) }} className="btn-primary flex-1 justify-center"><Check className="w-4 h-4" /> Approuver</button>
+                  <button onClick={() => { setComment(''); setModal({ kind: 'reject', a, idx }) }} className="btn-secondary flex-1 justify-center"><X className="w-4 h-4" /> Reject</button>
+                  <button onClick={() => { setComment('Reviewed dry-run. Looks good.'); setModal({ kind: 'approve', a, idx }) }} className="btn-primary flex-1 justify-center"><Check className="w-4 h-4" /> Approve</button>
                 </div>
               </div>
             </div>
           ))}
+        </div>
+
+        <div>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Approved runs</h2>
+              <p className="text-sm ink-2 mt-1">{approved.length} bulk run{approved.length !== 1 ? 's' : ''} cleared for execution</p>
+            </div>
+          </div>
+
+          <div className="card overflow-hidden mt-4">
+            {!loading && approved.length === 0 && (
+              <div className="p-12 text-center">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                  style={{ background: 'color-mix(in oklch, var(--ink) 5%, var(--card))' }}>
+                  <CheckCheck className="w-6 h-6 ink-2" />
+                </div>
+                <p className="font-bold" style={{ color: 'var(--ink)' }}>No approved runs yet</p>
+                <p className="text-sm ink-2 mt-1">Runs you approve will show up here.</p>
+              </div>
+            )}
+
+            {approved.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="aria-thead">
+                    <tr>
+                      <th className="text-left px-4 py-2.5">Workflow</th>
+                      <th className="text-left px-4 py-2.5">Run status</th>
+                      <th className="text-left px-4 py-2.5">Steps</th>
+                      <th className="text-left px-4 py-2.5">Approved by</th>
+                      <th className="text-left px-4 py-2.5">Approved at</th>
+                      <th className="text-left px-4 py-2.5">Comment</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {approved.map(a => (
+                      <tr key={a.id} className="border-t" style={{ borderColor: 'var(--line)' }}>
+                        <td className="px-4 py-3">
+                          <p className="font-semibold" style={{ color: 'var(--ink)' }}>{a.run?.workflow_name ?? 'Unknown workflow'}</p>
+                          <p className="text-[10px] font-mono ink-2 mt-0.5">{a.automation_run_id.slice(0, 8)}…</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge s={a.run?.status ?? 'unknown'} />
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--ink)' }}>
+                          {a.run ? `${a.run.success_count}/${a.run.total_steps} ok` : '—'}
+                          {a.run && a.run.failed_count > 0 && <span className="text-rose-600"> · {a.run.failed_count} failed</span>}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs" style={{ color: 'var(--ink)' }}>{a.approved_by ?? '—'}</td>
+                        <td className="px-4 py-3 text-xs ink-2">{a.approved_at ? new Date(a.approved_at).toLocaleString('en-US') : '—'}</td>
+                        <td className="px-4 py-3 text-xs ink-2 max-w-[240px] truncate" title={a.comment ?? ''}>{a.comment ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

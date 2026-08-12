@@ -81,12 +81,14 @@
       0,
       1
     ],
-    "notes": "hash 32 hex (MD5-like) — HASH_PATTERN",
+    "notes": "hash 32 hex (MD5-like) — HASH_PATTERN. confiance rules = 0.70 pile (infer_parameter_name: detected_type='hash' -> 0.70) ; seuil de fallback est '< 0.70', donc ce cas est le point exact où les règles suffisent encore.",
     "expected_names": {
       "2": [
         "file_id"
       ]
-    }
+    },
+    "expected_llm_triggered": false,
+    "expected_source": "rules"
   },
   {
     "id": "a05_hash_sha1_like",
@@ -942,12 +944,14 @@
       0,
       1
     ],
-    "notes": "point 7 — préfixe inconnu, templatisé quand même (confidence basse, nom générique)",
+    "notes": "point 7 — préfixe inconnu, templatisé quand même (confidence basse, nom générique). Une seule URL -> group_normalizer.build_group_hints() prend le chemin fallback_single_example (pas de comparaison inter-requêtes possible), PAS un vrai appel LLM groupé — le fallback réel se ferait ensuite via semantic_normalizer.py si url_normalizer.py l'appelle sur cette position.",
     "expected_names": {
       "2": [
         "resource_id"
       ]
-    }
+    },
+    "expected_llm_triggered": true,
+    "expected_source": "semantic_normalizer"
   },
   {
     "id": "e04_single_short_hex",
@@ -1221,5 +1225,231 @@
       3
     ],
     "notes": "'me' est un raccourci utilisateur connu (_STATIC_SEGMENTS), jamais un ID"
+  },
+  {
+    "id": "k01_group_llm_real_trigger",
+    "category": "confidence_gate_boundary",
+    "method": "GET",
+    "urls": [
+      "/hr/positions/pos_042",
+      "/hr/positions/pos_099"
+    ],
+    "id_positions": [
+      2
+    ],
+    "fixed_positions": [
+      0,
+      1
+    ],
+    "notes": "préfixe 'pos' -> _PREFIX_TO_PARAM['pos'] = (position_id, 0.60) < seuil 0.70 -> déclenche un VRAI appel group_normalizer (2 siblings, donc pas fallback_single_example). Seul cas des 3 ajouts qui exercerait un appel LLM réel avec --with-ai. expected_names volontairement absent — le nom que le LLM produira n'est pas pré-déterminé, à valider après un run réel.",
+    "expected_llm_triggered": true,
+    "expected_source": "group_normalizer"
+  },
+  {
+    "id": "l01_month_words_stay_literal",
+    "category": "palier2_false_positive_targeting",
+    "method": "GET",
+    "urls": ["/api/events/january", "/api/events/february", "/api/events/march"],
+    "id_positions": [],
+    "fixed_positions": [0, 1, 2],
+    "notes": "PROPOSITION, corrigée après un premier essai raté (positions hétérogènes par URL — non supporté par ce schéma, qui suppose un comportement uniforme sur tout le groupe). Mots-mois purs, aucun vrai ID dans le lot — variante de h01 sur un vocabulaire différent."
+  },
+  {
+    "id": "l02_boolean_flag_stays_literal",
+    "category": "palier2_false_positive_targeting",
+    "method": "GET",
+    "urls": ["/api/reports/true", "/api/reports/false"],
+    "id_positions": [],
+    "fixed_positions": [0, 1, 2],
+    "notes": "PROPOSITION — valeur booléenne comme segment variable. Ne doit jamais devenir un ID (aucune valeur métier plausible)."
+  },
+  {
+    "id": "l03_single_char_repeated",
+    "category": "palier2_false_positive_targeting",
+    "method": "GET",
+    "urls": ["/api/orders/a", "/api/orders/b", "/api/orders/c"],
+    "id_positions": [],
+    "fixed_positions": [0, 1, 2],
+    "notes": "PROPOSITION — lettres seules répétées, ressemble à un code court mais aucune preuve que ce soit un identifiant (pourrait aussi être un statut/type à 1 lettre). JUGEMENT, PAS UN FAIT : je propose littéral par défaut (position h01-like), mais confirme — si ce sont réellement des IDs métier courts dans ton contexte HAR réel, la vérité terrain doit être id_positions=[2] à la place."
+  },
+  {
+    "id": "m01_double_slash",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api//orders/123"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — double slash dans l'URL brute. _segments() filtre les tokens vides, donc devrait normaliser identiquement à /api/orders/123 — teste la robustesse au parsing, pas la détection elle-même."
+  },
+  {
+    "id": "m02_trailing_slash",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/orders/123/"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — slash final, même remarque que m01 (devrait être invisible après filtrage)."
+  },
+  {
+    "id": "m03_uppercase_uuid",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/sessions/550E8400-E29B-41D4-A716-446655440000"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — UUID en majuscules. UUID_PATTERN est-il sensible à la casse ? Teste une régression potentielle, pas encore vérifié."
+  },
+  {
+    "id": "m04_accented_slug",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/blog/posts/café-du-matin-42", "/blog/posts/déjà-vu-17"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — caractères accentués dans un slug + marqueur numérique (variante de a21)."
+  },
+  {
+    "id": "m05_leading_zeros",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/invoices/00123", "/api/invoices/00456"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — zéros de tête sur un entier pur."
+  },
+  {
+    "id": "m06_dotted_segment",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/files/report.v2.final"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — segment avec points internes, traité comme un token atomique par le normalizer actuel (pas de découpage intra-segment)."
+  },
+  {
+    "id": "m07_query_like_suffix",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/orders/123?ref=email"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — capture HAR imparfaite, query string restée collée au path. NUMERIC_ID_PATTERN ne matchera probablement pas '123?ref=email' tel quel — régression réaliste à observer, pas garanti détecté aujourd'hui."
+  },
+  {
+    "id": "m08_encoded_space_slug",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/blog/posts/hello%20world-88"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — espace encodé (%20) dans un slug + marqueur numérique."
+  },
+  {
+    "id": "m09_deep_nesting_6_levels",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/org/acme/dept/hr/employees/emp_301"],
+    "id_positions": [5],
+    "fixed_positions": [0, 1, 2, 3, 4],
+    "notes": "PROPOSITION — imbrication profonde (6 segments), un seul ID réel en position finale."
+  },
+  {
+    "id": "m10_short_single_char_resource",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/x/1", "/api/x/2"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — nom de ressource à 1 lettre inhabituel, teste le nommage contextuel sur un cas dégénéré."
+  },
+  {
+    "id": "m11_mixed_language_resource",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/produits/produit-482", "/api/produits/produit-901"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — nom de ressource en français, slug+id (variante de a21)."
+  },
+  {
+    "id": "m12_versioned_dotted_id",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/releases/2.4.1", "/api/releases/3.0.0"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION, JUGEMENT — segment de type semver. Je propose ID (chaque version est une ressource distincte adressable), mais c'est discutable — confirme."
+  },
+  {
+    "id": "m13_slug_prefixed_uuid",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/blog/posts/article_550e8400-e29b-41d4-a716-446655440000"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — préfixe mot complet ('article_') + UUID, distinct de a20 (préfixe code court usr_)."
+  },
+  {
+    "id": "m14_duplicate_value_different_positions",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/matches/42/vs/42"],
+    "id_positions": [2, 4],
+    "fixed_positions": [0, 1, 3],
+    "notes": "PROPOSITION — même valeur brute à 2 positions différentes du même chemin (match auto-référentiel). Teste que les 2 positions sont bien détectées indépendamment."
+  },
+  {
+    "id": "m15_case_sensitive_prefix_mixed",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/employees/EMP_301", "/api/employees/emp_302"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — casse mixte sur le préfixe connu 'emp' (majuscule sur une URL, minuscule sur l'autre)."
+  },
+  {
+    "id": "m16_sha256_hash",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/commits/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — hash 64 hex (SHA256-like), au-delà des 32/40 déjà couverts par a04/a05."
+  },
+  {
+    "id": "m17_base64_token",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/exports/YWJjZGVmZ2hpams="],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — token base64 avec padding '='."
+  },
+  {
+    "id": "m18_ipv4_segment",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/devices/192.168.1.1"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — adresse IPv4 comme identifiant de ressource (device)."
+  },
+  {
+    "id": "m19_datetime_with_millis",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/api/logs/2024-01-15T10:30:00.123Z"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — datetime avec millisecondes + Z, variante de a09."
+  },
+  {
+    "id": "m20_composite_three_part",
+    "category": "palier2_noisy",
+    "method": "GET",
+    "urls": ["/reports/lines/12_34_56"],
+    "id_positions": [2],
+    "fixed_positions": [0, 1],
+    "notes": "PROPOSITION — clé composite à 3 nombres, variante de a25 (2 nombres)."
   }
 ]

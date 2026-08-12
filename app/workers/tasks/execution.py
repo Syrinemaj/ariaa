@@ -72,7 +72,55 @@ def _update_job_progress(
                 queue="reporting",
             )
 
+        launcher_user_id = data.get("created_by_user_id", "")
+        if automation_run_id and launcher_user_id:
+            _notify_launcher_run_finished(
+                org_id=org_id,
+                launcher_user_id=launcher_user_id,
+                automation_run_id=automation_run_id,
+                har_file_name=data.get("har_file_name") or None,
+                final_status=final_status,
+                job_id=job_id,
+            )
+
     redis.expire(f"job:{job_id}", _JOB_TTL)
+
+
+_COMPLETION_ACTION_BY_STATUS = {
+    "done": "BULK_EXECUTION_COMPLETED",
+    "partial": "BULK_EXECUTION_PARTIAL",
+    "failed": "BULK_EXECUTION_FAILED",
+}
+
+
+def _notify_launcher_run_finished(
+    org_id: str,
+    launcher_user_id: str,
+    automation_run_id: str,
+    har_file_name: str | None,
+    final_status: str,
+    job_id: str,
+) -> None:
+    """Tell whoever launched the bulk run that it just finished (personal notification)."""
+    from app.db.session import SessionLocal
+    from app.notifications.service import create_run_completed_notification
+
+    db = SessionLocal()
+    try:
+        create_run_completed_notification(
+            db=db,
+            org_id=org_id,
+            launcher_user_id=launcher_user_id,
+            resource_id=automation_run_id,
+            har_file_name=har_file_name,
+            action=_COMPLETION_ACTION_BY_STATUS.get(final_status, "BULK_EXECUTION_COMPLETED"),
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to create bulk-completion notification for job %s", job_id)
+    finally:
+        db.close()
 
 
 @celery_app.task(

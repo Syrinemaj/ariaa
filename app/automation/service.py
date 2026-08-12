@@ -16,6 +16,7 @@ async def execute_automation(
     approval_granted: bool = False,
     org_id: str = "",
     created_by_user_id: Optional[str] = None,
+    team_id: Optional[str] = None,
 ) -> Tuple[AutomationRun, AutomationExecutionResult]:
     plan = request.plan
 
@@ -35,6 +36,7 @@ async def execute_automation(
         plan_json=plan.model_dump(),
         org_id=org_id,
         created_by_user_id=created_by_user_id,
+        team_id=team_id,
     )
     db.add(automation_run)
     await db.commit()

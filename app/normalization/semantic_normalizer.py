@@ -1,7 +1,9 @@
 """
 SemanticNormalizer — LLM-based URL path parameter naming.
 
-Uses GroqClient (primary) with automatic Azure fallback.
+Uses the AI client selected by settings.AI_PROVIDER (create_ai_client()) —
+BedrockClient by default, GroqClient/AzureOpenAIClient as configured
+alternatives. No fallback between providers is attempted here.
 
 This is the last-resort, single-segment fallback: normalize_path() only
 calls it when neither regex rules nor group_normalizer.py's group-level
@@ -14,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from app.ai.groq_client import GroqClient
+from app.ai.base_client import create_ai_client
 
 _PARAM_SCHEMA: dict = {
     "name": "semantic_parameter_normalization",
@@ -75,7 +77,7 @@ class SemanticNormalizer:
     """
 
     def __init__(self) -> None:
-        self._client = GroqClient()
+        self._client = create_ai_client()
 
     def infer_parameter_name(
         self,

@@ -9,9 +9,12 @@
 html { scroll-behavior: smooth; }
 
 /* ── Aria1 Design Tokens ─────────────────────────────────── */
+/* Brand palette matches the Sopra HR Software logo (red → orange) —
+   --brand ≈ Tailwind red-600, --accent ≈ Tailwind orange-500. Kept in
+   oklch() like the rest of this file's color-mix()/gradient usage. */
 :root {
-  --brand:  oklch(0.585 0.205 277);
-  --accent: oklch(0.585 0.205 305);
+  --brand:  oklch(0.577 0.245 27.33);
+  --accent: oklch(0.705 0.213 47.6);
   --bg:     oklch(0.985 0.005 270);
   --card:   #ffffff;
   --ink:    oklch(0.18 0.025 265);
@@ -35,6 +38,21 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.2s, color 0.2s;
+}
+
+/* Force light autofill chrome on inputs that must always render light
+   (auth-adjacent pages — Forgot/Reset password) — browsers otherwise paint
+   saved-credential fields with a dark background from OS/page dark mode via
+   the -webkit-autofill inset box-shadow trick, ignoring the input's own
+   background-color. */
+input.force-light-autofill:-webkit-autofill,
+input.force-light-autofill:-webkit-autofill:hover,
+input.force-light-autofill:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a !important;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  caret-color: #0f172a;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 /* ── Aria1 Utility Classes ────────────────────────────────── */
@@ -167,25 +185,29 @@ body {
 
 /* ── Dark mode overrides for Tailwind hardcoded classes ───── */
 /* (legacy fallback for any remaining hardcoded classes) */
-html.dark .bg-white    { background-color: var(--card) !important; }
+/* :not(.force-light-autofill) carves out the auth-adjacent pages (AuthPage,
+   ForgotPasswordPage, ResetPasswordPage) whose cards/forms must always stay
+   light — without this exclusion these !important rules unconditionally
+   overrode their explicit bg-white styling in dark mode. */
+html.dark .bg-white:not(.force-light-autofill)    { background-color: var(--card) !important; }
 html.dark .bg-slate-50 { background-color: color-mix(in oklch, var(--ink) 4%, var(--card)) !important; }
 html.dark .bg-slate-100{ background-color: color-mix(in oklch, var(--ink) 7%, var(--card)) !important; }
 html.dark .border-\[#e2e8f0\] { border-color: var(--line) !important; }
 html.dark .bg-indigo-50  { background-color: color-mix(in oklch, var(--brand) 12%, var(--card)) !important; }
 
 /* Inputs — dark mode */
-html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.force-light-autofill),
 html.dark textarea, html.dark select {
   background-color: var(--card) !important;
   color: var(--ink) !important;
   border-color: var(--line) !important;
 }
-html.dark input::placeholder, html.dark textarea::placeholder {
+html.dark input:not(.force-light-autofill)::placeholder, html.dark textarea::placeholder {
   color: color-mix(in oklch, var(--ink-2) 60%, transparent) !important;
 }
-html.dark input:-webkit-autofill,
-html.dark input:-webkit-autofill:hover,
-html.dark input:-webkit-autofill:focus {
+html.dark input:not(.force-light-autofill):-webkit-autofill,
+html.dark input:not(.force-light-autofill):-webkit-autofill:hover,
+html.dark input:not(.force-light-autofill):-webkit-autofill:focus {
   -webkit-box-shadow: 0 0 0px 1000px oklch(0.21 0.022 265) inset !important;
   -webkit-text-fill-color: oklch(0.96 0.01 265) !important;
 }

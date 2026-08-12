@@ -48,9 +48,9 @@ const AlertBanner: React.FC<AlertBannerProps> = ({ variant, message, reason }) =
 
 // ─── Left panel data ─────────────────────────────────────────────────────────
 const FEATURES = [
-  { icon: Zap,      label: 'Découverte API',  sub: '247 endpoints cartographiés'   },
-  { icon: Shield,   label: 'Audit Sécurité', sub: 'Couverture OWASP Top 10'  },
-  { icon: BarChart2,label: 'Moniteur Live',   sub: '99,2% de disponibilité suivie'   },
+  { icon: Zap,      label: 'API Discovery',  sub: '247 endpoints mapped'   },
+  { icon: Shield,   label: 'Security Audit', sub: 'OWASP Top 10 coverage'  },
+  { icon: BarChart2,label: 'Live Monitor',   sub: '99.2% uptime tracked'   },
 ]
 
 const API_LOG = [
@@ -94,11 +94,11 @@ const LoginPage: React.FC = () => {
     if (result.success) {
       navigate('/dashboard')
     } else if (result.status === 'pending') {
-      setAlert({ variant: 'warning', message: 'Votre compte est en attente d\'approbation par un manager.' })
+      setAlert({ variant: 'warning', message: 'Your account is pending approval by a manager.' })
     } else if (result.status === 'rejected') {
-      setAlert({ variant: 'rejected', message: 'Votre compte a été rejeté.', reason: result.reason })
+      setAlert({ variant: 'rejected', message: 'Your account has been rejected.', reason: result.reason })
     } else {
-      setAlert({ variant: 'error', message: result.error ?? 'Email ou mot de passe invalide.' })
+      setAlert({ variant: 'error', message: result.error ?? 'Invalid email or password.' })
     }
   }
 
@@ -153,7 +153,6 @@ const LoginPage: React.FC = () => {
 
           {/* Logo */}
           <div className="flex items-center gap-2.5 mb-auto pb-10">
-            <img src="/logo.png" alt="ARIA" style={{ height: 48, width: 'auto' }} />
             <span className="text-2xl font-bold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
           </div>
 
@@ -175,11 +174,11 @@ const LoginPage: React.FC = () => {
 
             {/* Headline */}
             <h1 className="text-[2.6rem] font-extrabold text-white leading-[1.15] tracking-tight mb-4">
-              Rétro-ingénierie<br />de toute API instantanément.
+              Reverse engineer<br />any API instantly.
             </h1>
             <p className="text-sm text-white/55 leading-relaxed max-w-[44ch] mb-10">
-              Capturez le trafic HTTP, cartographiez chaque endpoint, détectez les vulnérabilités
-              et générez automatiquement la documentation — tout en un seul outil.
+              Capture HTTP traffic, map every endpoint, detect vulnerabilities
+              and automatically generate documentation — all in one tool.
             </p>
 
             {/* Feature pills */}
@@ -229,7 +228,7 @@ const LoginPage: React.FC = () => {
                 <span className="font-mono text-[11px] text-white/28">aria · live capture</span>
                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#4ade80]">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-                  En direct
+                  Live
                 </div>
               </div>
 
@@ -265,8 +264,8 @@ const LoginPage: React.FC = () => {
               >
                 {[
                   { val: '247',   lbl: 'endpoints'      },
-                  { val: '3',     lbl: 'vulnérabilités' },
-                  { val: '99,2%', lbl: 'disponibilité'  },
+                  { val: '3',     lbl: 'vulnerabilities' },
+                  { val: '99.2%', lbl: 'uptime'  },
                 ].map(({ val, lbl }) => (
                   <div key={lbl} className="flex items-center gap-1.5">
                     <CheckCircle2 size={11} style={{ color: '#22c55e', flexShrink: 0 }} />
@@ -279,7 +278,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           {/* Footer */}
-          <p className="text-[11px] text-white/18 mt-10">© 2026 ARIA · PFE</p>
+          <p className="text-[11px] text-white/18 mt-10">© 2026 ARIA · Final Year Project</p>
         </div>
       </div>
 
@@ -313,7 +312,6 @@ const LoginPage: React.FC = () => {
 
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5 mb-9">
-            <img src="/logo.png" alt="ARIA" style={{ height: 44, width: 'auto' }} />
             <span className="text-2xl font-bold tracking-tight" style={{ color: '#1E318A' }}>
               aria
             </span>
@@ -322,10 +320,10 @@ const LoginPage: React.FC = () => {
           {/* Heading block */}
           <div className="mb-7">
             <h2 className="text-[1.65rem] font-bold tracking-tight leading-tight mb-1.5" style={{ color: '#1E318A' }}>
-              Bienvenue
+              Welcome
             </h2>
             <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
-              Connectez-vous à votre espace ARIA pour continuer.
+              Log in to your ARIA workspace to continue.
             </p>
           </div>
 
@@ -344,7 +342,7 @@ const LoginPage: React.FC = () => {
             {/* Email */}
             <div>
               <label htmlFor="login-email" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>
-                Adresse email
+                Email address
               </label>
               <div className="relative">
                 <Mail
@@ -356,7 +354,7 @@ const LoginPage: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="vous@exemple.com"
+                  placeholder="you@example.com"
                   autoComplete="email"
                   required
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-[rgba(255,255,255,0.3)] bg-[#1a1d2e] transition-all duration-150"
@@ -370,7 +368,7 @@ const LoginPage: React.FC = () => {
             {/* Password */}
             <div>
               <label htmlFor="login-password" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>
-                Mot de passe
+                Password
               </label>
               <div className="relative">
                 <Lock
@@ -410,13 +408,13 @@ const LoginPage: React.FC = () => {
                   onChange={(e) => setRemember(e.target.checked)}
                   className="w-4 h-4 rounded accent-[#6366f1] cursor-pointer"
                 />
-                <span className="text-sm text-[#64748b]">Se souvenir de moi</span>
+                <span className="text-sm text-[#64748b]">Remember me</span>
               </label>
               <Link
                 to="/forgot-password"
                 className="text-sm font-semibold text-[#6366f1] hover:text-[#4f46e5] transition-colors"
               >
-                Mot de passe oublié ?
+                Forgot password?
               </Link>
             </div>
 
@@ -443,11 +441,11 @@ const LoginPage: React.FC = () => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Connexion en cours…
+                  Signing in…
                 </>
               ) : (
                 <>
-                  Se connecter
+                  Log in
                   <ArrowRight size={15} />
                 </>
               )}
@@ -457,7 +455,7 @@ const LoginPage: React.FC = () => {
           {/* Divider */}
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px bg-[#e2e8f0]" />
-            <span className="text-xs text-[#94a3b8] font-medium">Nouveau sur ARIA ?</span>
+            <span className="text-xs text-[#94a3b8] font-medium">New to ARIA?</span>
             <div className="flex-1 h-px bg-[#e2e8f0]" />
           </div>
 
@@ -469,12 +467,12 @@ const LoginPage: React.FC = () => {
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#c7d2fe')}
             onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#e2e8f0')}
           >
-            Demander l'accès
+            Request access
           </Link>
 
           {/* Pied de page mobile */}
           <p className="lg:hidden text-center text-xs text-[#94a3b8] mt-8">
-            © 2026 ARIA · PFE
+            © 2026 ARIA · Final Year Project
           </p>
         </div>
       </div>

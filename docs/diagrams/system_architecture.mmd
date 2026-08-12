@@ -26,7 +26,7 @@ architecture-beta
     service schema(server)[3 Schema Inference] in worker_grp
     service wf(server)[4 Workflow Clustering] in worker_grp
 
-    service llm(cloud)[Azure OpenAI  GPT-4o] in ai_grp
+    service llm(cloud)[Groq  llama-3.3-70b] in ai_grp
     service embed(cloud)[Embeddings] in ai_grp
     service rag_svc(server)[RAG Service] in ai_grp
     service planner(server)[Planner] in ai_grp

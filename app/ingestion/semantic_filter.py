@@ -32,7 +32,7 @@ def _build_ai_payload(entry: TrafficEntry) -> Dict[str, Any]:
 
 def semantic_filter_with_azure(
     entry: TrafficEntry,
-    client,  # AIClientProtocol (GroqClient) — typed as Any to avoid circular import
+    client,  # AIClientProtocol (create_ai_client()) — typed as Any to avoid circular import
 ) -> TrafficEntry:
     try:
         ai_payload = _build_ai_payload(entry)

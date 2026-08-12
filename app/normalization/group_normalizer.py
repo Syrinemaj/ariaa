@@ -27,7 +27,7 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-from app.ai.groq_client import GroqClient
+from app.ai.base_client import AIClientProtocol, create_ai_client
 from app.normalization.parameter_detector import detect_parameter_type, infer_parameter_name
 
 logger = logging.getLogger(__name__)
@@ -220,7 +220,7 @@ def _find_ambiguous_positions(skeleton: Tuple[str, ...], segment_rows: List[List
     return ambiguous
 
 
-def _call_group_llm(client: GroqClient, method: str, urls: List[str]) -> dict:
+def _call_group_llm(client: AIClientProtocol, method: str, urls: List[str]) -> dict:
     return client.structured_chat(
         system_prompt=_GROUP_SYSTEM_PROMPT,
         user_payload={"method": method, "urls_du_meme_endpoint": urls},
@@ -230,7 +230,7 @@ def _call_group_llm(client: GroqClient, method: str, urls: List[str]) -> dict:
 
 
 def _validate_response(response: object) -> Optional[dict]:
-    """Schema check beyond what GroqClient itself guarantees (top-level
+    """Schema check beyond what the AI client itself guarantees (top-level
     required keys only) — validates each segment's inner structure."""
     if not isinstance(response, dict):
         return None
@@ -260,7 +260,7 @@ def _validate_response(response: object) -> Optional[dict]:
 def build_group_hints(
     entries: Sequence[Tuple[str, str]],
     dynamic_positions_per_entry: Sequence[Set[int]],
-    ai_client: Optional[GroqClient] = None,
+    ai_client: Optional[AIClientProtocol] = None,
 ) -> List[Optional[Dict[int, dict]]]:
     """
     entries: (method, path) per request, in the same order the caller will
@@ -301,7 +301,7 @@ def build_group_hints(
         key = _build_skeleton_key(method, segments, dynamic_positions)
         groups.setdefault(key, []).append(idx)
 
-    client: Optional[GroqClient] = ai_client
+    client: Optional[AIClientProtocol] = ai_client
 
     for key, indices in groups.items():
         method, _length, skeleton = key
@@ -333,7 +333,7 @@ def build_group_hints(
         urls = ["/" + "/".join(row) for row in rows][:_MAX_URLS_PER_GROUP]
 
         if client is None:
-            client = GroqClient()
+            client = create_ai_client()
 
         try:
             raw_response = _call_group_llm(client, method, urls)

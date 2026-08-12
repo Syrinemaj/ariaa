@@ -4,10 +4,10 @@ from sqlalchemy import Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.mixins import OrgScopedMixin, TimestampMixin, UserOwnedMixin
+from app.db.mixins import OrgScopedMixin, TeamScopedMixin, TimestampMixin, UserOwnedMixin
 
 
-class AnalysisRun(TimestampMixin, OrgScopedMixin, UserOwnedMixin, Base):
+class AnalysisRun(TimestampMixin, OrgScopedMixin, UserOwnedMixin, TeamScopedMixin, Base):
     __tablename__ = "analysis_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))

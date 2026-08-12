@@ -4,8 +4,10 @@ import {
     Mail, Lock, Eye, EyeOff, ArrowRight, User,
     AlertCircle, Clock, CheckCircle2, Info,
     Zap, Shield, BarChart2, Activity, Cpu, GitBranch,
+    Sun, Moon,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 import { api, ApiError } from '../lib/api'
 
 
@@ -34,8 +36,11 @@ const LOGS = [
     { method: 'PATCH', path: '/api/v2/users/settings', status: 200, ms: 178, ok: true },
     { method: 'POST', path: '/api/v2/endpoints/enrich', status: 202, ms: 512, ok: true },
 ]
-const MC: Record<string, string> = {
-    GET: '#818cf8', POST: '#34d399', DELETE: '#f87171', PATCH: '#fbbf24', PUT: '#a78bfa',
+const MC_DARK: Record<string, string> = {
+    GET: '#fb923c', POST: '#34d399', DELETE: '#f87171', PATCH: '#fbbf24', PUT: '#fdba74',
+}
+const MC_LIGHT: Record<string, string> = {
+    GET: '#ea580c', POST: '#059669', DELETE: '#dc2626', PATCH: '#d97706', PUT: '#c2410c',
 }
 
 type Mode = 'login' | 'register'
@@ -43,8 +48,61 @@ type Mode = 'login' | 'register'
 export default function AuthPage() {
     const navigate = useNavigate()
     const { login } = useAuth()
+    const { theme, toggleTheme } = useTheme()
     const [mode, setMode] = useState<Mode>('login')
     const [visibleLogs, setVisibleLogs] = useState(LOGS.slice(0, 4))
+
+    // Only the left "pub" marketing panel follows the app theme — the
+    // Welcome/Request access form panel stays light in both modes.
+    const isDarkPub = theme === 'dark'
+    const MC = isDarkPub ? MC_DARK : MC_LIGHT
+    const pub = {
+        bg:                 isDarkPub ? '#070b1a' : '#fff7f4',
+        gridLine:           isDarkPub ? 'rgba(220,38,38,0.07)' : 'rgba(220,38,38,0.06)',
+        orb1:               isDarkPub ? 'rgba(220,38,38,0.35)' : 'rgba(220,38,38,0.14)',
+        orb2:               isDarkPub ? 'rgba(249,115,22,0.28)' : 'rgba(249,115,22,0.14)',
+        orb3:               isDarkPub ? 'rgba(234,88,12,0.15)' : 'rgba(234,88,12,0.10)',
+        scanLine:           isDarkPub ? 'rgba(220,38,38,0.5)' : 'rgba(220,38,38,0.25)',
+        topShimmer:         isDarkPub ? 'rgba(249,115,22,0.8)' : 'rgba(249,115,22,0.4)',
+        toggleBg:           isDarkPub ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)',
+        toggleBorder:       isDarkPub ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.1)',
+        versionBg:          isDarkPub ? 'rgba(220,38,38,0.15)' : 'rgba(220,38,38,0.08)',
+        versionBorder:      isDarkPub ? 'rgba(220,38,38,0.3)' : 'rgba(220,38,38,0.25)',
+        versionText:        isDarkPub ? '#fca5a5' : '#dc2626',
+        eyebrowBg:          isDarkPub ? 'rgba(220,38,38,0.12)' : 'rgba(220,38,38,0.08)',
+        eyebrowBorder:      isDarkPub ? 'rgba(249,115,22,0.35)' : 'rgba(249,115,22,0.3)',
+        eyebrowText:        isDarkPub ? '#fdba74' : '#c2410c',
+        headline:           isDarkPub ? '#ffffff' : '#0f172a',
+        body:               isDarkPub ? 'rgba(255,255,255,0.45)' : '#64748b',
+        statCardBg:         isDarkPub ? 'rgba(255,255,255,0.04)' : '#ffffff',
+        statCardBorder:     isDarkPub ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)',
+        statValue:          isDarkPub ? '#ffffff' : '#0f172a',
+        statLabel:          isDarkPub ? 'rgba(255,255,255,0.35)' : '#94a3b8',
+        terminalBg:         isDarkPub ? 'rgba(0,0,0,0.5)' : '#ffffff',
+        terminalBorder:     isDarkPub ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.08)',
+        terminalHeaderBg:   isDarkPub ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)',
+        terminalHeaderBorder: isDarkPub ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)',
+        terminalTitle:      isDarkPub ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+        recordingBg:        isDarkPub ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.1)',
+        recordingBorder:    isDarkPub ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.3)',
+        recordingText:      isDarkPub ? '#4ade80' : '#16a34a',
+        colHeaderText:      isDarkPub ? 'rgba(255,255,255,0.2)' : '#cbd5e1',
+        colHeaderBorder:    isDarkPub ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)',
+        colHeaderBg:        isDarkPub ? 'rgba(0,0,0,0.2)' : 'rgba(15,23,42,0.015)',
+        rowHighlightBg:     isDarkPub ? 'rgba(220,38,38,0.08)' : 'rgba(220,38,38,0.06)',
+        rowHighlightBorder: isDarkPub ? 'rgba(220,38,38,0.15)' : 'rgba(220,38,38,0.15)',
+        pathText:           isDarkPub ? 'rgba(255,255,255,0.45)' : '#475569',
+        latencyText:        isDarkPub ? 'rgba(255,255,255,0.25)' : '#94a3b8',
+        footerTop:          isDarkPub ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)',
+        footerBg:           isDarkPub ? 'rgba(0,0,0,0.3)' : 'rgba(15,23,42,0.015)',
+        footerLabel:        isDarkPub ? 'rgba(255,255,255,0.3)' : '#94a3b8',
+        footerValue:        isDarkPub ? 'rgba(255,255,255,0.6)' : '#334155',
+        poweredText:        isDarkPub ? 'rgba(255,255,255,0.2)' : '#cbd5e1',
+        copyrightText:      isDarkPub ? 'rgba(255,255,255,0.15)' : '#94a3b8',
+        bottomBadgeBg:      isDarkPub ? 'rgba(220,38,38,0.1)' : 'rgba(220,38,38,0.06)',
+        bottomBadgeBorder:  isDarkPub ? 'rgba(220,38,38,0.2)' : 'rgba(220,38,38,0.15)',
+        bottomBadgeText:    isDarkPub ? 'rgba(252,165,165,0.6)' : '#dc2626',
+    }
 
     // Simulate live log feed
     useEffect(() => {
@@ -80,9 +138,9 @@ export default function AuthPage() {
     const [rErr, setRErr] = useState('')
 
     const iStyle: React.CSSProperties = { border: '1.5px solid #e2e8f0', outline: 'none' }
-    const onFocus = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = '#6366f1')
+    const onFocus = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = '#dc2626')
     const onBlur = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = '#e2e8f0')
-    const iCls = 'w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-[#0f172a] placeholder-[#94a3b8] bg-white transition-all duration-150'
+    const iCls = 'w-full pl-10 pr-4 py-2.5 rounded-xl text-sm text-[#0f172a] placeholder-[#94a3b8] bg-white transition-all duration-150 force-light-autofill'
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -91,17 +149,17 @@ export default function AuthPage() {
         const r = await login(email, password)
         setLLoading(false)
         if (r.success) navigate('/dashboard')
-        else if (r.status === 'pending') setLAlert({ type: 'warning', msg: 'Compte en attente d\'approbation.' })
-        else setLAlert({ type: 'error', msg: r.error ?? 'Identifiants invalides.' })
+        else if (r.status === 'pending') setLAlert({ type: 'warning', msg: 'Account pending approval.' })
+        else setLAlert({ type: 'error', msg: r.error ?? 'Invalid credentials.' })
     }
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault()
         const errs: Record<string, string> = {}
-        if (rUser.trim().length < 2) errs.user = 'Min. 2 caractères'
-        if (!rEmail.includes('@')) errs.email = 'Email invalide'
-        if (rPwd.length < 8) errs.pwd = 'Min. 8 caractères'
-        if (rPwd !== rConfirm) errs.confirm = "Les mots de passe ne correspondent pas"
+        if (rUser.trim().length < 2) errs.user = 'Min. 2 characters'
+        if (!rEmail.includes('@')) errs.email = 'Invalid email'
+        if (rPwd.length < 8) errs.pwd = 'Min. 8 characters'
+        if (rPwd !== rConfirm) errs.confirm = "Passwords do not match"
         setRErrors(errs)
         if (Object.keys(errs).length) return
         setRLoading(true); setRErr('')
@@ -114,11 +172,11 @@ export default function AuthPage() {
             setRDone(true)
         } catch (err: unknown) {
             if (err instanceof ApiError) {
-                if (err.status === 422) setRErr('Vérifiez les informations saisies.')
-                else if (err.status === 429) setRErr('Trop de tentatives. Réessayez dans 1 minute.')
-                else setRErr('Une erreur est survenue. Veuillez réessayer.')
+                if (err.status === 422) setRErr('Please check the information entered.')
+                else if (err.status === 429) setRErr('Too many attempts. Try again in 1 minute.')
+                else setRErr('An error occurred. Please try again.')
             } else {
-                setRErr('Erreur réseau. Vérifiez votre connexion.')
+                setRErr('Network error. Check your connection.')
             }
         } finally {
             setRLoading(false)
@@ -136,6 +194,24 @@ export default function AuthPage() {
         /* Forms fixed */
         .f-login    { position:absolute; top:0; bottom:0; left:50%; width:50%; display:flex; align-items:center; justify-content:center; z-index:1; }
         .f-register { position:absolute; top:0; bottom:0; left:0;   width:50%; display:flex; align-items:center; justify-content:center; z-index:1; }
+
+        /* Force light autofill chrome — browsers otherwise paint saved-credential
+           inputs with a dark background (from OS/page dark mode) via the
+           -webkit-autofill inset box-shadow trick, ignoring the input's own
+           bg-white class. This keeps the Welcome/Request access forms light
+           in both themes, as intended. */
+        .f-login input:-webkit-autofill,
+        .f-login input:-webkit-autofill:hover,
+        .f-login input:-webkit-autofill:focus,
+        .f-register input:-webkit-autofill,
+        .f-register input:-webkit-autofill:hover,
+        .f-register input:-webkit-autofill:focus {
+          -webkit-text-fill-color: #0f172a !important;
+          -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+          box-shadow: 0 0 0 1000px #ffffff inset !important;
+          caret-color: #0f172a;
+          transition: background-color 9999s ease-in-out 0s;
+        }
 
         /* PUB glides as curtain */
         .pub { position:absolute; top:0; bottom:0; width:50%; z-index:10; transition:left 0.72s cubic-bezier(0.76,0,0.24,1); }
@@ -169,7 +245,7 @@ export default function AuthPage() {
         .scan-line { animation:scan 3s linear infinite; }
 
         /* Badge glow */
-        @keyframes badgeGlow { 0%,100%{box-shadow:0 0 0 0 rgba(99,102,241,0)} 50%{box-shadow:0 0 12px 3px rgba(99,102,241,0.35)} }
+        @keyframes badgeGlow { 0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0)} 50%{box-shadow:0 0 12px 3px rgba(220,38,38,0.35)} }
         .badge-glow { animation:badgeGlow 3s ease-in-out infinite; }
 
         /* Shimmer on card */
@@ -194,22 +270,18 @@ export default function AuthPage() {
 
                 {/* Bg for forms */}
                 <div className="absolute inset-0 z-0 pointer-events-none">
-                    <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full orb1" style={{ background: 'radial-gradient(circle,rgba(99,102,241,0.08),transparent 70%)' }} />
-                    <div className="absolute -bottom-20 -right-20 w-80 h-80 rounded-full orb2" style={{ background: 'radial-gradient(circle,rgba(139,92,246,0.07),transparent 70%)' }} />
-                    <div className="absolute inset-0 grid-scroll" style={{ backgroundImage: 'radial-gradient(circle,#6366f1 1px,transparent 1px)', backgroundSize: '28px 28px', opacity: 0.025 }} />
+                    <div className="absolute -top-20 -left-20 w-96 h-96 rounded-full orb1" style={{ background: 'radial-gradient(circle,rgba(220,38,38,0.08),transparent 70%)' }} />
+                    <div className="absolute -bottom-20 -right-20 w-80 h-80 rounded-full orb2" style={{ background: 'radial-gradient(circle,rgba(249,115,22,0.07),transparent 70%)' }} />
+                    <div className="absolute inset-0 grid-scroll" style={{ backgroundImage: 'radial-gradient(circle,#dc2626 1px,transparent 1px)', backgroundSize: '28px 28px', opacity: 0.025 }} />
                 </div>
 
                 {/* ════ FORM LOGIN ══════════════════════════════════════════════ */}
-                <div className="f-login">
+                <div className="f-login" style={{ colorScheme: 'light' }}>
                     <div className={`w-full max-w-sm px-10 ${mode === 'login' ? 'reveal-right' : ''}`} key={`l-${mode}`}>
 
-                        {/* Top badge */}
-                        <div className="flex justify-center mb-8">
-                            <img src="/logo.png" alt="aria" className="h-10 w-auto object-contain" />
-                        </div>
                         <div className="mb-8">
-                            <h2 className="text-2xl font-extrabold tracking-tight mb-1.5" style={{ color: '#0f172a' }}>Bienvenue</h2>
-                            <p className="text-sm" style={{ color: '#64748b' }}>Connectez-vous pour accéder à votre espace de travail</p>
+                            <h2 className="text-2xl font-extrabold tracking-tight mb-1.5" style={{ color: '#0f172a' }}>Welcome</h2>
+                            <p className="text-sm" style={{ color: '#64748b' }}>Log in to access your workspace</p>
                         </div>
 
                         {lAlert && (
@@ -225,13 +297,13 @@ export default function AuthPage() {
                                 <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>Email</label>
                                 <div className="relative">
                                     <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#94a3b8' }} />
-                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="vous@exemple.com" autoComplete="email" required className={iCls} style={iStyle} onFocus={onFocus} onBlur={onBlur} />
+                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required className={iCls} style={iStyle} onFocus={onFocus} onBlur={onBlur} />
                                 </div>
                             </div>
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#94a3b8' }}>Mot de passe</label>
-                                    <button type="button" className="text-xs font-semibold hover:opacity-70 transition-opacity" style={{ color: '#6366f1' }} onClick={() => navigate('/forgot-password')}>Oublié ?</button>
+                                    <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#94a3b8' }}>Password</label>
+                                    <button type="button" className="text-xs font-semibold hover:opacity-70 transition-opacity" style={{ color: '#dc2626' }} onClick={() => navigate('/forgot-password')}>Forgot?</button>
                                 </div>
                                 <div className="relative">
                                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#94a3b8' }} />
@@ -242,73 +314,66 @@ export default function AuthPage() {
                                 </div>
                             </div>
                             <label className="flex items-center gap-2.5 cursor-pointer pt-1">
-                                <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="w-4 h-4 rounded accent-[#6366f1]" />
-                                <span className="text-sm" style={{ color: '#64748b' }}>Se souvenir de moi pendant 30 jours</span>
+                                <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="w-4 h-4 rounded accent-[#dc2626]" />
+                                <span className="text-sm" style={{ color: '#64748b' }}>Remember me for 30 days</span>
                             </label>
                             <button
                                 type="submit" disabled={lLoading || !email || !password}
                                 className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold text-white transition-all duration-200 disabled:opacity-50 mt-2"
-                                style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
-                                onMouseEnter={e => { if (!lLoading) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 28px rgba(99,102,241,0.5)' }}
-                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 20px rgba(99,102,241,0.4)' }}
+                                style={{ background: 'linear-gradient(135deg,#dc2626,#f97316)', boxShadow: '0 4px 20px rgba(220,38,38,0.4)' }}
+                                onMouseEnter={e => { if (!lLoading) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 28px rgba(220,38,38,0.5)' }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 20px rgba(220,38,38,0.4)' }}
                             >
-                                {lLoading ? <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Connexion en cours…</> : <>Se connecter <ArrowRight size={15} /></>}
+                                {lLoading ? <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Signing in…</> : <>Log in <ArrowRight size={15} /></>}
                             </button>
                         </form>
 
                         <div className="flex items-center gap-3 my-6">
                             <div className="flex-1 h-px" style={{ background: '#e2e8f0' }} />
-                            <span className="text-xs font-medium" style={{ color: '#94a3b8' }}>Pas encore de compte ?</span>
+                            <span className="text-xs font-medium" style={{ color: '#94a3b8' }}>Don't have an account?</span>
                             <div className="flex-1 h-px" style={{ background: '#e2e8f0' }} />
                         </div>
 
                         <button
                             onClick={() => setMode('register')}
                             className="w-full py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                            style={{ border: '2px solid #e2e8f0', color: '#6366f1', background: 'transparent' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#6366f1'; (e.currentTarget as HTMLButtonElement).style.background = '#f5f3ff' }}
+                            style={{ border: '2px solid #e2e8f0', color: '#dc2626', background: 'transparent' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#dc2626'; (e.currentTarget as HTMLButtonElement).style.background = '#fef2f2' }}
                             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
                         >
-                            Demander l'accès →
+                            Request access →
                         </button>
                     </div>
                 </div>
 
                 {/* ════ FORM REGISTER ══════════════════════════════════════════ */}
-                <div className="f-register">
+                <div className="f-register" style={{ colorScheme: 'light' }}>
                     <div className={`w-full max-w-sm px-10 overflow-y-auto max-h-[100dvh] py-10 ${mode === 'register' ? 'reveal-left' : ''}`} key={`r-${rDone}`}>
                         {rDone ? (
                             <div className="text-center py-8">
                                 <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6" style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '2px solid #bbf7d0' }}>
                                     <CheckCircle2 size={28} style={{ color: '#16a34a' }} />
                                 </div>
-                                <h2 className="text-2xl font-extrabold text-[#0f172a] mb-2">Vous êtes sur la liste !</h2>
-                                <p className="text-sm text-[#64748b] mb-6">Un manager examinera votre demande et vous assignera un rôle.</p>
+                                <h2 className="text-2xl font-extrabold text-[#0f172a] mb-2">You're on the list!</h2>
+                                <p className="text-sm text-[#64748b] mb-6">A manager will review your request and assign you a role.</p>
                                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold mb-8 badge-glow"
                                     style={{ background: 'linear-gradient(135deg,#fffbeb,#fef3c7)', border: '1px solid #fde68a', color: '#92400e' }}>
-                                    <span className="w-2 h-2 rounded-full bg-amber-400 pdot" />En attente d'approbation
+                                    <span className="w-2 h-2 rounded-full bg-amber-400 pdot" />Pending approval
                                 </div>
                                 <div>
-                                    <button onClick={() => setMode('login')} className="text-sm font-bold text-[#6366f1] hover:text-[#4f46e5] transition-colors">← Retour à la connexion</button>
+                                    <button onClick={() => setMode('login')} className="text-sm font-bold text-[#dc2626] hover:text-[#b91c1c] transition-colors">← Back to login</button>
                                 </div>
                             </div>
                         ) : (
                             <>
-                                <div className="flex items-center gap-2 mb-8">
-                                    <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-                                        <img src="/logo.png" alt="ARIA" style={{ height: 16, width: 'auto' }} />
-                                    </div>
-                                    <span className="text-sm font-bold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
-                                </div>
-
                                 <div className="mb-6">
-                                    <h2 className="text-2xl font-extrabold tracking-tight mb-1.5" style={{ color: '#0f172a' }}>Demander l'accès</h2>
-                                    <p className="text-sm" style={{ color: '#64748b' }}>Rejoignez ARIA — un manager vous assignera un rôle</p>
+                                    <h2 className="text-2xl font-extrabold tracking-tight mb-1.5" style={{ color: '#0f172a' }}>Request access</h2>
+                                    <p className="text-sm" style={{ color: '#64748b' }}>Join ARIA — a manager will assign you a role</p>
                                 </div>
 
                                 <div className="flex items-start gap-3 rounded-2xl px-4 py-3 mb-5" style={{ background: 'linear-gradient(135deg,#f0f9ff,#e0f2fe)', border: '1px solid #bae6fd' }}>
                                     <Info size={14} style={{ color: '#0284c7', marginTop: 2, flexShrink: 0 }} />
-                                    <p className="text-xs leading-relaxed font-medium" style={{ color: '#0c4a6e' }}>Votre compte sera examiné avant activation. Votre rôle vous sera assigné par votre manager.</p>
+                                    <p className="text-xs leading-relaxed font-medium" style={{ color: '#0c4a6e' }}>Your account will be reviewed before activation. Your role will be assigned by your manager.</p>
                                 </div>
 
                                 {rErr && (
@@ -320,8 +385,8 @@ export default function AuthPage() {
 
                                 <form onSubmit={handleRegister} noValidate className="space-y-4">
                                     {[
-                                        { label: "Nom d'utilisateur", id: 'user', type: 'text', val: rUser, set: setRUser, err: rErrors.user, icon: User, ph: 'votre_pseudo', ac: 'username' },
-                                        { label: 'Email', id: 'email', type: 'email', val: rEmail, set: setREmail, err: rErrors.email, icon: Mail, ph: 'vous@exemple.com', ac: 'email' },
+                                        { label: "Username", id: 'user', type: 'text', val: rUser, set: setRUser, err: rErrors.user, icon: User, ph: 'your_username', ac: 'username' },
+                                        { label: 'Email', id: 'email', type: 'email', val: rEmail, set: setREmail, err: rErrors.email, icon: Mail, ph: 'you@example.com', ac: 'email' },
                                     ].map(({ label, id, type, val, set, err, icon: Icon, ph, ac }) => (
                                         <div key={id}>
                                             <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>{label}</label>
@@ -335,10 +400,10 @@ export default function AuthPage() {
 
                                     {/* Password */}
                                     <div>
-                                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>Mot de passe</label>
+                                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>Password</label>
                                         <div className="relative">
                                             <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#94a3b8' }} />
-                                            <input type={showRP ? 'text' : 'password'} value={rPwd} onChange={e => setRPwd(e.target.value)} placeholder="Min. 8 caractères" autoComplete="new-password" className={`${iCls} pr-10`} style={iStyle} onFocus={onFocus} onBlur={onBlur} />
+                                            <input type={showRP ? 'text' : 'password'} value={rPwd} onChange={e => setRPwd(e.target.value)} placeholder="Min. 8 characters" autoComplete="new-password" className={`${iCls} pr-10`} style={iStyle} onFocus={onFocus} onBlur={onBlur} />
                                             <button type="button" style={{ color: '#94a3b8' }} className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors" onClick={() => setShowRP(p => !p)}>{showRP ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                                         </div>
                                         {rErrors.pwd && <p className="text-xs font-medium mt-1" style={{ color: '#ef4444' }}>{rErrors.pwd}</p>}
@@ -353,10 +418,10 @@ export default function AuthPage() {
 
                                     {/* Confirmation */}
                                     <div>
-                                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>Confirmer le mot de passe</label>
+                                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#94a3b8' }}>Confirm password</label>
                                         <div className="relative">
                                             <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#94a3b8' }} />
-                                            <input type={showRC ? 'text' : 'password'} value={rConfirm} onChange={e => setRConfirm(e.target.value)} placeholder="Répéter le mot de passe" autoComplete="new-password" className={`${iCls} pr-10`} style={iStyle} onFocus={onFocus} onBlur={onBlur} />
+                                            <input type={showRC ? 'text' : 'password'} value={rConfirm} onChange={e => setRConfirm(e.target.value)} placeholder="Repeat password" autoComplete="new-password" className={`${iCls} pr-10`} style={iStyle} onFocus={onFocus} onBlur={onBlur} />
                                             <button type="button" style={{ color: '#94a3b8' }} className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors" onClick={() => setShowRC(p => !p)}>{showRC ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                                         </div>
                                         {rErrors.confirm && <p className="text-xs font-medium mt-1" style={{ color: '#ef4444' }}>{rErrors.confirm}</p>}
@@ -365,122 +430,126 @@ export default function AuthPage() {
                                     <button
                                         type="submit" disabled={rLoading}
                                         className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-bold text-white transition-all duration-200 disabled:opacity-50 mt-2"
-                                        style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
+                                        style={{ background: 'linear-gradient(135deg,#dc2626,#f97316)', boxShadow: '0 4px 20px rgba(220,38,38,0.4)' }}
                                         onMouseEnter={e => { if (!rLoading) (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)' }}
                                         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)' }}
                                     >
-                                        {rLoading ? <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Envoi en cours…</> : "Demander l'accès →"}
+                                        {rLoading ? <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>Sending…</> : "Request access →"}
                                     </button>
                                 </form>
 
                                 <p className="text-sm text-center mt-5" style={{ color: '#64748b' }}>
-                                    Déjà un compte ?{' '}
-                                    <button onClick={() => setMode('login')} className="font-bold transition-colors" style={{ color: '#6366f1' }}>Se connecter</button>
+                                    Already have an account?{' '}
+                                    <button onClick={() => setMode('login')} className="font-bold transition-colors" style={{ color: '#dc2626' }}>Log in</button>
                                 </p>
                             </>
                         )}
                     </div>
                 </div>
 
-                {/* ════ PUB PANEL — le rideau qui glisse ══════════════════════ */}
-                <div className={`pub ${mode}`} style={{ background: '#070b1a' }}>
+                {/* ════ PUB PANEL — le rideau qui glisse (suit le thème) ═══════ */}
+                <div className={`pub ${mode}`} style={{ background: pub.bg, transition: 'background 0.3s ease' }}>
 
                     {/* Grid bg animé */}
                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                        <div className="absolute inset-0 grid-scroll" style={{ backgroundImage: 'linear-gradient(rgba(99,102,241,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(99,102,241,0.07) 1px,transparent 1px)', backgroundSize: '40px 40px', opacity: 1 }} />
+                        <div className="absolute inset-0 grid-scroll" style={{ backgroundImage: `linear-gradient(${pub.gridLine} 1px,transparent 1px),linear-gradient(90deg,${pub.gridLine} 1px,transparent 1px)`, backgroundSize: '40px 40px', opacity: 1 }} />
                     </div>
 
                     {/* Orbs */}
-                    <div className="absolute top-[-15%] right-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none orb1" style={{ background: 'radial-gradient(circle,rgba(99,102,241,0.35) 0%,transparent 65%)' }} />
-                    <div className="absolute bottom-[-10%] left-[-8%] w-[380px] h-[380px] rounded-full pointer-events-none orb2" style={{ background: 'radial-gradient(circle,rgba(139,92,246,0.28) 0%,transparent 65%)' }} />
-                    <div className="absolute top-[40%] left-[10%] w-[200px] h-[200px] rounded-full pointer-events-none orb3" style={{ background: 'radial-gradient(circle,rgba(168,85,247,0.15) 0%,transparent 65%)' }} />
+                    <div className="absolute top-[-15%] right-[-10%] w-[500px] h-[500px] rounded-full pointer-events-none orb1" style={{ background: `radial-gradient(circle,${pub.orb1} 0%,transparent 65%)` }} />
+                    <div className="absolute bottom-[-10%] left-[-8%] w-[380px] h-[380px] rounded-full pointer-events-none orb2" style={{ background: `radial-gradient(circle,${pub.orb2} 0%,transparent 65%)` }} />
+                    <div className="absolute top-[40%] left-[10%] w-[200px] h-[200px] rounded-full pointer-events-none orb3" style={{ background: `radial-gradient(circle,${pub.orb3} 0%,transparent 65%)` }} />
 
                     {/* Scan line */}
-                    <div className="absolute left-0 right-0 h-px pointer-events-none scan-line" style={{ background: 'linear-gradient(90deg,transparent,rgba(99,102,241,0.5),transparent)', zIndex: 5 }} />
+                    <div className="absolute left-0 right-0 h-px pointer-events-none scan-line" style={{ background: `linear-gradient(90deg,transparent,${pub.scanLine},transparent)`, zIndex: 5 }} />
 
                     {/* Top shimmer border */}
-                    <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg,transparent,rgba(139,92,246,0.8),transparent)' }} />
+                    <div className="absolute top-0 left-0 right-0 h-px" style={{ background: `linear-gradient(90deg,transparent,${pub.topShimmer},transparent)` }} />
 
                     <div className="relative flex flex-col h-full px-10 py-6 z-10">
 
-                        {/* Logo + badge */}
-                        <div className="flex items-center justify-between mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)' }}>
-                                    <img src="/logo.png" alt="ARIA" style={{ height: 18, width: 'auto' }} />
-                                </div>
-                                <span className="text-lg font-black tracking-tight" style={{ color: '#1E318A' }}>aria</span>
-                            </div>
+                        {/* Badge + theme toggle */}
+                        <div className="flex items-center justify-end gap-2 mb-6">
+                            <button
+                                type="button"
+                                onClick={toggleTheme}
+                                title={isDarkPub ? 'Light mode' : 'Dark mode'}
+                                aria-label={isDarkPub ? 'Switch to light mode' : 'Switch to dark mode'}
+                                className="p-1.5 rounded-full transition hover:opacity-80 cursor-pointer"
+                                style={{ background: pub.toggleBg, border: `1px solid ${pub.toggleBorder}` }}
+                            >
+                                {isDarkPub ? <Sun size={13} color="#fbbf24" /> : <Moon size={13} color="#64748b" />}
+                            </button>
                             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-                                style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#818cf8] pdot" />v1.0.0
+                                style={{ background: pub.versionBg, border: `1px solid ${pub.versionBorder}`, color: pub.versionText }}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#fb923c] pdot" />v1.0.0
                             </div>
                         </div>
 
                         {/* Headline */}
                         <div className="mb-5">
                             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold mb-3 badge-glow"
-                                style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(139,92,246,0.35)', color: '#c4b5fd' }}>
-                                <Activity size={11} /> Plateforme d'Intelligence API
+                                style={{ background: pub.eyebrowBg, border: `1px solid ${pub.eyebrowBorder}`, color: pub.eyebrowText }}>
+                                <Activity size={11} /> API Intelligence Platform
                             </div>
-                            <h1 className="font-black text-white leading-[1.1] tracking-tight mb-2" style={{ fontSize: '2rem' }}>
-                                Rétro-ingénierie<br />
-                                <span style={{ background: 'linear-gradient(135deg,#818cf8,#c4b5fd)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                                    de toute API REST.
+                            <h1 className="font-black leading-[1.1] tracking-tight mb-2" style={{ fontSize: '2rem', color: pub.headline }}>
+                                Reverse engineer<br />
+                                <span style={{ background: 'linear-gradient(135deg,#dc2626,#f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                                    any REST API.
                                 </span>
                             </h1>
-                            <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)', maxWidth: '38ch' }}>
-                                Importez des fichiers HAR, capturez le trafic en direct et laissez l'IA générer automatiquement une documentation OpenAPI complète.
+                            <p className="text-sm leading-relaxed" style={{ color: pub.body, maxWidth: '38ch' }}>
+                                Import HAR files, capture live traffic, and let AI automatically generate complete OpenAPI documentation.
                             </p>
                         </div>
 
                         {/* Stats row */}
                         <div className="grid grid-cols-3 gap-3 mb-5">
                             {[
-                                { icon: GitBranch, val: 247, suffix: '', label: 'Endpoints', color: '#818cf8' },
-                                { icon: Shield, val: 99, suffix: '%', label: 'Couverture', color: '#34d399' },
-                                { icon: Cpu, val: 1247, suffix: '', label: 'Appels LLM', color: '#fbbf24' },
+                                { icon: GitBranch, val: 247, suffix: '', label: 'Endpoints', color: MC.GET },
+                                { icon: Shield, val: 99, suffix: '%', label: 'Coverage', color: MC.POST },
+                                { icon: Cpu, val: 1247, suffix: '', label: 'LLM Calls', color: MC.PATCH },
                             ].map(({ icon: Icon, val, suffix, label, color }) => (
                                 <div key={label} className="rounded-2xl p-3 shimmer relative overflow-hidden"
-                                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                    style={{ background: pub.statCardBg, border: `1px solid ${pub.statCardBorder}` }}>
                                     <Icon size={14} style={{ color, marginBottom: 6 }} />
-                                    <div className="text-lg font-black text-white leading-none tick" key={mode}>
+                                    <div className="text-lg font-black leading-none tick" style={{ color: pub.statValue }} key={mode}>
                                         <Counter to={val} suffix={suffix} />
                                     </div>
-                                    <div className="text-[10px] mt-1 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>{label}</div>
+                                    <div className="text-[10px] mt-1 font-medium" style={{ color: pub.statLabel }}>{label}</div>
                                 </div>
                             ))}
                         </div>
 
                         {/* ─── Live capture terminal ─────────────────────────── */}
                         <div className="flex-1 min-h-0 rounded-2xl overflow-hidden flex flex-col"
-                            style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)' }}>
+                            style={{ background: pub.terminalBg, border: `1px solid ${pub.terminalBorder}`, backdropFilter: 'blur(20px)' }}>
 
                             {/* Title bar */}
                             <div className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-                                style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
+                                style={{ borderBottom: `1px solid ${pub.terminalHeaderBorder}`, background: pub.terminalHeaderBg }}>
                                 <div className="flex items-center gap-2">
                                     <div className="flex gap-1.5">
                                         <span className="w-3 h-3 rounded-full" style={{ background: '#ff5f57' }} />
                                         <span className="w-3 h-3 rounded-full" style={{ background: '#febc2e' }} />
                                         <span className="w-3 h-3 rounded-full" style={{ background: '#28c840' }} />
                                     </div>
-                                    <span className="text-xs font-bold ml-1" style={{ color: 'rgba(255,255,255,0.3)', fontFamily: "'JetBrains Mono',monospace" }}>aria · live capture</span>
+                                    <span className="text-xs font-bold ml-1" style={{ color: pub.terminalTitle, fontFamily: "'JetBrains Mono',monospace" }}>aria · live capture</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.25)' }}>
+                                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: pub.recordingBg, border: `1px solid ${pub.recordingBorder}` }}>
                                         <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pdot" />
-                                        <span className="text-[10px] font-bold" style={{ color: '#4ade80' }}>RECORDING</span>
+                                        <span className="text-[10px] font-bold" style={{ color: pub.recordingText }}>RECORDING</span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Column headers */}
                             <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
-                                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(0,0,0,0.2)' }}>
+                                style={{ borderBottom: `1px solid ${pub.colHeaderBorder}`, background: pub.colHeaderBg }}>
                                 {['METHOD', 'PATH', 'STATUS', 'LATENCY'].map((h, i) => (
                                     <div key={h} className="text-[10px] font-black uppercase tracking-widest"
-                                        style={{ color: 'rgba(255,255,255,0.2)', width: i === 0 ? '60px' : i === 1 ? '1fr' : i === 2 ? '52px' : '58px', flex: i === 1 ? 1 : undefined }}>
+                                        style={{ color: pub.colHeaderText, width: i === 0 ? '60px' : i === 1 ? '1fr' : i === 2 ? '52px' : '58px', flex: i === 1 ? 1 : undefined }}>
                                         {h}
                                     </div>
                                 ))}
@@ -490,32 +559,32 @@ export default function AuthPage() {
                             <div className="flex-1 overflow-hidden px-4 py-2 space-y-1.5">
                                 {visibleLogs.map((row, i) => (
                                     <div key={`${row.path}-${i}`} className="log-row flex items-center gap-2 py-1.5 px-3 rounded-xl"
-                                        style={{ background: i === visibleLogs.length - 1 ? 'rgba(99,102,241,0.08)' : 'transparent', border: i === visibleLogs.length - 1 ? '1px solid rgba(99,102,241,0.15)' : '1px solid transparent' }}>
-                                        <span className="w-[60px] text-[11px] font-black flex-shrink-0" style={{ color: MC[row.method] ?? '#94a3b8', fontFamily: "'JetBrains Mono',monospace" }}>{row.method}</span>
-                                        <span className="flex-1 text-[11px] truncate" style={{ color: 'rgba(255,255,255,0.45)', fontFamily: "'JetBrains Mono',monospace" }}>{row.path}</span>
-                                        <span className="w-[52px] text-[11px] font-bold text-center flex-shrink-0" style={{ color: row.ok ? '#4ade80' : '#fb923c', fontFamily: "'JetBrains Mono',monospace" }}>{row.status}</span>
-                                        <span className="w-[58px] text-[11px] text-right flex-shrink-0" style={{ color: 'rgba(255,255,255,0.25)', fontFamily: "'JetBrains Mono',monospace" }}>{row.ms}ms</span>
+                                        style={{ background: i === visibleLogs.length - 1 ? pub.rowHighlightBg : 'transparent', border: i === visibleLogs.length - 1 ? `1px solid ${pub.rowHighlightBorder}` : '1px solid transparent' }}>
+                                        <span className="w-[60px] text-[11px] font-black flex-shrink-0" style={{ color: MC[row.method] ?? pub.statLabel, fontFamily: "'JetBrains Mono',monospace" }}>{row.method}</span>
+                                        <span className="flex-1 text-[11px] truncate" style={{ color: pub.pathText, fontFamily: "'JetBrains Mono',monospace" }}>{row.path}</span>
+                                        <span className="w-[52px] text-[11px] font-bold text-center flex-shrink-0" style={{ color: row.ok ? pub.recordingText : MC.GET, fontFamily: "'JetBrains Mono',monospace" }}>{row.status}</span>
+                                        <span className="w-[58px] text-[11px] text-right flex-shrink-0" style={{ color: pub.latencyText, fontFamily: "'JetBrains Mono',monospace" }}>{row.ms}ms</span>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Footer stats bar */}
                             <div className="flex items-center justify-between px-4 py-3 flex-shrink-0"
-                                style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.3)' }}>
+                                style={{ borderTop: `1px solid ${pub.footerTop}`, background: pub.footerBg }}>
                                 <div className="flex items-center gap-4">
                                     {[
-                                        { label: 'Requêtes', val: '1 247', color: '#818cf8' },
-                                        { label: 'Erreurs', val: '3', color: '#f87171' },
-                                        { label: 'Moy.', val: '142ms', color: '#34d399' },
+                                        { label: 'Requests', val: '1,247', color: MC.GET },
+                                        { label: 'Errors', val: '3', color: MC.DELETE },
+                                        { label: 'Avg.', val: '142ms', color: MC.POST },
                                     ].map(({ label, val, color }) => (
                                         <div key={label} className="flex items-center gap-1.5">
                                             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                                            <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.3)' }}>{label}</span>
-                                            <span className="text-[10px] font-black" style={{ color: 'rgba(255,255,255,0.6)', fontFamily: "'JetBrains Mono',monospace" }}>{val}</span>
+                                            <span className="text-[10px] font-bold" style={{ color: pub.footerLabel }}>{label}</span>
+                                            <span className="text-[10px] font-black" style={{ color: pub.footerValue, fontFamily: "'JetBrains Mono',monospace" }}>{val}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="flex items-center gap-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                                <div className="flex items-center gap-1 text-[10px]" style={{ color: pub.poweredText }}>
                                     <Zap size={10} />
                                     <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>powered by groq</span>
                                 </div>
@@ -524,9 +593,9 @@ export default function AuthPage() {
 
                         {/* Bottom */}
                         <div className="flex items-center justify-between mt-6">
-                            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.15)' }}>© 2026 ARIA · PFE Syrine Majdoub</p>
+                            <p className="text-[11px]" style={{ color: pub.copyrightText }}>© 2026 ARIA · Final Year Project by Syrine Majdoub</p>
                             <div className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full"
-                                style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: 'rgba(165,180,252,0.6)' }}>
+                                style={{ background: pub.bottomBadgeBg, border: `1px solid ${pub.bottomBadgeBorder}`, color: pub.bottomBadgeText }}>
                                 <BarChart2 size={9} /> ARIA v1.0
                             </div>
                         </div>

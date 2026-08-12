@@ -5,10 +5,10 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.mixins import OrgScopedMixin, TimestampMixin, UserOwnedMixin
+from app.db.mixins import OrgScopedMixin, TeamScopedMixin, TimestampMixin, UserOwnedMixin
 
 
-class AutomationRun(TimestampMixin, OrgScopedMixin, UserOwnedMixin, Base):
+class AutomationRun(TimestampMixin, OrgScopedMixin, UserOwnedMixin, TeamScopedMixin, Base):
     __tablename__ = "automation_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))

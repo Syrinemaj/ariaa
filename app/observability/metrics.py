@@ -48,6 +48,36 @@ llm_cost_total = Counter(
     ["task_name", "model_name", "provider"],
 )
 
+# ── Real AWS billed cost (Cost Explorer) ───────────────────────────────────
+# Unlike llm_cost_total (only sees calls made through app/llm_observability/),
+# this reflects what AWS actually billed for the account, regardless of which
+# code path (production API, evaluation scripts, manual boto3 test) caused it.
+# Gauge, not Counter — set (not incremented) to the latest Cost Explorer value
+# on each sync, since Cost Explorer already returns cumulative period totals.
+aws_billed_cost_usd = Gauge(
+    "aria_aws_billed_cost_usd",
+    "Real AWS cost this month-to-date, from Cost Explorer, by service",
+    ["service"],
+)
+
+# The generic "Amazon Bedrock" SERVICE bucket lumps every on-demand model
+# together (production deepseek.v3.2 alongside every model evaluation/
+# run_scripts/* swept) — only Anthropic's marketplace-listed models get
+# their own SERVICE name. This breaks that bucket down by USAGE_TYPE
+# (parsed to a bare model name) so the production model can be isolated
+# from eval-script noise.
+aws_bedrock_model_cost_usd = Gauge(
+    "aria_aws_bedrock_model_cost_usd",
+    "Real AWS cost this month-to-date for on-demand Bedrock usage, by model "
+    "(parsed from Cost Explorer USAGE_TYPE, since these don't get their own SERVICE line)",
+    ["model"],
+)
+
+aws_cost_last_sync_timestamp = Gauge(
+    "aria_aws_cost_last_sync_timestamp_seconds",
+    "Unix timestamp of the last successful Cost Explorer sync",
+)
+
 # Groq has no embedding API — every call returns a zero vector.
 # This counter surfaces the impact on RAG quality.
 llm_embedding_fallback_total = Counter(

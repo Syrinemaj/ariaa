@@ -1,21 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { Component, useEffect, type ReactNode } from 'react'
+import { Component, type ReactNode } from 'react'
 import { AuthProvider } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { RunProvider } from './contexts/RunContext'
 import { ToastProvider } from './contexts/ToastContext'
 import RequireRole from './components/layout/RequireRole'
-
-function LockLight({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    document.documentElement.classList.remove('dark')
-    return () => {
-      const stored = localStorage.getItem('aria_theme')
-      if (stored === 'dark') document.documentElement.classList.add('dark')
-    }
-  }, [])
-  return <>{children}</>
-}
 import LoginPage from './pages/LoginPage'
 import SignUpPage from './pages/SignUpPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
@@ -33,7 +22,6 @@ import AutomationListPage from './pages/AutomationListPage'
 import BulkPage from './pages/BulkPage'
 import ApprovalsPage from './pages/ApprovalsPage'
 import ReportsPage from './pages/ReportsPage'
-import SettingsPage from './pages/SettingsPage'
 import UsersPage from './pages/UsersPage'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -43,11 +31,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
     if (this.state.error) {
       return (
         <div style={{ padding: 40, fontFamily: 'monospace', background: '#fff8f8', minHeight: '100vh' }}>
-          <h2 style={{ color: '#c00' }}>Erreur de rendu</h2>
+          <h2 style={{ color: '#c00' }}>Render error</h2>
           <pre style={{ color: '#900', whiteSpace: 'pre-wrap' }}>{this.state.error}</pre>
           <button onClick={() => { this.setState({ error: null }); window.location.href = '/login' }}
             style={{ marginTop: 16, padding: '8px 16px', cursor: 'pointer' }}>
-            Retour à la connexion
+            Back to login
           </button>
         </div>
       )
@@ -62,12 +50,12 @@ const ADMIN_ONLY     = ['ADMIN']
 function AppRoutes() {
   return (
     <Routes>
-      {/* ── Auth pages (always light, no theme toggle) ────────────── */}
-      <Route path="/login"          element={<LockLight><AuthPage /></LockLight>} />
-      <Route path="/signup"         element={<LockLight><SignUpPage /></LockLight>} />
-      <Route path="/forgot-password" element={<LockLight><ForgotPasswordPage /></LockLight>} />
-      <Route path="/reset-password"  element={<LockLight><ResetPasswordPage /></LockLight>} />
-      <Route path="/auth"           element={<LockLight><LoginPage /></LockLight>} />
+      {/* ── Auth pages (follow the app's light/dark theme; each carries its own toggle) ── */}
+      <Route path="/login"          element={<AuthPage />} />
+      <Route path="/signup"         element={<SignUpPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password"  element={<ResetPasswordPage />} />
+      <Route path="/auth"           element={<LoginPage />} />
 
       {/* ── Accessible to ALL roles ───────────────────────────────── */}
       <Route path="/dashboard" element={<DashboardPage />} />
@@ -94,8 +82,6 @@ function AppRoutes() {
       {/* ── ADMIN only ────────────────────────────────────────────── */}
       <Route path="/approvals"
         element={<RequireRole allowedRoles={ADMIN_ONLY}><ApprovalsPage /></RequireRole>} />
-      <Route path="/settings"
-        element={<RequireRole allowedRoles={ADMIN_ONLY}><SettingsPage /></RequireRole>} />
       <Route path="/users"
         element={<RequireRole allowedRoles={ADMIN_ONLY}><UsersPage /></RequireRole>} />
 

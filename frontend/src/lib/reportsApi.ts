@@ -70,6 +70,19 @@ export interface DailyTrendPoint {
   count: number
 }
 
+export interface KpiWindow {
+  current: number
+  previous: number
+}
+
+export interface KpiTrends {
+  window_days: number
+  analysis_runs: KpiWindow
+  endpoints_catalogued: KpiWindow
+  automation_runs: KpiWindow
+  global_success_rate: KpiWindow    // 0-1
+}
+
 // ── API calls ─────────────────────────────────────────────────────────────────
 
 export function getSummary(): Promise<GlobalSummary> {
@@ -80,13 +93,18 @@ export function getDailyTrend(days = 30): Promise<DailyTrendPoint[]> {
   return api.get<DailyTrendPoint[]>(`/reports/daily?days=${days}`)
 }
 
-export function listAutomationRuns(params?: { limit?: number; status?: string }) {
-  const qs = params
-    ? Object.entries(params)
-        .filter(([, v]) => v !== undefined)
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-        .join('&')
-    : ''
+export function getKpiTrends(windowDays = 7): Promise<KpiTrends> {
+  return api.get<KpiTrends>(`/reports/kpi-trends?window_days=${windowDays}`)
+}
+
+export function listAutomationRuns(params?: { limit?: number; page?: number; status?: string }) {
+  // Backend /reports/runs paginates via page/page_size (see app/core/pagination.py) —
+  // `limit` here maps to page_size for callers that only care about a cap.
+  const query: Record<string, string> = {}
+  if (params?.status) query.status = params.status
+  if (params?.limit !== undefined) query.page_size = String(params.limit)
+  if (params?.page !== undefined) query.page = String(params.page)
+  const qs = new URLSearchParams(query).toString()
   return api.get<{ items: AutomationRun[]; total: number; page: number; page_size: number; total_pages: number }>(
     `/reports/runs${qs ? `?${qs}` : ''}`
   )

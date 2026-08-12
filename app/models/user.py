@@ -1,9 +1,11 @@
 """
-User model — rôles en majuscules avec ajout du rôle VIEWER.
+User model — rôles en majuscules.
 
 Migration 008 met à jour les données existantes :
   "admin"    → "ADMIN"
   "operator" → "OPERATOR"
+
+Migration 014 retire le rôle VIEWER (jamais assigné, jamais appliqué).
 
 Comparaisons de rôles (UserRole est str, Enum) :
   current_user.role == UserRole.ADMIN.value  → "ADMIN" == "ADMIN"  ✓
@@ -23,7 +25,6 @@ from app.db.base import Base
 class UserRole(str, Enum):
     ADMIN = "ADMIN"
     OPERATOR = "OPERATOR"
-    VIEWER = "VIEWER"
 
     @classmethod
     def values(cls) -> set[str]:
@@ -35,7 +36,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("email", name="uq_users_email"),
         CheckConstraint(
-            "role IN ('ADMIN', 'OPERATOR', 'VIEWER')",
+            "role IN ('ADMIN', 'OPERATOR')",
             name="ck_users_role",
         ),
     )

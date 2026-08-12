@@ -41,8 +41,8 @@ function DeleteModal({
             <TriangleAlert className="w-5 h-5 text-rose-500" />
           </div>
           <div>
-            <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>Supprimer cette analyse ?</p>
-            <p className="text-xs ink-2 mt-0.5">Cette action est irréversible.</p>
+            <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>Delete this analysis?</p>
+            <p className="text-xs ink-2 mt-0.5">This action is irreversible.</p>
           </div>
         </div>
 
@@ -55,7 +55,7 @@ function DeleteModal({
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onCancel} disabled={deleting} className="btn-secondary">
-            Annuler
+            Cancel
           </button>
           <button
             onClick={onConfirm}
@@ -63,8 +63,8 @@ function DeleteModal({
             className="btn-danger"
             style={{ minWidth: '7rem' }}>
             {deleting
-              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Suppression…</>
-              : <><Trash2 className="w-3.5 h-3.5" /> Supprimer</>
+              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Deleting…</>
+              : <><Trash2 className="w-3.5 h-3.5" /> Delete</>
             }
           </button>
         </div>
@@ -76,14 +76,14 @@ function DeleteModal({
 // ── Status pill ────────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<string, { label: string; color: string; dot: string }> = {
-  completed:  { label: 'Terminé',        color: 'text-emerald-700 bg-emerald-50 border-emerald-200',  dot: 'bg-emerald-500' },
-  done:       { label: 'Terminé',        color: 'text-emerald-700 bg-emerald-50 border-emerald-200',  dot: 'bg-emerald-500' },
-  processing: { label: 'En cours',       color: 'text-amber-700 bg-amber-50 border-amber-200',        dot: 'bg-amber-500 animate-pulse' },
-  running:    { label: 'En cours',       color: 'text-amber-700 bg-amber-50 border-amber-200',        dot: 'bg-amber-500 animate-pulse' },
-  enriching:  { label: 'Enrichissement', color: 'text-violet-700 bg-violet-50 border-violet-200',     dot: 'bg-violet-500 animate-pulse' },
-  queued:     { label: 'En attente',     color: 'text-slate-700 bg-slate-50 border-slate-200',        dot: 'bg-slate-400' },
-  pending:    { label: 'En attente',     color: 'text-slate-700 bg-slate-50 border-slate-200',        dot: 'bg-slate-400' },
-  failed:     { label: 'Échoué',         color: 'text-red-700 bg-red-50 border-red-200',              dot: 'bg-red-500' },
+  completed:  { label: 'Completed',      color: 'text-emerald-700 bg-emerald-50 border-emerald-200',  dot: 'bg-emerald-500' },
+  done:       { label: 'Completed',      color: 'text-emerald-700 bg-emerald-50 border-emerald-200',  dot: 'bg-emerald-500' },
+  processing: { label: 'In progress',    color: 'text-amber-700 bg-amber-50 border-amber-200',        dot: 'bg-amber-500 animate-pulse' },
+  running:    { label: 'In progress',    color: 'text-amber-700 bg-amber-50 border-amber-200',        dot: 'bg-amber-500 animate-pulse' },
+  enriching:  { label: 'Enriching',      color: 'text-violet-700 bg-violet-50 border-violet-200',     dot: 'bg-violet-500 animate-pulse' },
+  queued:     { label: 'Pending',        color: 'text-slate-700 bg-slate-50 border-slate-200',        dot: 'bg-slate-400' },
+  pending:    { label: 'Pending',        color: 'text-slate-700 bg-slate-50 border-slate-200',        dot: 'bg-slate-400' },
+  failed:     { label: 'Failed',         color: 'text-red-700 bg-red-50 border-red-200',              dot: 'bg-red-500' },
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -114,7 +114,7 @@ function UserChip({ name, isCurrentUser }: { name: string; isCurrentUser: boolea
       </div>
       <span className="text-xs font-medium truncate max-w-[120px]" style={{ color: 'var(--ink)' }}>
         {name}
-        {isCurrentUser && <span className="ml-1 ink-2">(vous)</span>}
+        {isCurrentUser && <span className="ml-1 ink-2">(you)</span>}
       </span>
     </div>
   )
@@ -253,24 +253,24 @@ export default function RunsHistoryPage() {
           <div>
             <p className="text-xs font-semibold tracking-wider uppercase ink-2">Discovery</p>
             <h2 className="text-xl font-black mt-0.5" style={{ color: 'var(--ink)' }}>
-              Historique des analyses
+              Analysis history
             </h2>
             <p className="text-sm ink-2 mt-1">
               {isAdmin ? (
                 <span className="inline-flex items-center gap-1.5">
                   <Shield className="w-3.5 h-3.5" style={{ color: 'var(--brand)' }} />
-                  Vue admin · {total} fichiers HAR · tous les utilisateurs
+                  Admin view · {total} HAR files · all users
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5 ink-2" />
-                  Vos analyses · {visibleRuns.length} fichiers HAR uploadés
+                  Your analyses · {visibleRuns.length} HAR files uploaded
                 </span>
               )}
             </p>
           </div>
           <button onClick={() => nav('/analysis')} className="btn-primary">
-            <Upload className="w-4 h-4" /> Nouvelle analyse
+            <Upload className="w-4 h-4" /> New analysis
           </button>
         </div>
 
@@ -280,7 +280,7 @@ export default function RunsHistoryPage() {
             style={{ background: 'color-mix(in oklch, var(--brand) 8%, var(--card))', border: '1px solid color-mix(in oklch, var(--brand) 20%, var(--line))' }}>
             <Shield className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--brand)' }} />
             <span className="text-xs font-semibold" style={{ color: 'var(--brand)' }}>
-              Accès administrateur — vous voyez les analyses de tous les utilisateurs
+              Administrator access — you can see analyses from all users
             </span>
           </div>
         )}
@@ -292,21 +292,21 @@ export default function RunsHistoryPage() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ink-2" />
               <input value={q} onChange={e => setQ(e.target.value)}
                 className="input !pl-9"
-                placeholder="Rechercher par nom de fichier ou ID…" />
+                placeholder="Search by file name or ID…" />
             </div>
             <label className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm cursor-pointer"
               style={{ border: '1px solid var(--line)', background: 'var(--card)' }}>
-              <span className="text-xs font-medium ink-2">Statut</span>
+              <span className="text-xs font-medium ink-2">Status</span>
               <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
                 className="bg-transparent outline-none text-sm font-medium" style={{ color: 'var(--ink)' }}>
                 {['ALL', 'completed', 'processing', 'failed', 'queued'].map(s => (
                   <option key={s} value={s}>
-                    {s === 'ALL' ? 'Tous' : STATUS_META[s]?.label ?? s}
+                    {s === 'ALL' ? 'All' : STATUS_META[s]?.label ?? s}
                   </option>
                 ))}
               </select>
             </label>
-            <button onClick={() => loadPage(page)} className="btn-secondary !py-1.5 !px-3" title="Rafraîchir">
+            <button onClick={() => loadPage(page)} className="btn-secondary !py-1.5 !px-3" title="Refresh">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <span className="ml-auto text-xs font-mono ink-2">
@@ -318,15 +318,15 @@ export default function RunsHistoryPage() {
             <table className="w-full text-sm">
               <thead className="aria-thead">
                 <tr>
-                  <th className="text-left px-4 py-2.5">Fichier HAR</th>
-                  <th className="text-left px-4 py-2.5">Statut</th>
+                  <th className="text-left px-4 py-2.5">HAR file</th>
+                  <th className="text-left px-4 py-2.5">Status</th>
                   <th className="text-left px-4 py-2.5">Endpoints</th>
                   <th className="text-left px-4 py-2.5">Date</th>
                   {/* Uploader column — admins only */}
                   {isAdmin && (
                     <th className="text-left px-4 py-2.5">
                       <span className="inline-flex items-center gap-1.5">
-                        <User className="w-3 h-3" /> Uploadé par
+                        <User className="w-3 h-3" /> Uploaded by
                       </span>
                     </th>
                   )}
@@ -347,12 +347,12 @@ export default function RunsHistoryPage() {
                     <td colSpan={isAdmin ? 6 : 5} className="px-4 py-12 text-center">
                       <p className="text-sm ink-2">
                         {visibleRuns.length === 0
-                          ? "Vous n'avez pas encore uploadé de fichier HAR."
-                          : 'Aucun fichier ne correspond à votre recherche.'}
+                          ? "You haven't uploaded a HAR file yet."
+                          : 'No files match your search.'}
                       </p>
                       {visibleRuns.length === 0 && (
                         <button onClick={() => nav('/analysis')} className="btn-primary mt-4 mx-auto text-xs">
-                          <Upload className="w-3.5 h-3.5" /> Uploader un HAR
+                          <Upload className="w-3.5 h-3.5" /> Upload a HAR
                         </button>
                       )}
                     </td>
@@ -369,7 +369,7 @@ export default function RunsHistoryPage() {
                       onMouseLeave={e => (e.currentTarget.style.background = '')}
                       onClick={() => handleRowClick(r)}>
 
-                      {/* Fichier */}
+                      {/* File */}
                       <td className="px-4 py-3" onClick={e => editingId === r.id && e.stopPropagation()}>
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
@@ -387,10 +387,10 @@ export default function RunsHistoryPage() {
                                   className="input !py-1 !px-2 text-xs font-mono w-40"
                                 />
                                 <button onClick={e => { e.stopPropagation(); doSaveEdit() }} disabled={savingEdit}
-                                  className="btn-ghost !p-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-40" title="Sauvegarder">
+                                  className="btn-ghost !p-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-40" title="Save">
                                   {savingEdit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                 </button>
-                                <button onClick={e => { e.stopPropagation(); doCancelEdit() }} className="btn-ghost !p-1 hover:text-rose-500" title="Annuler">
+                                <button onClick={e => { e.stopPropagation(); doCancelEdit() }} className="btn-ghost !p-1 hover:text-rose-500" title="Cancel">
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -406,7 +406,7 @@ export default function RunsHistoryPage() {
                         </div>
                       </td>
 
-                      {/* Statut */}
+                      {/* Status */}
                       <td className="px-4 py-3">
                         <StatusPill status={r.status} />
                       </td>
@@ -423,12 +423,12 @@ export default function RunsHistoryPage() {
                       {/* Date */}
                       <td className="px-4 py-3">
                         <p className="text-xs" style={{ color: 'var(--ink)' }}>
-                          {new Date(r.created_at).toLocaleDateString('fr-FR', {
+                          {new Date(r.created_at).toLocaleDateString('en-US', {
                             day: '2-digit', month: 'short', year: 'numeric',
                           })}
                         </p>
                         <p className="text-[10px] ink-2">
-                          {new Date(r.created_at).toLocaleTimeString('fr-FR', {
+                          {new Date(r.created_at).toLocaleTimeString('en-US', {
                             hour: '2-digit', minute: '2-digit',
                           })}
                         </p>
@@ -449,17 +449,17 @@ export default function RunsHistoryPage() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => { setActiveRun({ id: r.id, name: r.file_name }); nav(`/endpoints?run=${r.id}`) }}
-                            className="btn-ghost !py-1 !px-2 text-xs" title="Explorer les endpoints">
+                            className="btn-ghost !py-1 !px-2 text-xs" title="Explore endpoints">
                             <Database className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => { setActiveRun({ id: r.id, name: r.file_name }); nav(`/workflows?run=${r.id}`) }}
-                            className="btn-ghost !py-1 !px-2 text-xs" title="Voir les workflows">
+                            className="btn-ghost !py-1 !px-2 text-xs" title="View workflows">
                             <Network className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => { setActiveRun({ id: r.id, name: r.file_name }); nav(`/bulk?run=${r.id}`) }}
-                            className="btn-ghost !py-1 !px-2 text-xs" title="Automatiser">
+                            className="btn-ghost !py-1 !px-2 text-xs" title="Automate">
                             <Layers className="w-3.5 h-3.5" />
                           </button>
 
@@ -470,14 +470,14 @@ export default function RunsHistoryPage() {
                             onClick={e => startEdit(r, e)}
                             disabled={editingId === r.id}
                             className="btn-ghost !py-1 !px-2 text-xs disabled:opacity-40"
-                            title="Modifier le nom">
+                            title="Rename">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={e => handleDelete(r, e)}
                             disabled={deletingId === r.id}
                             className="btn-ghost !py-1 !px-2 text-xs hover:text-red-500 disabled:opacity-40"
-                            title="Supprimer cette analyse">
+                            title="Delete this analysis">
                             {deletingId === r.id
                               ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                               : <Trash2 className="w-3.5 h-3.5" />
@@ -497,7 +497,7 @@ export default function RunsHistoryPage() {
             <div className="flex items-center justify-between px-5 py-3"
               style={{ borderTop: '1px solid var(--line)' }}>
               <p className="text-xs ink-2">
-                Page {page + 1} / {totalPages} · {total} fichiers
+                Page {page + 1} / {totalPages} · {total} files
               </p>
               <div className="flex items-center gap-1">
                 <button

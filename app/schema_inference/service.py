@@ -7,14 +7,33 @@ from app.schema_inference.request_schema import infer_request_schema
 from app.schema_inference.response_schema import infer_response_schema
 from app.schema_inference.schema_merger import merge_schemas
 
+# Markers of a login/session-management endpoint, checked against
+# normalized_path — presence anywhere in the run is what lets
+# infer_auth_from_headers() fall back to "inferred session auth" for calls
+# whose own headers carry no direct evidence (see its docstring: browsers
+# routinely strip Cookie/Set-Cookie from HAR exports).
+_SESSION_AUTH_MARKERS = ("login", "logout", "usermgt", "signin", "session")
 
-def infer_schema_for_endpoint(endpoint: NormalizedEndpoint) -> EndpointSchemaResult:
+
+def _has_session_auth_endpoint(endpoints: List[NormalizedEndpoint]) -> bool:
+    return any(
+        marker in endpoint.normalized_path.lower()
+        for endpoint in endpoints
+        for marker in _SESSION_AUTH_MARKERS
+    )
+
+
+def infer_schema_for_endpoint(
+    endpoint: NormalizedEndpoint,
+    app_has_session_auth: bool = False,
+) -> EndpointSchemaResult:
     request_schema = infer_request_schema(endpoint.request_body)
     response_schema = infer_response_schema(endpoint.response_body)
 
     auth = infer_auth_from_headers(
         request_headers=endpoint.metadata.get("request_headers", {}),
         response_headers=endpoint.metadata.get("response_headers", {}),
+        app_has_session_auth=app_has_session_auth,
     )
 
     status_codes = [endpoint.status] if endpoint.status is not None else []
@@ -40,9 +59,10 @@ def infer_schema_for_endpoint(endpoint: NormalizedEndpoint) -> EndpointSchemaRes
 
 def infer_schemas_for_endpoints(endpoints: List[NormalizedEndpoint]) -> List[EndpointSchemaResult]:
     grouped: Dict[str, EndpointSchemaResult] = {}
+    app_has_session_auth = _has_session_auth_endpoint(endpoints)
 
     for endpoint in endpoints:
-        result = infer_schema_for_endpoint(endpoint)
+        result = infer_schema_for_endpoint(endpoint, app_has_session_auth=app_has_session_auth)
         key = result.canonical_key
 
         if key not in grouped:

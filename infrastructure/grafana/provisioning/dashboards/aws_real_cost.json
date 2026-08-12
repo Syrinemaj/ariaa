@@ -1,0 +1,138 @@
+{
+  "title": "ARIA — Coût AWS réel (facturation)",
+  "uid": "aria-aws-real-cost",
+  "description": "Coût AWS RÉELLEMENT FACTURÉ (Cost Explorer, synchronisé par app/observability/aws_cost_sync.py). Le panel principal isole BEDROCK_MODEL (deepseek.v3.2, app/core/config.py) — le seul modèle que la prod appelle réellement — du reste de la facture Bedrock, qui vient des scripts evaluation/run_scripts/* (ils appellent Bedrock directement en boto3, hors du pipeline app/llm_observability/, donc invisibles dans aria_llm_cost_total). Données Cost Explorer avec ~24h de retard, synchronisées toutes les AWS_COST_SYNC_INTERVAL_SECONDS (6h par défaut).",
+  "version": 2,
+  "refresh": "5m",
+  "time": { "from": "now-30d", "to": "now" },
+  "tags": ["aria", "aws", "cost", "billing", "deepseek"],
+  "schemaVersion": 38,
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "💳 deepseek.v3.2 — modèle de production réel", "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+
+    {
+      "id": 1, "title": "deepseek.v3.2 — coût réel (mois en cours)", "type": "stat",
+      "description": "BEDROCK_MODEL en prod (.env / app/core/config.py). Isolé du reste de la facture Bedrock via Cost Explorer USAGE_TYPE (aria_aws_bedrock_model_cost_usd, voir app/observability/aws_cost_sync.py) — les modèles testés par evaluation/run_scripts/* sont exclus de ce chiffre.",
+      "gridPos": { "x": 0, "y": 1, "w": 8, "h": 6 },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 4,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 2 },
+            { "color": "red", "value": 10 }
+          ]}
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "aria_aws_bedrock_model_cost_usd{model=\"deepseek.v3.2\"}",
+        "legendFormat": "deepseek.v3.2"
+      }]
+    },
+
+    {
+      "id": 2, "title": "Total AWS — mois en cours (tout compris)", "type": "stat",
+      "description": "Toute la facture AWS : deepseek.v3.2 + scripts d'évaluation + infra (S3, SQS...). Pour référence uniquement — voir le panel de gauche pour le vrai coût de production.",
+      "gridPos": { "x": 8, "y": 1, "w": 8, "h": 6 },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["sum"] }, "textMode": "value_and_name" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD", "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "sum(aria_aws_billed_cost_usd)",
+        "legendFormat": "Total AWS"
+      }]
+    },
+
+    {
+      "id": 3, "title": "Dernière synchro Cost Explorer", "type": "stat",
+      "gridPos": { "x": 16, "y": 1, "w": 8, "h": 6 },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": { "unit": "dateTimeFromNow" }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "expr": "aria_aws_cost_last_sync_timestamp_seconds * 1000",
+        "legendFormat": "Dernière synchro"
+      }]
+    },
+
+    {
+      "id": 6,
+      "title": "📋 Le reste (scripts d'évaluation, hors prod)",
+      "type": "text",
+      "gridPos": { "x": 0, "y": 7, "w": 24, "h": 3 },
+      "options": {
+        "mode": "markdown",
+        "content": "Tout ce qui dépasse le panel **deepseek.v3.2** ci-dessus (Claude Sonnet/Opus/Haiku, Nova, Llama, Qwen...) vient de `evaluation/run_scripts/*` — des balayages de comparaison de modèles pour le PFE, pas de trafic de production. Repli sur `evaluation/results/` pour identifier le run correspondant."
+      }
+    },
+
+    { "id": 200, "type": "row", "title": "🔍 Détail (autres modèles / autres services — pour investigation)", "collapsed": true,
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 1 },
+      "panels": [
+        {
+          "id": 4, "title": "Coût réel par service AWS (mois en cours)", "type": "bargauge",
+          "gridPos": { "x": 0, "y": 11, "w": 24, "h": 10 },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD", "decimals": 3,
+              "color": { "mode": "thresholds" },
+              "thresholds": { "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 4 }
+              ]}
+            }
+          },
+          "targets": [{
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "expr": "aria_aws_billed_cost_usd",
+            "legendFormat": "{{service}}"
+          }]
+        },
+        {
+          "id": 5, "title": "Coût réel par modèle Bedrock on-demand (mois en cours)", "type": "bargauge",
+          "description": "Décomposition de la ligne générique 'Amazon Bedrock' par modèle (Cost Explorer USAGE_TYPE) — inclut deepseek.v3.2 (prod) ET tous les modèles non-marketplace testés en évaluation (Nova, Llama, Qwen, Mistral...).",
+          "gridPos": { "x": 0, "y": 21, "w": 24, "h": 10 },
+          "options": {
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+            "reduceOptions": { "calcs": ["lastNotNull"] }
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "currencyUSD", "decimals": 4,
+              "color": { "mode": "thresholds" },
+              "thresholds": { "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 0.1 },
+                { "color": "red", "value": 0.3 }
+              ]}
+            }
+          },
+          "targets": [{
+            "datasource": { "type": "prometheus", "uid": "prometheus" },
+            "expr": "aria_aws_bedrock_model_cost_usd",
+            "legendFormat": "{{model}}"
+          }]
+        }
+      ]
+    }
+  ]
+}

@@ -52,9 +52,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: false, status: 'pending' }
         }
         if (detail === 'Account deactivated') {
-          return { success: false, status: 'rejected', reason: 'Votre accès a été révoqué par un administrateur.' }
+          return { success: false, status: 'rejected', reason: 'Your access has been revoked by an administrator.' }
         }
-        return { success: false, error: detail || 'Email ou mot de passe invalide.' }
+        return { success: false, error: detail || 'Invalid email or password.' }
       }
 
       const tokens = await tokenRes.json() as { access_token: string; refresh_token: string }

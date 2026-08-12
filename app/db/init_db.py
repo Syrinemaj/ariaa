@@ -30,6 +30,7 @@ from app.models.idempotency import IdempotencyRecord  # noqa: F401
 from app.models.bulk_batch import BulkBatch, BulkBatchRow  # noqa: F401
 from app.models.bulk_report import BulkExecutionReport  # noqa: F401
 from app.models.llm_call import LLMCall  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
 from app.db.base import Base
 
 

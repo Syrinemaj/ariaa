@@ -126,18 +126,18 @@ export const RECENT_RUNS: RecentRun[] = [
 ]
 
 export const RUN_OPTIONS: RunOption[] = [
-  { id:"run_8f3c1a90b27e", label:"Analyse #001 — northwind-prod (20 mai 2026)", short:"Analyse #001" },
-  { id:"run_4a1b9d7e6c12", label:"Analyse #002 — hrcore-staging (18 mai 2026)", short:"Analyse #002" },
-  { id:"run_c92ef0a4b813", label:"Analyse #003 — payroll-q2 (en cours)",        short:"Analyse #003" },
-  { id:"run_3d7c8eaf201b", label:"Analyse #004 — partners-api (15 mai 2026)",   short:"Analyse #004" },
+  { id:"run_8f3c1a90b27e", label:"Analysis #001 — northwind-prod (May 20, 2026)", short:"Analysis #001" },
+  { id:"run_4a1b9d7e6c12", label:"Analysis #002 — hrcore-staging (May 18, 2026)", short:"Analysis #002" },
+  { id:"run_c92ef0a4b813", label:"Analysis #003 — payroll-q2 (in progress)",      short:"Analysis #003" },
+  { id:"run_3d7c8eaf201b", label:"Analysis #004 — partners-api (May 15, 2026)",   short:"Analysis #004" },
 ]
 
 export const AUTO_RUN_OPTIONS: AutoRunOption[] = [
-  { id:"arun_b71d9e2c", label:"Automation Bulk #001 — Onboarding (20 mai 2026)" },
-  { id:"arun_3f88a014", label:"Automation Simple #001 — Test onboarding (19 mai 2026)" },
-  { id:"arun_92ab1c44", label:"Automation Bulk #002 — Migration de département (19 mai 2026)" },
-  { id:"arun_7e0fb251", label:"Automation Bulk #003 — Offboarding (18 mai 2026)" },
-  { id:"arun_a8c12d96", label:"Automation Bulk #004 — Ajustement salarial (17 mai 2026)" },
+  { id:"arun_b71d9e2c", label:"Bulk Automation #001 — Onboarding (May 20, 2026)" },
+  { id:"arun_3f88a014", label:"Simple Automation #001 — Onboarding test (May 19, 2026)" },
+  { id:"arun_92ab1c44", label:"Bulk Automation #002 — Department Migration (May 19, 2026)" },
+  { id:"arun_7e0fb251", label:"Bulk Automation #003 — Offboarding (May 18, 2026)" },
+  { id:"arun_a8c12d96", label:"Bulk Automation #004 — Salary Adjustment (May 17, 2026)" },
 ]
 
 export const RECENT_AUTOMATIONS: RecentAutomation[] = [

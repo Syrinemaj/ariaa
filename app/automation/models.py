@@ -24,6 +24,10 @@ class StepExecutionResult(BaseModel):
     request_payload: Optional[Dict[str, Any]] = None
     response_payload: Optional[Any] = None
     error_message: Optional[str] = None
+    # Non-fatal — surfaced in dry-run so the issue is visible before a real
+    # write, without blocking the preview. See
+    # batch_processor.py::_check_stale_update_fields.
+    warnings: List[str] = Field(default_factory=list)
 
 
 class AutomationExecutionResult(BaseModel):

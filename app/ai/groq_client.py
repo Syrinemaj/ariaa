@@ -97,22 +97,34 @@ class GroqClient:
             )
             return
 
-        # No DB session — this is the only place Prometheus gets recorded,
-        # so do it here, priced by the model that actually served the call.
+        # ARIA-OBS-FIX: most callers (intent_analyzer, plan_generator,
+        # semantic_normalizer, group_normalizer, workflow/endpoint
+        # understanding...) never pass a db session — structured_chat() is a
+        # sync method called from sync code, so threading the caller's async
+        # request-scoped session down here isn't an option (AsyncSession
+        # methods are coroutines; log_llm_call_and_print_terminal_summary is
+        # fully sync). Previously this branch only recorded to Prometheus,
+        # whose in-process counters reset to 0 on every restart — every one
+        # of those calls was invisible to llm_calls (the persisted history
+        # GET /llm/summary and get_model_cost_comparison read from) and to
+        # any Grafana panel querying beyond the current process's uptime.
+        # Open a short-lived sync session so this call gets the exact same
+        # persistence + Prometheus recording as the db-provided path, with
+        # zero change required at any call site.
         try:
-            from app.llm_observability.cost_estimator import estimate_llm_cost
-            from app.observability.metrics import record_llm_tokens
-            total = (usage.prompt_tokens or 0) + (usage.completion_tokens or 0)
-            cost = estimate_llm_cost(
-                usage.prompt_tokens or 0, usage.completion_tokens or 0, model=settings.GROQ_MODEL
-            )
-            record_llm_tokens(
-                task_name=task_name,
-                model_name=settings.GROQ_MODEL,
-                total_tokens=total,
-                estimated_cost=cost,
-                provider="groq",
-            )
+            from app.db.session import SessionLocal
+            from app.llm_observability.service import log_llm_call_and_print_terminal_summary
+            session = SessionLocal()
+            try:
+                log_llm_call_and_print_terminal_summary(
+                    db=session,
+                    task_name=task_name,
+                    prompt_tokens=usage.prompt_tokens,
+                    completion_tokens=usage.completion_tokens,
+                )
+                session.commit()
+            finally:
+                session.close()
         except Exception:
             pass
 

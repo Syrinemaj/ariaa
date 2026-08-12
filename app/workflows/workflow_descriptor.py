@@ -20,8 +20,8 @@ Falls back to an empty dict on any LLM or network error.
 
 Usage (sync, call via asyncio.to_thread from async contexts):
     from app.workflows.workflow_descriptor import generate_workflow_description
-    from app.ai.groq_client import GroqClient
-    desc = generate_workflow_description(steps, GroqClient(), redis=get_redis())
+    from app.ai.base_client import create_ai_client
+    desc = generate_workflow_description(steps, create_ai_client(), redis=get_redis())
 """
 from __future__ import annotations
 

@@ -16,3 +16,6 @@ from app.models.idempotency import IdempotencyRecord
 from app.models.bulk_batch import BulkBatch, BulkBatchRow
 from app.models.bulk_report import BulkExecutionReport
 from app.models.llm_call import LLMCall
+from app.models.notification import Notification
+from app.models.team import Team
+from app.models.team_member import TeamMember

@@ -1,14 +1,20 @@
-"""ARIA-EVAL: main evaluation harness — runs every case in golden_dataset.json
-through the real pipeline (app/planner/service.py::create_plan_from_instruction),
-scores it with the LLM judge, computes aggregate metrics, and exports a CSV
-for the PFE report.
+"""ARIA-EVAL: main evaluation harness — runs every case in
+golden_dataset/planner_golden_dataset.json through the real pipeline
+(app/planner/service.py::create_plan_from_instruction), scores it with the
+LLM judge, computes aggregate metrics, and exports a CSV for the PFE report.
 
 Must run with EVAL_MODE=true, and against a database reachable at
 settings.DATABASE_URL — in this project that means inside the aria-api
 container (DATABASE_URL's host "postgres" only resolves on the Docker
 network), not on the host machine directly. See evaluation/README.md.
 
-    EVAL_MODE=true python evaluation/run_eval.py
+    EVAL_MODE=true python evaluation/run_scripts/run_planner_eval.py
+
+# ARIA-EVAL: evaluation/ folder restructuring (Phase 2) — this file used to
+# be evaluation/run_eval.py. Moved into run_scripts/; golden_dataset.json,
+# judge.py, metrics.py, tracer.py moved into their own subpackages at the
+# same time — imports and path constants below updated accordingly. No
+# behavior change.
 """
 from __future__ import annotations
 
@@ -21,19 +27,20 @@ from app.ai.groq_client import GroqClient
 from app.db.session import AsyncSessionLocal
 from app.planner.service import create_plan_from_instruction
 from app.rag.embeddings.client import LocalEmbeddingClient
-from evaluation.judge import judge_plan
-from evaluation.metrics import (
+from evaluation.judge.planner_judge import judge_plan
+from evaluation.metrics.planner_metrics import (
     context_precision,
     hit_rate,
     mapping_coverage,
     mrr,
     workflow_conformity,
 )
-from evaluation.tracer import EVAL_MODE, get_tracer, reset_tracer
+from evaluation.tracer.planner_tracer import EVAL_MODE, get_tracer, reset_tracer
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-GOLDEN_DATASET_PATH = os.path.join(_HERE, "golden_dataset.json")
-RESULTS_CSV_PATH = os.path.join(_HERE, "results.csv")
+_RUN_SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_EVAL_ROOT = os.path.dirname(_RUN_SCRIPTS_DIR)
+GOLDEN_DATASET_PATH = os.path.join(_EVAL_ROOT, "golden_dataset", "planner_golden_dataset.json")
+RESULTS_CSV_PATH = os.path.join(_EVAL_ROOT, "results", "results.csv")
 
 # ARIA-EVAL: golden_dataset.json sets "run_id"/"org_id" explicitly per case
 # (Phase 1 — needed so category A/B cases target runs that actually have the
@@ -84,7 +91,7 @@ async def run_eval():
         print(
             "⚠ EVAL_MODE is not set to true — traces will be empty and every "
             "trace-based metric below will read 0%. Run with:\n"
-            "    EVAL_MODE=true python evaluation/run_eval.py\n"
+            "    EVAL_MODE=true python evaluation/run_scripts/run_planner_eval.py\n"
         )
 
     with open(GOLDEN_DATASET_PATH, encoding="utf-8") as f:

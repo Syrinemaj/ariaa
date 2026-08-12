@@ -12,9 +12,9 @@ interface FormErrors {
 }
 
 const FEATURES = [
-  'Rétro-ingénierie des endpoints API avec précision',
-  "Contrôle d'accès par rôle & approbations d'équipe",
-  'Surveillance des sessions en temps réel & alertes de sécurité',
+  'Reverse engineer API endpoints with precision',
+  "Role-based access control & team approvals",
+  'Real-time session monitoring & security alerts',
 ]
 
 const SignUpPage: React.FC = () => {
@@ -32,13 +32,13 @@ const SignUpPage: React.FC = () => {
   const validate = (): boolean => {
     const newErrors: FormErrors = {}
     if (!fullName.trim() || fullName.trim().length < 2)
-      newErrors.full_name = 'Le nom doit contenir au moins 2 caractères.'
+      newErrors.full_name = 'Name must be at least 2 characters long.'
     if (!email.includes('@'))
-      newErrors.email = 'Veuillez entrer une adresse email valide.'
+      newErrors.email = 'Please enter a valid email address.'
     if (password.length < 8)
-      newErrors.password = 'Le mot de passe doit contenir au moins 8 caractères.'
+      newErrors.password = 'Password must be at least 8 characters long.'
     if (password !== confirmPassword)
-      newErrors.confirmPassword = 'Les mots de passe ne correspondent pas.'
+      newErrors.confirmPassword = 'Passwords do not match.'
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -58,16 +58,16 @@ const SignUpPage: React.FC = () => {
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         if (err.status === 422) {
-          setApiError('Veuillez vérifier les informations saisies.')
+          setApiError('Please check the information entered.')
         } else if (err.status === 429) {
-          setApiError('Trop de tentatives. Réessayez dans quelques minutes.')
+          setApiError('Too many attempts. Try again in a few minutes.')
         } else if (err.status === 404) {
-          setApiError('Service indisponible. Vérifiez que le serveur est démarré.')
+          setApiError('Service unavailable. Check that the server is running.')
         } else {
-          setApiError('Une erreur est survenue. Veuillez réessayer.')
+          setApiError('An error occurred. Please try again.')
         }
       } else {
-        setApiError('Erreur réseau. Vérifiez votre connexion.')
+        setApiError('Network error. Check your connection.')
       }
     } finally {
       setLoading(false)
@@ -91,15 +91,14 @@ const SignUpPage: React.FC = () => {
 
         <div className="relative">
           <div className="flex items-center gap-3 mb-16">
-            <img src="/logo.png" alt="ARIA" style={{ height: 30, width: 'auto' }} />
             <span className="text-lg font-semibold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
           </div>
 
           <h1 className="text-4xl font-bold text-white tracking-tight leading-tight mb-4">
-            Demandez l'accès<br />à la plateforme.
+            Request access<br />to the platform.
           </h1>
           <p className="text-sm text-zinc-400 leading-relaxed max-w-[48ch] mb-10">
-            Soumettez votre demande et un manager examinera votre dossier pour vous attribuer un rôle.
+            Submit your request and a manager will review it to assign you a role.
           </p>
 
           <div className="space-y-3.5">
@@ -112,14 +111,13 @@ const SignUpPage: React.FC = () => {
           </div>
         </div>
 
-        <p className="relative text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>© 2026 ARIA · PFE</p>
+        <p className="relative text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>© 2026 ARIA · Final Year Project</p>
       </div>
 
       {/* ── Right form panel ─────────────────────────────── */}
       <div className="flex-1 flex flex-col justify-center px-8 sm:px-14 py-12 min-h-[100dvh] lg:min-h-0" style={{ background: '#0d0f1b' }}>
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-2.5 mb-10">
-          <img src="/logo.png" alt="ARIA" style={{ height: 28, width: 'auto' }} />
           <span className="text-lg font-semibold tracking-tight" style={{ color: '#1E318A' }}>aria</span>
         </div>
 
@@ -129,27 +127,27 @@ const SignUpPage: React.FC = () => {
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                 <CheckCircle2 size={24} style={{ color: '#16a34a' }} />
               </div>
-              <h2 className="text-2xl font-bold tracking-tight mb-2" style={{ color: '#e2e8f0' }}>Demande envoyée</h2>
-              <p className="text-sm mb-5" style={{ color: 'rgba(255,255,255,0.45)' }}>Votre demande de compte a été reçue et est en cours d'examen. Un manager vous assignera un rôle.</p>
+              <h2 className="text-2xl font-bold tracking-tight mb-2" style={{ color: '#e2e8f0' }}>Request sent</h2>
+              <p className="text-sm mb-5" style={{ color: 'rgba(255,255,255,0.45)' }}>Your account request has been received and is under review. A manager will assign you a role.</p>
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                En attente d'approbation
+                Pending approval
               </span>
               <Link to="/" className="text-sm font-medium transition-colors" style={{ color: '#818cf8' }}>
-                Retour à la connexion
+                Back to login
               </Link>
             </div>
           ) : (
             <>
               <div className="mb-6">
-                <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: '#e2e8f0' }}>Créer un compte</h2>
-                <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>Remplissez vos informations pour demander l'accès.</p>
+                <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: '#e2e8f0' }}>Create an account</h2>
+                <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>Fill in your information to request access.</p>
               </div>
 
               {/* Bannière d'information */}
               <div className="flex items-start gap-3 rounded-xl px-4 py-3 mb-5 text-sm" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
                 <Info size={15} style={{ color: '#818cf8', marginTop: 1, flexShrink: 0 }} />
-                <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>Un manager examinera votre demande et vous assignera un rôle avant que vous puissiez accéder à la plateforme.</p>
+                <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>A manager will review your request and assign you a role before you can access the platform.</p>
               </div>
 
               {apiError && (
@@ -162,30 +160,30 @@ const SignUpPage: React.FC = () => {
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 {/* Nom complet */}
                 <div>
-                  <label htmlFor="full_name" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Nom complet</label>
+                  <label htmlFor="full_name" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Full name</label>
                   <div className="relative">
                     <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="full_name" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Prénom Nom" autoComplete="name" className={inputBase} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+                    <input id="full_name" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="First Last" autoComplete="name" className={inputBase} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
                   </div>
                   {errors.full_name && <p className="text-xs text-red-500 mt-1">{errors.full_name}</p>}
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label htmlFor="su-email" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Adresse email</label>
+                  <label htmlFor="su-email" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Email address</label>
                   <div className="relative">
                     <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="su-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.com" autoComplete="email" className={inputBase} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+                    <input id="su-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" className={inputBase} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
                   </div>
                   {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
                 </div>
 
                 {/* Mot de passe */}
                 <div>
-                  <label htmlFor="su-password" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Mot de passe</label>
+                  <label htmlFor="su-password" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Password</label>
                   <div className="relative">
                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="su-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 caractères" autoComplete="new-password" className={`${inputBase} pr-10`} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+                    <input id="su-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" autoComplete="new-password" className={`${inputBase} pr-10`} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
                     <button type="button" className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer transition-colors" onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
@@ -195,10 +193,10 @@ const SignUpPage: React.FC = () => {
 
                 {/* Confirmer le mot de passe */}
                 <div>
-                  <label htmlFor="su-confirm" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Confirmer le mot de passe</label>
+                  <label htmlFor="su-confirm" className="block text-sm font-medium mb-1.5" style={{ color: '#94a3b8' }}>Confirm password</label>
                   <div className="relative">
                     <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                    <input id="su-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Répéter le mot de passe" autoComplete="new-password" className={`${inputBase} pr-10`} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+                    <input id="su-confirm" type={showConfirm ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Repeat password" autoComplete="new-password" className={`${inputBase} pr-10`} style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
                     <button type="button" className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer transition-colors" onClick={() => setShowConfirm(!showConfirm)}>
                       {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
@@ -222,15 +220,15 @@ const SignUpPage: React.FC = () => {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
-                      Envoi en cours…
+                      Sending…
                     </>
-                  ) : 'Demander l\'accès'}
+                  ) : 'Request access'}
                 </button>
               </form>
 
               <p className="text-sm mt-5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                Déjà un compte ?{' '}
-                <Link to="/" className="font-medium transition-colors" style={{ color: '#818cf8' }}>Se connecter</Link>
+                Already have an account?{' '}
+                <Link to="/" className="font-medium transition-colors" style={{ color: '#818cf8' }}>Log in</Link>
               </p>
             </>
           )}

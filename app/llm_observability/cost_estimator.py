@@ -10,6 +10,8 @@ def active_model() -> str:
     """Model name for the currently configured provider (settings.AI_PROVIDER)."""
     if settings.AI_PROVIDER == "groq":
         return settings.GROQ_MODEL
+    if settings.AI_PROVIDER == "bedrock":
+        return settings.BEDROCK_MODEL
     return settings.AZURE_OPENAI_MODEL
 
 

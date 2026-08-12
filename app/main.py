@@ -9,6 +9,7 @@ Fix 14.3: setup_logging() configures structlog JSON output before first log.
 """
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
@@ -28,10 +29,12 @@ from app.api.automation import router as automation_router
 from app.api.bulk import router as bulk_router
 from app.api.jobs import router as jobs_router
 from app.api.maintenance import router as maintenance_router
+from app.api.notifications import router as notifications_router
 from app.api.openapi import router as openapi_router
 from app.api.rag import router as rag_router
 from app.api.registry import router as registry_router
 from app.api.reports import router as reports_router
+from app.api.teams import router as teams_router
 from app.api.upload import router as upload_router
 from app.api.users import router as users_router
 from app.core.config import settings
@@ -51,15 +54,11 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ── AI completion client (Groq primary, Azure legacy) ───────────────────
-    if settings.AI_PROVIDER == "azure":
-        from app.ai.azure_openai_client import AzureOpenAIClient
-        app.state.ai_client = AzureOpenAIClient()
-        logger.info("ai.provider.selected", provider="azure", model=settings.AZURE_OPENAI_MODEL)
-    else:
-        from app.ai.groq_client import GroqClient
-        app.state.ai_client = GroqClient()
-        logger.info("ai.provider.selected", provider="groq", model=settings.GROQ_MODEL)
+    # ── AI completion client (Bedrock primary, Groq/Azure alternatives) ─────
+    from app.ai.base_client import create_ai_client
+    from app.llm_observability.cost_estimator import active_model
+    app.state.ai_client = create_ai_client()
+    logger.info("ai.provider.selected", provider=settings.AI_PROVIDER, model=active_model())
 
     # ── Embedding client (always local sentence-transformers) ────────────────
     # Loaded lazily on first call — no startup latency penalty.
@@ -85,12 +84,7 @@ async def lifespan(app: FastAPI):
 
     # ── Prometheus metrics ──────────────────────────────────────────────────
     from app.observability.metrics import initialize_metrics
-    _metric_model = (
-        settings.GROQ_MODEL
-        if settings.AI_PROVIDER == "groq"
-        else settings.AZURE_OPENAI_MODEL
-    )
-    initialize_metrics(model_name=_metric_model, provider=settings.AI_PROVIDER)
+    initialize_metrics(model_name=active_model(), provider=settings.AI_PROVIDER)
 
     # ── Startup AI usage summary ────────────────────────────────────────────
     from app.llm_observability.service import print_current_ai_usage_today
@@ -100,10 +94,15 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # ── Real AWS billed cost sync (Cost Explorer → Grafana) ─────────────────
+    from app.observability.aws_cost_sync import run_aws_cost_sync_loop
+    aws_cost_sync_task = asyncio.create_task(run_aws_cost_sync_loop())
+
     logger.info("aria.startup", otel_enabled=settings.OTEL_ENABLED)
 
     yield
 
+    aws_cost_sync_task.cancel()
     await app.state.redis.aclose()
     logger.info("aria.shutdown")
 
@@ -187,6 +186,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(teams_router)
 app.include_router(upload_router)
 app.include_router(registry_router)
 app.include_router(openapi_router)
@@ -197,6 +197,7 @@ app.include_router(bulk_router)
 app.include_router(approvals_router)
 app.include_router(audit_router)
 app.include_router(maintenance_router)
+app.include_router(notifications_router)
 app.include_router(jobs_router)
 app.include_router(llm_router)
 

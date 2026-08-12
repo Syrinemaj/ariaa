@@ -9,14 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.base_client import StructuredResponseError
 from app.audit.service import log_audit_event
-from app.auth.dependencies import require_admin_or_operator
+from app.auth.dependencies import get_current_user_team_ids, require_admin_or_operator
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.automation.models import AutomationExecutionRequest
 from app.automation.service import execute_automation
 from app.db.session import get_db
+from app.models.analysis_run import AnalysisRun
 from app.models.user import User, UserRole
 from app.monitoring.service import log_plan_generated, log_plan_validated
+from app.notifications.service import create_approval_required_notification_async
 from app.core.logging import get_logger
 from app.planner.models import AutomationPlan
 from app.planner.service import create_plan_from_instruction
@@ -25,6 +27,8 @@ from app.registry.repository import get_run_by_id
 from app.security.execution_guard import ExecutionGuardError
 from app.security.pinned_dns_transport import SSRFError
 from app.security.ssrf_guard import create_safe_client, validate_target_url
+from app.security.tenancy import team_visibility_clause
+from app.teams.service import resolve_single_team_id
 
 router = APIRouter(prefix="/automation", tags=["Automation"])
 logger = get_logger(__name__)
@@ -192,7 +196,8 @@ async def plan_from_workflow(
     from app.models.workflow import WorkflowModel
     from app.models.endpoint import Endpoint
 
-    # BUG-007 IDOR: verify workflow belongs to the caller's org
+    # BUG-007 IDOR: verify workflow belongs to the caller's org (+ team scoping)
+    team_ids = await get_current_user_team_ids(current_user, db)
     res = await db.execute(
         select(WorkflowModel)
         .join(AnalysisRun, AnalysisRun.id == WorkflowModel.run_id)
@@ -200,6 +205,7 @@ async def plan_from_workflow(
         .where(
             WorkflowModel.id == body.workflow_id,
             AnalysisRun.org_id == current_user.org_id,
+            team_visibility_clause(AnalysisRun, current_user, team_ids),
         )
     )
     wf = res.scalar_one_or_none()
@@ -364,6 +370,22 @@ async def execute_automation_plan(
         raise HTTPException(status_code=403, detail="Only admin can run real execution.")
 
     if not body.dry_run and not body.approval_granted:
+        from sqlalchemy import select
+
+        analysis_run_result = await db.execute(
+            select(AnalysisRun).where(AnalysisRun.id == body.plan.run_id)
+        )
+        analysis_run = analysis_run_result.scalar_one_or_none()
+        await create_approval_required_notification_async(
+            db=db,
+            requester=current_user,
+            resource_type="analysis_run",
+            resource_id=body.plan.run_id,
+            har_file_name=analysis_run.file_name if analysis_run else None,
+        )
+        # Commit now — we're about to raise, and get_db() rolls back the
+        # session on exception, which would otherwise drop this notification.
+        await db.commit()
         raise HTTPException(status_code=403, detail="Real execution requires explicit approval.")
 
     execution_request = AutomationExecutionRequest(
@@ -381,6 +403,7 @@ async def execute_automation_plan(
             approval_granted=body.approval_granted,
             org_id=current_user.org_id,
             created_by_user_id=current_user.id,
+            team_id=await resolve_single_team_id(db, current_user.id),
         )
     except ExecutionGuardError as e:
         raise HTTPException(status_code=403, detail=str(e))

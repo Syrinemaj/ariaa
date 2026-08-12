@@ -17,6 +17,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.json_safety import strip_null_bytes
 from app.models.analysis_run import AnalysisRun
 from app.models.endpoint import Endpoint
 from app.models.schema import EndpointSchema
@@ -35,6 +36,7 @@ async def create_analysis_run(
     org_id: str = "",
     created_by_user_id: Optional[str] = None,
     status: str = "processing",
+    team_id: Optional[str] = None,
 ) -> AnalysisRun:
     run = AnalysisRun(
         file_name=file_name,
@@ -44,6 +46,7 @@ async def create_analysis_run(
         org_id=org_id,
         created_by_user_id=created_by_user_id,
         status=status,
+        team_id=team_id,
     )
     db.add(run)
     await db.flush()
@@ -61,12 +64,18 @@ async def save_endpoint_schema_result(
         run_id=run_id,
         method=result.method,
         path=result.path,
-        canonical_key=build_registry_key(org_id, result.method, result.path),
+        # NOT build_registry_key(org_id, result.method, result.path) — that
+        # recomputes the key from method+path alone and would silently drop
+        # the #dataSectionName-style action discriminator that
+        # build_canonical_key() may have appended (see canonicalizer.py),
+        # merging distinct business actions multiplexed onto one URL back
+        # into a single row and risking a duplicate-key insert.
+        canonical_key=f"{org_id}:{result.canonical_key}",
         source_count=result.examples_count,
         business_domain=result.metadata.get("business_domain"),
         business_action=result.metadata.get("business_action"),
         path_parameters=[p.model_dump() for p in result.path_parameters],
-        metadata_json=result.metadata,
+        metadata_json=strip_null_bytes(result.metadata),
         org_id=org_id,
     )
     db.add(endpoint)
@@ -74,8 +83,8 @@ async def save_endpoint_schema_result(
 
     schema = EndpointSchema(
         endpoint_id=endpoint.id,
-        request_schema=result.request_schema.model_dump() if result.request_schema else None,
-        response_schema=result.response_schema.model_dump() if result.response_schema else None,
+        request_schema=strip_null_bytes(result.request_schema.model_dump()) if result.request_schema else None,
+        response_schema=strip_null_bytes(result.response_schema.model_dump()) if result.response_schema else None,
         status_codes=result.status_codes,
         auth_required=result.auth.auth_required,
         auth_type=result.auth.auth_type,
@@ -101,7 +110,7 @@ async def save_workflow(
         name=workflow.name,
         business_domain=workflow.business_domain,
         confidence=workflow.confidence,
-        metadata_json=workflow.metadata,
+        metadata_json=strip_null_bytes(workflow.metadata),
     )
     db.add(workflow_model)
     await db.flush()
@@ -115,7 +124,7 @@ async def save_workflow(
             canonical_key=build_registry_key(org_id, step.method, step.path),
             action=step.action,
             depends_on=step.depends_on,
-            metadata_json=step.metadata,
+            metadata_json=strip_null_bytes(step.metadata),
         )
         db.add(step_model)
 

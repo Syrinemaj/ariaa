@@ -1,0 +1,16 @@
+id,category,instruction,rag_triggered,steps_count,has_field_mapping,has_loop,plan_confidence,intent_confidence,correctness,faithfulness,completeness,mapping,justification
+tc_001,A,Crée 200 employés depuis ce CSV,True,1,True,True,0.9,0.9,5,5,4,5,"Le plan généré correspond parfaitement à ce qui était attendu, avec les étapes et le mapping de champs corrects, mais pourrait inclure des étapes implicites supplémentaires."
+tc_002,A,Importe les employés depuis le fichier joint,True,1,True,True,0.92,0.85,5,5,4,5,"Le plan généré correspond parfaitement à ce qui était attendu, avec les étapes et le mapping de champs appropriés."
+tc_003,A,Ajoute les nouveaux salariés en masse depuis le CSV,True,1,True,True,0.9,0.9,5,5,4,5,"Le plan généré correspond parfaitement aux attentes, avec les étapes et le mapping attendus, mais pourrait inclure des étapes implicites supplémentaires."
+tc_004,A,Charge les employés depuis le fichier Excel,True,1,True,True,0.9,0.8,5,5,4,5,"Le plan généré correspond parfaitement aux attentes, avec les étapes et les mappings attendus, mais pourrait inclure des étapes implicites supplémentaires."
+tc_005,A,Crée les employés listés dans ce document,True,1,True,True,0.9,0.8,5,5,4,5,"Le plan généré correspond parfaitement aux attentes, avec les étapes et les mappings de champs corrects, mais pourrait inclure des étapes implicites supplémentaires."
+tc_006,B,Mettre à jour le salaire de l'employé 42,True,1,False,False,0.95,0.85,5,5,5,5,"Le plan généré correspond parfaitement à ce qui était attendu, avec les étapes et les mappings appropriés."
+tc_007,B,Créer un employé Bob Martin,True,1,False,False,0.9,0.8,5,5,3,5,"Le plan généré correspond parfaitement à ce qui était attendu, mais il pourrait inclure des étapes implicites supplémentaires pour une meilleure complétude."
+tc_008,B,Récupérer la liste des employés actifs,True,1,False,False,0.95,0.85,5,5,5,5,Le plan généré correspond parfaitement à ce qui était attendu.
+tc_009,B,Supprimer le produit prd_999 du catalogue,True,1,False,False,0.99,0.85,5,5,5,5,Le plan généré correspond parfaitement à l'instruction et aux attentes.
+tc_010,B,Mettre à jour les informations de l'utilisateur usr_123,True,1,False,False,0.95,0.85,5,5,5,5,Le plan généré correspond parfaitement à ce qui était attendu.
+tc_011,C,bonjour,,,,,,0.0,5,5,5,5,Le plan généré correspond parfaitement à ce qui était attendu.
+tc_012,C,test,,,,,,0.0,5,5,5,5,Le plan généré correspond parfaitement aux attentes.
+tc_013,C,je ne sais pas quoi faire,,,,,,0.0,5,5,5,5,"Le plan généré correspond parfaitement à ce qui était attendu, avec des étapes et un mapping de champs cohérents."
+tc_014,C,aaaaaaaaa,,,,,,0.0,5,5,5,5,Le plan généré correspond parfaitement à ce qui était attendu.
+tc_015,C,quelle heure est-il,,,,,,0.0,5,5,5,5,"Le plan généré correspond parfaitement à ce qui était attendu, avec des étapes et un mapping de champs cohérents."

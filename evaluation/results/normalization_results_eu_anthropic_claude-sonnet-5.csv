@@ -1,0 +1,6 @@
+id,category,method,id_hits,id_total,fixed_hits,fixed_total,false_positives,name_hits,name_total,consistency_violations,consistency_positions,passed,leaked_names,sample_templates,gate_expected_triggered,gate_actual_triggered,gate_match,estimated_cost_usd,call_count
+d03_shop_cart_item,nested_multilevel,GET,6,6,9,9,0,6,6,0,2,True,,/shop/carts/{cart_id}/items/{resource_id},,,,0.006072,1
+e03_single_prefixed_unknown_prefix,single_observation,GET,1,1,2,2,0,0,1,0,1,True,,/api/widgets/{widget_id},True,True,True,0.002613,1
+f01_unknown_prefix_repeated_3word,unknown_prefix,GET,3,3,6,6,0,3,3,0,1,True,,/api/widgets/{resource_id},,,,0.004704,1
+f02_unknown_prefix_2part,unknown_prefix,GET,2,2,4,4,0,2,2,0,1,True,,/api/gadgets/{resource_id},,,,0.004869,1
+k01_group_llm_real_trigger,confidence_gate_boundary,GET,2,2,4,4,0,0,0,0,1,True,,/hr/positions/{position_id},True,True,True,0.004869,1

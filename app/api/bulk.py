@@ -29,10 +29,14 @@ from app.models.approval import AutomationApproval
 from app.models.automation import AutomationRun
 from app.models.bulk_validation import BulkValidationRun
 from app.models.data_file import DataFile
+from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
+from app.notifications.service import create_approval_required_notification, create_bulk_launch_notification
 from app.planner.models import AutomationPlan
 from app.security.ssrf_guard import validate_target_url
+from app.security.tenancy import team_visibility_clause
 from app.security.upload_limits import save_bulk_file_with_limit
+from app.teams.service import resolve_single_team_id_sync
 
 router = APIRouter(prefix="/bulk", tags=["Bulk Automation"])
 
@@ -45,11 +49,17 @@ _EXEC_LOCK_TTL = 30
 
 # ── Ownership helpers ─────────────────────────────────────────────────────────
 
-def _assert_analysis_run_org(db: Session, analysis_run_id: str, org_id: str) -> AnalysisRun:
-    """Raise 404 if the AnalysisRun doesn't exist or belongs to a different org."""
+def _user_team_ids(db: Session, user_id: str) -> list:
+    return [row[0] for row in db.query(TeamMember.team_id).filter(TeamMember.user_id == user_id).all()]
+
+
+def _assert_analysis_run_org(db: Session, analysis_run_id: str, current_user: User) -> AnalysisRun:
+    """Raise 404 if the AnalysisRun doesn't exist, belongs to a different org, or is
+    outside the caller's team(s)."""
     run = db.query(AnalysisRun).filter(
         AnalysisRun.id == analysis_run_id,
-        AnalysisRun.org_id == org_id,
+        AnalysisRun.org_id == current_user.org_id,
+        team_visibility_clause(AnalysisRun, current_user, _user_team_ids(db, current_user.id)),
     ).first()
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
@@ -67,11 +77,13 @@ def _assert_data_file_org(db: Session, data_file_id: str, org_id: str) -> DataFi
     return df
 
 
-def _assert_automation_run_org(db: Session, automation_run_id: str, org_id: str) -> AutomationRun:
-    """Raise 404 if the AutomationRun doesn't exist or belongs to a different org."""
+def _assert_automation_run_org(db: Session, automation_run_id: str, current_user: User) -> AutomationRun:
+    """Raise 404 if the AutomationRun doesn't exist, belongs to a different org, or is
+    outside the caller's team(s)."""
     run = db.query(AutomationRun).filter(
         AutomationRun.id == automation_run_id,
-        AutomationRun.org_id == org_id,
+        AutomationRun.org_id == current_user.org_id,
+        team_visibility_clause(AutomationRun, current_user, _user_team_ids(db, current_user.id)),
     ).first()
     if not run:
         raise HTTPException(status_code=404, detail="Automation run not found")
@@ -156,7 +168,7 @@ async def upload_data_file(
         raise HTTPException(status_code=400, detail="Missing file name")
 
     # BUG-008: verify analysis_run belongs to the caller's org before associating
-    _assert_analysis_run_org(db, analysis_run_id, current_user.org_id)
+    _assert_analysis_run_org(db, analysis_run_id, current_user)
 
     # BUG-003 (path traversal): never use the client-supplied filename as a path
     safe_name = f"{uuid4()}{Path(file.filename).suffix.lower()}"
@@ -191,7 +203,7 @@ async def suggest_mapping(
     current_user: User = Depends(require_admin_or_operator),
 ):
     # BUG-007: verify both resources belong to the caller's org
-    _assert_analysis_run_org(db, request.analysis_run_id, current_user.org_id)
+    _assert_analysis_run_org(db, request.analysis_run_id, current_user)
     _assert_data_file_org(db, request.data_file_id, current_user.org_id)
 
     try:
@@ -222,7 +234,7 @@ async def validate_bulk(
     current_user: User = Depends(require_admin_or_operator),
 ):
     # BUG-007: org isolation
-    _assert_analysis_run_org(db, request.analysis_run_id, current_user.org_id)
+    _assert_analysis_run_org(db, request.analysis_run_id, current_user)
     _assert_data_file_org(db, request.data_file_id, current_user.org_id)
 
     result = validate_bulk_data(
@@ -288,7 +300,9 @@ async def execute_bulk(
     validate_target_url(body.base_url)
 
     # BUG-007: verify the data file belongs to the caller's org
-    _assert_data_file_org(db, body.data_file_id, current_user.org_id)
+    data_file = _assert_data_file_org(db, body.data_file_id, current_user.org_id)
+    analysis_run = db.query(AnalysisRun).filter(AnalysisRun.id == data_file.analysis_run_id).first()
+    har_file_name = analysis_run.file_name if analysis_run else None
 
     if not body.dry_run and current_user.role != UserRole.ADMIN:
         raise HTTPException(
@@ -313,6 +327,16 @@ async def execute_bulk(
     # (client-side approval_granted=true is not sufficient on its own)
     if not body.dry_run:
         if not body.approval_granted:
+            create_approval_required_notification(
+                db=db,
+                requester=current_user,
+                resource_type="data_file",
+                resource_id=body.data_file_id,
+                har_file_name=har_file_name,
+            )
+            # Commit now — we're about to raise, and get_sync_db() rolls back
+            # the session on exception, which would otherwise drop this notification.
+            db.commit()
             raise HTTPException(
                 status_code=400,
                 detail="Real execution requires approval_granted=true.",
@@ -323,6 +347,14 @@ async def execute_bulk(
                 AutomationApproval.status == "approved",
             ).first()
             if not db_approval:
+                create_approval_required_notification(
+                    db=db,
+                    requester=current_user,
+                    resource_type="data_file",
+                    resource_id=body.data_file_id,
+                    har_file_name=har_file_name,
+                )
+                db.commit()  # see comment above
                 raise HTTPException(
                     status_code=403,
                     detail="No approved approval record found for this automation run. "
@@ -349,6 +381,15 @@ async def execute_bulk(
         metadata={"dry_run": body.dry_run, "batch_size": body.batch_size},
     )
 
+    # Notify the admins of the operator's org ("team") that a bulk run just launched.
+    if current_user.role == UserRole.OPERATOR:
+        create_bulk_launch_notification(
+            db=db,
+            operator=current_user,
+            resource_id=body.data_file_id,
+            har_file_name=har_file_name,
+        )
+
     try:
         result = await execute_valid_rows_in_batches(
             db=db,
@@ -361,8 +402,10 @@ async def execute_bulk(
             allow_partial_execution=body.allow_partial_execution,
             org_id=current_user.org_id,
             created_by_user_id=current_user.id,
+            team_id=resolve_single_team_id_sync(db, current_user.id),
             resume=body.resume,
             existing_automation_run_id=body.existing_automation_run_id,
+            har_file_name=har_file_name,
         )
     except (ValueError, ApprovalRequiredError) as e:
         redis.delete(lock_key)   # release lock on error
@@ -389,7 +432,7 @@ async def resume_bulk(
     validate_target_url(request.base_url)
 
     # BUG-007: verify automation_run belongs to the caller's org
-    _assert_automation_run_org(db, request.automation_run_id, current_user.org_id)
+    _assert_automation_run_org(db, request.automation_run_id, current_user)
     _assert_data_file_org(db, request.data_file_id, current_user.org_id)
 
     return resume_job(
@@ -412,7 +455,7 @@ async def get_bulk_report(
     current_user: User = Depends(require_admin_or_operator),
 ):
     # BUG-007: verify ownership before returning the report
-    _assert_automation_run_org(db, automation_run_id, current_user.org_id)
+    _assert_automation_run_org(db, automation_run_id, current_user)
 
     try:
         return build_bulk_report(db=db, automation_run_id=automation_run_id)
@@ -427,7 +470,7 @@ async def download_row_errors_csv(
     current_user: User = Depends(require_admin_or_operator),
 ):
     # BUG-007: verify ownership
-    _assert_automation_run_org(db, automation_run_id, current_user.org_id)
+    _assert_automation_run_org(db, automation_run_id, current_user)
 
     try:
         report = build_bulk_report(db=db, automation_run_id=automation_run_id)

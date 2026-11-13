@@ -10,6 +10,15 @@ jobs:
   backend-tests:
     name: Backend — tests unitaires (mockés, sans service externe)
     runs-on: ubuntu-latest
+    # Aucun service externe n'est réellement appelé par ces tests (tout est
+    # mocké), mais app.core.config.Settings valide ses champs requis dès
+    # l'import du module — ces valeurs ne servent qu'à satisfaire cette
+    # validation, pas à ouvrir une vraie connexion.
+    env:
+      DATABASE_URL: postgresql+psycopg2://aria:aria_ci@localhost:5432/aria
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET_KEY: ci-test-secret-key-not-for-production-use-only
+      CONNECTION_ENCRYPTION_KEY: o4rrw-zrBakqdbvk_gbtR0VooTEZwycFivNnVih_JuI=
     steps:
       - uses: actions/checkout@v4
 
@@ -60,6 +69,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg2://aria:aria_ci@localhost:5432/aria
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET_KEY: ci-test-secret-key-not-for-production-use-only
+      CONNECTION_ENCRYPTION_KEY: o4rrw-zrBakqdbvk_gbtR0VooTEZwycFivNnVih_JuI=
     steps:
       - uses: actions/checkout@v4
 

@@ -41,13 +41,14 @@ PROM --> WORKER : scraping métriques
 GRAF --> PROM : requêtes de tableaux de bord
 
 note right of API
-  docker-compose.prod.yml : seulement
-  4 services applicatifs (api, worker,
-  postgres, redis) — le frontend est
-  construit dans une étape intermédiaire
-  de l'image API (FROM node:20-slim AS
-  frontend-builder) puis servi en statique
-  par l'image Python finale.
+  Déploiement réel : CI GitHub Actions
+  (.github/workflows/ci.yml) construit
+  et publie les images api/worker sur
+  ghcr.io à chaque push sur main.
+  Aucun environnement de production
+  n'est provisionné dans ce projet —
+  la CI publie des artefacts prêts à
+  être déployés, elle ne déploie pas.
 end note
 
 @enduml

@@ -1,0 +1,13 @@
+case_id,strata,difficulty,method,path,predicted_domain,predicted_action,predicted_tags,confidence,summary,error
+eu_001,confirm_existing,easy,PATCH,/api/v1/employees/{id}/salary,employees,update_salary,employees; salary; compensation; update,0.9,Updates an employee's salary information in the system.,
+eu_002,refine_wrong_existing,hard,POST,/api/v1/billing/create,billing,create_invoice,billing; invoice; create; payment; customer,0.9,Creates a new billing invoice for a customer with a specified amount and due date.,
+eu_003,infer_from_null,medium,POST,/api/v1/orders,ecommerce,create_order,orders; ecommerce; checkout; purchases,0.9,Creates a new order for a customer with specified items.,
+eu_004,sparse_schema_low_confidence,hard,GET,/api/v2/x/1,,,,,,bad_output_format
+eu_005,confirm_existing,easy,DELETE,/api/v1/products/{id},products,delete,products; delete; catalog; inventory,0.9,Deletes a specific product from the system.,
+eu_006,refine_wrong_existing,hard,PATCH,/hr/api/leave-requests/{id},employees,update,leave_requests; hr; approval; status_update,0.9,Updates the status of an employee's leave request to either approved or rejected.,
+eu_007,infer_from_null,medium,GET,/api/v1/payments/{id},payments,retrieve_payment,payments; retrieve; transaction; details,0.9,Retrieves detailed information about a specific payment transaction.,
+eu_008,sparse_schema_low_confidence,hard,POST,/svc/op,,,,,,bad_output_format
+eu_009,confirm_existing,medium,POST,/api/v1/auth/sessions,auth,authenticate,sessions; login; authentication; tokens,0.95,Creates a new user session by verifying login credentials and returning an access token.,
+eu_010,refine_wrong_existing,hard,POST,/api/v2/do,project_management,archive_project,project; archive; status_update; management,0.85,This endpoint archives or unarchives a project based on the archived status provided in the request.,
+eu_011,infer_from_null,medium,GET,/hr/api/departments/{id}/employees,Human Resources,List Department Employees,departments; employees; hr; directory; listing,0.85,Retrieves a list of employees who work in a specific department.,
+eu_012,confirm_existing,easy,POST,/api/v1/contracts,contracts,create,contracts; employment; create; hr,0.9,Creates a new employment contract for an employee with specified terms and start date.,

@@ -1,0 +1,58 @@
+@startuml Diagramme_sequenceBulkGouvernance
+!theme plain
+
+actor Opérateur
+participant "Frontend\n(BulkPage)" as FE
+participant "POST /bulk/execute\n(app/api/bulk.py)" as API
+participant "check_execution_policy\n(app/governance/policy_engine.py)" as Policy
+participant "_resolve_bulk_governance_and_approval" as Resolve
+database "PostgreSQL" as PG
+queue "Redis (broker, queue execution)" as Broker
+participant "Worker Celery\n(batch_executor.py)" as Worker
+participant "RedisCircuitBreaker\n(app/resilience/circuit_breaker.py)" as CB
+participant "Système cible" as Target
+
+Opérateur -> FE : lance l'exécution bulk (fichier validé)
+FE -> API : POST /bulk/execute {data_file_id, plan, connection_id}
+API -> Policy : check_execution_policy(plan, policy,\nforbidden_rules, connection.environment)
+Policy -> Policy : compute_plan_risk_score(plan) = max(scores étapes)
+Policy -> Policy : _check_forbidden_rules /\n_check_environment_policy /\n_check_risk_threshold
+Policy --> API : PolicyResult(decision, risk_score)
+
+alt decision == BLOCK
+  API --> FE : 403 — exécution bloquée (raisons)
+else
+  API -> Resolve : needs_approval = decision==REQUIRE_APPROVAL\nOR current_user.role != ADMIN
+  alt needs_approval
+    API -> PG : INSERT AutomationRun(status=pending_approval)
+    API -> PG : INSERT AutomationApproval(status=pending)
+    API --> FE : en attente d'approbation admin
+  else
+    API -> PG : INSERT AutomationRun(status=running)
+    API -> Broker : enqueue lots de 50 lignes\n(BULK_BATCH_SIZE)
+    API --> FE : 202 Accepted {job_id}
+  end
+end
+
+Broker -> Worker : dépile un lot
+Worker -> CB : is_request_allowed(endpoint) ?
+alt disjoncteur ouvert
+  Worker -> Worker : lot mis en attente
+else disjoncteur fermé/semi-ouvert
+  Worker -> Worker : generate_idempotency_key(org, workflow, endpoint, champs métier)
+  Worker -> PG : vérifie IdempotencyRecord (contrainte de non-conflit)
+  Worker -> Target : appel HTTP (idempotent)\n(limite globale 10 req/s, Redis)
+  Target --> Worker : 2xx / 409 / erreur
+  alt 409 doublon
+    Worker -> Worker : find_existing_record()\n— résolution si correspondance unique
+  else échec réel
+    Worker -> CB : enregistre un échec\n(ouverture après 5 échecs consécutifs)
+  end
+  Worker -> Worker : sanitize_payload()\navant journalisation
+  Worker -> PG : INSERT AutomationStepLog (payloads sanitisés)
+end
+
+Worker -> PG : agrège BulkExecutionReport\n(succès/échecs/doublons résolus)
+Worker -> PG : UPDATE AutomationRun.status\n(success / partial_success / failed / cancelled)
+
+@enduml

@@ -66,6 +66,8 @@ class TestIdempotencyService:
             idempotency_key="key-1",
             endpoint_key="ep",
             org_id="org-1",
+            automation_run_id="run-1",
+            row_index=0,
         )
         assert result is True
 
@@ -84,6 +86,8 @@ class TestIdempotencyService:
             idempotency_key="key-1",
             endpoint_key="ep",
             org_id="org-1",
+            automation_run_id="run-1",
+            row_index=0,
         )
         assert result is False  # duplicate detected
 

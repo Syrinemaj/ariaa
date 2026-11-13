@@ -2,7 +2,7 @@
 LLM usage & benchmark endpoints.
 
 GET  /llm/summary          — lifetime totals + today summary (admin)
-GET  /llm/compare-models   — lifetime usage projected onto Groq/Bedrock-Claude pricing
+GET  /llm/compare-models   — lifetime usage projected onto every priced Bedrock model
 GET  /llm/benchmark/tasks  — per-task aggregates with estimation accuracy
 GET  /llm/benchmark/daily  — daily token/cost timeline (last N days)
 GET  /llm/high-token       — most expensive individual calls
@@ -105,10 +105,10 @@ def compare_models(
     current_user: User = Depends(require_admin),
 ):
     """
-    Project lifetime token usage onto every priced model (current Groq
-    model vs. Amazon Bedrock's Claude Haiku 4.5 / Sonnet 5 / Opus 4.8) so
-    you can see what switching provider would actually cost, based on real
-    volume rather than a guess. Cheapest model first in `projected_by_model`.
+    Project lifetime token usage onto every priced Bedrock model (current
+    model vs. the other Nova/Claude/DeepSeek candidates) so you can see
+    what switching model would actually cost, based on real volume rather
+    than a guess. Cheapest model first in `projected_by_model`.
     """
     return get_model_cost_comparison(db)
 

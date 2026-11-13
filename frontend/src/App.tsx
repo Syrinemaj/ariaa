@@ -23,6 +23,9 @@ import BulkPage from './pages/BulkPage'
 import ApprovalsPage from './pages/ApprovalsPage'
 import ReportsPage from './pages/ReportsPage'
 import UsersPage from './pages/UsersPage'
+import AuditLogPage from './pages/AuditLogPage'
+import GovernancePage from './pages/GovernancePage'
+import ConnectionsPage from './pages/ConnectionsPage'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
   state = { error: null }
@@ -84,6 +87,12 @@ function AppRoutes() {
         element={<RequireRole allowedRoles={ADMIN_ONLY}><ApprovalsPage /></RequireRole>} />
       <Route path="/users"
         element={<RequireRole allowedRoles={ADMIN_ONLY}><UsersPage /></RequireRole>} />
+      <Route path="/audit-log"
+        element={<RequireRole allowedRoles={ADMIN_ONLY}><AuditLogPage /></RequireRole>} />
+      <Route path="/governance"
+        element={<RequireRole allowedRoles={ADMIN_ONLY}><GovernancePage /></RequireRole>} />
+      <Route path="/connections"
+        element={<RequireRole allowedRoles={ADMIN_ONLY}><ConnectionsPage /></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

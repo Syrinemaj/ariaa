@@ -1,0 +1,124 @@
+@startuml ARIA_Classes_Simplifie
+skinparam classAttributeIconSize 0
+hide circle
+hide methods
+
+class Organisation {
+  nom
+}
+
+class Equipe {
+  nom
+}
+
+class Utilisateur {
+  nom
+  email
+  rôle : {ADMIN, OPERATOR}
+  actif : booléen
+}
+
+class AnalyseRun {
+  nomFichier
+  statut
+  dateAnalyse
+}
+
+class Endpoint {
+  méthode
+  chemin
+  domaineMétier
+  actionMétier
+}
+
+class ProcessusMetier {
+  nom
+  domaineMétier
+  niveauConfiance
+  niveauRisque
+}
+
+class EtapeProcessus {
+  ordre
+}
+
+class PlanAutomatisation {
+  instruction
+  workflowNom
+  nécessiteApprobation
+}
+
+class EtapePlan {
+  ordre
+  méthode
+  mappingChamps
+}
+
+class FichierDonnees {
+  nomFichier
+  type : {csv, excel}
+  nombreLignes
+}
+
+class LigneDonnees {
+  index
+  statut : {en_attente, valide, invalide, traitée}
+}
+
+class Execution {
+  statut
+  dateDébut
+  modeSimulation : booléen
+}
+
+class Approbation {
+  statut : {en_attente, approuvée, refusée}
+  commentaire
+  dateDécision
+}
+
+class RapportExecution {
+  succès
+  échecs
+  détailErreur
+}
+
+class Notification {
+  type
+  lu : booléen
+}
+
+class JournalAudit {
+  action
+  ressource
+  date
+}
+
+Organisation "1" -- "*" Utilisateur
+Organisation "1" -- "*" Equipe
+Equipe "*" -- "*" Utilisateur
+Organisation "1" -- "*" AnalyseRun
+Utilisateur "1" -- "*" AnalyseRun : lance
+
+AnalyseRun "1" -- "*" Endpoint
+AnalyseRun "1" -- "*" ProcessusMetier
+ProcessusMetier "1" -- "*" EtapeProcessus
+EtapeProcessus "*" -- "1" Endpoint
+
+AnalyseRun "1" -- "*" PlanAutomatisation
+Utilisateur "1" -- "*" PlanAutomatisation : formule
+PlanAutomatisation "1" -- "*" EtapePlan
+EtapePlan "*" -- "1" Endpoint
+
+AnalyseRun "1" -- "*" FichierDonnees
+FichierDonnees "1" -- "*" LigneDonnees
+
+PlanAutomatisation "1" -- "*" Execution
+Execution "1" -- "0..1" Approbation
+Utilisateur "1" -- "*" Approbation : décide
+Execution "1" -- "*" RapportExecution
+
+Utilisateur "1" -- "*" Notification
+Utilisateur "1" -- "*" JournalAudit : génère
+
+@enduml

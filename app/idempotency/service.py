@@ -30,37 +30,47 @@ async def acquire_idempotency_lock(
     idempotency_key: str,
     endpoint_key: str,
     org_id: str,
+    automation_run_id: str,
+    row_index: int,
+    data_row_id: str | None = None,
 ) -> bool:
     """
     Tente d'acquérir le verrou d'idempotency pour (idempotency_key, endpoint_key).
 
     Retourne True  → premier worker, doit exécuter l'étape.
-    Retourne False → doublon détecté, doit skiper.
+    Retourne False → doublon détecté (ou déjà en cours/réussi), doit skiper.
 
-    ON CONFLICT DO NOTHING + RETURNING id :
-    - Si la ligne n'existe pas → INSERT réussit → RETURNING renvoie l'id
-    - Si la ligne existe déjà  → DO NOTHING   → RETURNING est vide
+    ON CONFLICT ... DO UPDATE ... WHERE status='failed' + RETURNING id :
+    - Ligne absente              → INSERT réussit → exécuter
+    - Ligne 'pending' (en cours) → conflit, WHERE ne matche pas → skip (doublon concurrent)
+    - Ligne 'success'            → conflit, WHERE ne matche pas → skip (déjà fait)
+    - Ligne 'failed'             → conflit, WHERE matche → repasse à 'pending' → exécuter (retry légitime)
     """
     result = await db.execute(
         text("""
             INSERT INTO idempotency_records
-                (id, idempotency_key, endpoint_key, org_id, status, created_at, updated_at)
+                (id, idempotency_key, endpoint_key, org_id, automation_run_id,
+                 data_row_id, row_index, status, response_reference, created_at, updated_at)
             VALUES
-                (gen_random_uuid()::text, :key, :endpoint_key, :org_id,
-                 'pending', NOW(), NOW())
+                (gen_random_uuid()::text, :key, :endpoint_key, :org_id, :automation_run_id,
+                 :data_row_id, :row_index, 'pending', '{}'::jsonb, NOW(), NOW())
             ON CONFLICT (idempotency_key, endpoint_key)
-            DO NOTHING
+            DO UPDATE SET status = 'pending', updated_at = NOW()
+            WHERE idempotency_records.status = 'failed'
             RETURNING id
         """),
         {
             "key": idempotency_key,
             "endpoint_key": endpoint_key,
             "org_id": org_id,
+            "automation_run_id": automation_run_id,
+            "data_row_id": data_row_id,
+            "row_index": row_index,
         },
     )
     await db.flush()
     row = result.fetchone()
-    return row is not None  # True = first, False = duplicate
+    return row is not None  # True = exécuter, False = déjà en cours/réussi
 
 
 async def mark_idempotency_success(
@@ -97,7 +107,7 @@ async def mark_idempotency_failure(
         text("""
             UPDATE idempotency_records
             SET status = 'failed',
-                response_reference = jsonb_build_object('error', :error),
+                response_reference = CAST(:ref AS jsonb),
                 updated_at = NOW()
             WHERE idempotency_key = :key
               AND endpoint_key = :endpoint_key
@@ -105,7 +115,7 @@ async def mark_idempotency_failure(
         {
             "key": idempotency_key,
             "endpoint_key": endpoint_key,
-            "error": error[:2000],  # cap error message length
+            "ref": __import__("json").dumps({"error": error[:2000]}),
         },
     )
     await db.flush()

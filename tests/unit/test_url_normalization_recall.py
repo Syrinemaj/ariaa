@@ -1,11 +1,11 @@
 """
-Recall harness for exhaustive URL-ID detection (rules + grouped Groq LLM).
+Recall harness for exhaustive URL-ID detection (rules + grouped Bedrock LLM).
 
-Hits the REAL Groq API (no mocking) — the whole point is to measure actual
-detection recall for the PFE evaluation chapter, not a canned mock answer.
-Skipped automatically when no GROQ_API_KEY is configured. Not meant to gate
-every commit given the external dependency + per-call cost + LLM
-non-determinism — run manually:
+Hits the REAL Bedrock API (no mocking) — the whole point is to measure
+actual detection recall for the PFE evaluation chapter, not a canned mock
+answer. Skipped automatically when no AWS credentials are available. Not
+meant to gate every commit given the external dependency + per-call cost +
+LLM non-determinism — run manually:
 
     pytest tests/unit/test_url_normalization_recall.py -s -v
 
@@ -23,20 +23,20 @@ so it isn't graded here.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from typing import FrozenSet, List
 
 import pytest
 
-from app.core.config import settings
 from app.ingestion.models import TrafficEntry
 from app.normalization import group_normalizer
 from app.normalization.service import normalize_entries
 
 pytestmark = pytest.mark.skipif(
-    not settings.GROQ_API_KEY,
-    reason="requires a real GROQ_API_KEY — not mocked, hits the live Groq API",
+    not (os.environ.get("AWS_ACCESS_KEY_ID") or os.environ.get("AWS_PROFILE")),
+    reason="requires live AWS credentials — not mocked, hits the live Bedrock API",
 )
 
 _PLACEHOLDER_RE = re.compile(r"^\{.+\}$")

@@ -1,24 +1,27 @@
 """ARIA-EVAL: LLM-as-judge — scores a generated plan (tracer.py output)
-against a golden_dataset.json case, using a model independent of the
-pipeline's own (settings.GROQ_MODEL) so the pipeline isn't grading its own
-output.
+against a golden_dataset.json case, using a Bedrock model independent of
+settings.BEDROCK_MODEL (the pipeline's own) so the pipeline isn't grading
+its own output. BedrockClient.structured_chat() accepts a `model` override
+per call (see app/ai/bedrock_client.py), so the judge client can be any
+BedrockClient instance — only the model id passed below matters for
+independence, not which model the instance was constructed with.
 """
 from __future__ import annotations
 
 import logging
 
-from app.core.config import settings
-
 logger = logging.getLogger(__name__)
 
-# ARIA-EVAL: llama-3.1-70b-versatile was deprecated by Groq during 2025 in
-# favor of llama-3.3-70b-versatile (the pipeline's current
-# settings.GROQ_MODEL) — confirmed decommissioned (HTTP 400
-# model_decommissioned) via live testing. Tried first as requested; falls
-# back to settings.GROQ_MODEL (the pipeline's own model) on any failure,
-# exactly as the spec's own "si disponible, sinon le modèle actuel"
-# anticipates.
-JUDGE_MODEL_PREFERRED = "llama-3.1-70b-versatile"
+# ARIA-EVAL: deepseek.v3.2 was the production model before the 8-task
+# evaluation (evaluation/aggregate.py) replaced it with amazon.nova-lite-v1:0
+# for cost/latency reasons unrelated to judging quality — reusing it here
+# keeps the judge on a different model family than whatever
+# settings.BEDROCK_MODEL currently is, without needing a third model just
+# for this role. Previously this pointed at two Groq model ids
+# (llama-3.1-70b-versatile, with settings.GROQ_MODEL as fallback) — both
+# were confirmed decommissioned/inaccessible via live testing, and Groq was
+# removed as a provider entirely (see app/ai/base_client.py).
+JUDGE_MODEL = "deepseek.v3.2"
 
 SYSTEM_PROMPT = """Tu es un évaluateur de systèmes d'automatisation d'API.
 Tu notes la qualité d'un plan généré par rapport à ce qui était attendu.
@@ -59,10 +62,10 @@ Réponds en JSON :
 }}
 """
 
-# ARIA-EVAL: passed to GroqClient.structured_chat() (app/ai/groq_client.py)
-# — reused for both the schema-injection prompt AND the required/non-null
-# field validation + automatic retry that structured_chat() already does
-# internally. No more manual "does the dict have the right keys" check here.
+# ARIA-EVAL: passed to BedrockClient.structured_chat() (app/ai/bedrock_client.py)
+# — reused for both the tool schema AND the required/non-null field
+# validation + automatic retry that structured_chat() already does
+# internally. No manual "does the dict have the right keys" check needed here.
 _JUDGE_SCHEMA = {
     "name": "judge_evaluation",
     "schema": {
@@ -82,21 +85,15 @@ _JUDGE_SCHEMA = {
 }
 
 
-def judge_plan(case: dict, trace: dict, groq_client) -> dict:
+def judge_plan(case: dict, trace: dict, ai_client) -> dict:
     """
     Scores a generated plan (trace, produced by evaluation/tracer.py) against
     a golden_dataset.json case, on 4 criteria (1-5): correctness,
     faithfulness, completeness, mapping.
 
-    # ARIA-EVAL: calls groq_client.structured_chat(model=...) — the same
-    # method every other pipeline caller (intent_analyzer.py,
-    # plan_generator.py) uses — instead of driving groq_client._sync
-    # directly. This reuses GroqClient's existing primary -> secondary ->
-    # tertiary -> Azure key fallback cascade for free; judge.py only adds
-    # the model-level retry (preferred model, then the pipeline's own),
-    # which is a judge-specific concern the shared method has no reason to
-    # know about. Each of the two model attempts below still gets the full
-    # multi-key cascade internally.
+    ai_client — any BedrockClient instance; structured_chat(model=JUDGE_MODEL)
+    below overrides whatever model the instance was constructed with, so the
+    judge stays on JUDGE_MODEL regardless of which model is under test.
 
     Returns the judge's JSON dict (correctness/faithfulness/completeness/
     mapping/justification), or {"error": str(exc)} if the call fails for
@@ -124,25 +121,13 @@ def judge_plan(case: dict, trace: dict, groq_client) -> dict:
     )
 
     try:
-        try:
-            return groq_client.structured_chat(
-                system_prompt=SYSTEM_PROMPT,
-                user_payload={"case_evaluation": user_prompt},
-                json_schema=_JUDGE_SCHEMA,
-                task_name="judge_evaluation",
-                model=JUDGE_MODEL_PREFERRED,
-            )
-        except Exception as exc:
-            logger.warning(
-                "judge.preferred_model_failed model=%s error=%s — falling back to %s",
-                JUDGE_MODEL_PREFERRED, exc, settings.GROQ_MODEL,
-            )
-            return groq_client.structured_chat(
-                system_prompt=SYSTEM_PROMPT,
-                user_payload={"case_evaluation": user_prompt},
-                json_schema=_JUDGE_SCHEMA,
-                task_name="judge_evaluation",
-                model=settings.GROQ_MODEL,
-            )
+        return ai_client.structured_chat(
+            system_prompt=SYSTEM_PROMPT,
+            user_payload={"case_evaluation": user_prompt},
+            json_schema=_JUDGE_SCHEMA,
+            task_name="judge_evaluation",
+            model=JUDGE_MODEL,
+        )
     except Exception as exc:
+        logger.warning("judge.failed model=%s error=%s", JUDGE_MODEL, exc)
         return {"error": str(exc)}

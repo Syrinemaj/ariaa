@@ -15,6 +15,7 @@ from app.automation.models import AutomationExecutionResult, StepExecutionResult
 from app.automation.payload_mapper import map_payload_for_step
 from app.automation.rate_limiter import SimpleRateLimiter
 from app.automation.retry_manager import with_retries
+from app.bulk_execution.retry_policy import is_retryable_step_result
 from app.automation.state_manager import update_state_from_response
 from app.planner.models import AutomationPlan, PlanStep
 from app.security.ssrf_guard import SSRFError, create_safe_client
@@ -137,6 +138,7 @@ async def execute_plan_batch(
                     step_result = await with_retries(
                         operation=operation,
                         retries=1 if dry_run else 3,
+                        is_retryable=is_retryable_step_result,
                     )
                     if stale_field_warnings:
                         step_result.warnings = stale_field_warnings
@@ -147,6 +149,7 @@ async def execute_plan_batch(
                     row_state = update_state_from_response(
                         state=row_state,
                         response_payload=step_result.response_payload,
+                        action=step.action,
                     )
 
                 if step_result.status == "failed":

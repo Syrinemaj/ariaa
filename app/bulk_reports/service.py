@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.bulk_reports.batch_report import get_batch_summary
-from app.bulk_reports.row_report import get_failed_rows
+from app.bulk_reports.row_report import get_duplicate_rows, get_failed_rows
 from app.models.automation import AutomationRun
 from app.models.bulk_report import BulkExecutionReport
 
@@ -18,6 +18,7 @@ def build_bulk_report(db: Session, automation_run_id: str) -> dict:
 
     batch_summary = get_batch_summary(db=db, automation_run_id=automation_run_id)
     row_errors = get_failed_rows(db=db, automation_run_id=automation_run_id)
+    duplicate_rows = get_duplicate_rows(db=db, automation_run_id=automation_run_id)
 
     # BUG-002: upsert — avoid creating N duplicate report records on repeated GETs
     report = db.query(BulkExecutionReport).filter(
@@ -55,4 +56,5 @@ def build_bulk_report(db: Session, automation_run_id: str) -> dict:
         "failed_count": report.failed_count,
         "batch_summary": batch_summary,
         "row_errors": row_errors,
+        "duplicate_rows": duplicate_rows,
     }

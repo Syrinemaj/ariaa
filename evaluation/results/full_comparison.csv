@@ -1,0 +1,4 @@
+model,overall_score,tasks_covered_weight,total_cost_usd,quality_per_dollar,planner_plan_generation,normalization,traffic_classification,endpoint_understanding,workflow_grouping,domain_canonicalization,sequence_reorder,workflow_description
+deepseek.v3.2,0.8508,100.0,0.7501,1.1343,0.8706,0.9746,0.6481,0.6000,0.9129,0.9400,1.0000,1.0000
+amazon.nova-lite-v1:0,0.8489,100.0,0.0199,42.6543,0.8812,0.9746,0.6987,0.6358,0.9467,0.8200,0.9818,0.9250
+mistral.mistral-large-2402-v1:0,0.0000,10.0,0.0093,0.0000,,,,,,0.0000,,

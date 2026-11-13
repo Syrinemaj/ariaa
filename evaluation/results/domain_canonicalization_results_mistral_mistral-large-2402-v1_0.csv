@@ -1,0 +1,11 @@
+case_id,difficulty,n_raw_domains,expected_group_count,predicted_domains,predicted_count,error
+dc_001,easy,5,1,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_002,medium,4,1,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_003,medium,5,2,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_004,hard,4,2,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_005,easy,4,1,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_006,easy,4,1,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_007,hard,8,4,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_008,hard,3,1,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_009,easy,1,1,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t
+dc_010,medium,6,2,,0,api_error: ValidationException: An error occurred (ValidationException) when calling the Converse operation: This model doesn't support the toolConfig.toolChoice.tool field. Remove t

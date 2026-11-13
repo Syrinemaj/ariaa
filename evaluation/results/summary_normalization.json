@@ -1,0 +1,22 @@
+[
+  {
+    "model": "deepseek.v3.2",
+    "skipped": false,
+    "cases_completed": 80,
+    "completion_rate": 1.0,
+    "hit_rate": 0.9437,
+    "precision": 1.0,
+    "naming_accuracy": 0.9905,
+    "cost_usd": 0.0
+  },
+  {
+    "model": "amazon.nova-lite-v1:0",
+    "skipped": false,
+    "cases_completed": 80,
+    "completion_rate": 1.0,
+    "hit_rate": 0.9437,
+    "precision": 1.0,
+    "naming_accuracy": 0.9905,
+    "cost_usd": 0.0
+  }
+]

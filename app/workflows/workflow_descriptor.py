@@ -1,8 +1,8 @@
 """
 AI-powered workflow description generator.
 
-Produces fields complementary to enrich_workflow_with_ai (workflow_understanding.py,
-which owns name/business_domain/confidence — see that module's docstring):
+Produces fields complementary to naming (name/business_domain/confidence,
+now set at creation time in clustering.py — see that module's docstring):
   - summary         : one sentence for end users
   - description     : 2-3 sentences with technical context
   - business_tags   : list of 3-5 domain tags
@@ -95,7 +95,7 @@ def generate_workflow_description(
     Parameters
     ----------
     steps     : ordered list of WorkflowStep (with ai_summary in metadata if available)
-    ai_client : GroqClient or compatible — required; returns fallback if None
+    ai_client : BedrockClient or compatible — required; returns fallback if None
     redis     : sync Redis client (redis.Redis) — optional, caches result TTL 24h
 
     Returns

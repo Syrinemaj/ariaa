@@ -52,9 +52,34 @@ export interface BackendPlanValidationResult {
   issues: BackendPlanValidationIssue[]
 }
 
+// Matches app/automation/payload_mapper.py::required_input_fields() — fields
+// the operator must actually supply, i.e. NOT already covered by an explicit
+// field_mapping rule or auto-resolved from an earlier step's response
+// (e.g. employee_id after a "Create Employee" step never appears here).
+export interface RequiredInputField {
+  field: string
+  type: string
+  first_needed_at_step: number
+}
+
 export interface CreatePlanResponse {
   plan: BackendAutomationPlan
   validation: BackendPlanValidationResult
+  required_input_fields: RequiredInputField[]
+}
+
+// Matches app/automation/models.py::StepExecutionResult
+export interface BackendStepExecutionResult {
+  step_order: number
+  method: string
+  path: string
+  url?: string | null
+  status: string
+  status_code?: number | null
+  request_payload?: Record<string, unknown> | null
+  response_payload?: unknown
+  error_message?: string | null
+  warnings: string[]
 }
 
 export interface ExecutePlanResponse {
@@ -64,7 +89,7 @@ export interface ExecutePlanResponse {
   success_count: number
   failed_count: number
   total_steps: number
-  result: Record<string, unknown>
+  result: { results: BackendStepExecutionResult[]; metadata: Record<string, unknown> }
 }
 
 // ── API calls ───────────────────────────────────────────────────────────────
@@ -111,16 +136,14 @@ export function recordApproval(automationRunId: string, comment?: string): Promi
 export function executePlan(
   plan: BackendAutomationPlan,
   inputRows: Record<string, unknown>[],
-  baseUrl: string,
-  authHeaders: Record<string, string>,
+  connectionId: string,
   dryRun: boolean,
   approvalGranted: boolean,
 ) {
   return api.post<ExecutePlanResponse>('/automation/execute', {
     plan,
     input_rows: inputRows,
-    base_url: baseUrl || undefined,
-    auth_headers: authHeaders,
+    connection_id: connectionId,
     dry_run: dryRun,
     approval_granted: approvalGranted,
   })

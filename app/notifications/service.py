@@ -4,6 +4,8 @@ Notification feed — two audiences (see app/models/notification.py):
   create_bulk_launch_notification()       -> team-wide, every ADMIN in org_id
   create_run_completed_notification()     -> the one user who launched the run
   create_approval_required_notification[_async]() -> team-wide, every ADMIN in org_id
+  create_access_requested_notification_async()     -> team-wide, every ADMIN in org_id
+  get_org_admins() / get_org_admins_async()         -> explicit recipient list for approval emails
 
 Creators come in sync/async pairs because callers run on different session
 types: app/api/bulk.py and app/workers/tasks/execution.py use the sync
@@ -27,6 +29,24 @@ from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
 from app.models.user import User, UserRole
+
+
+def get_org_admins(db: Session, org_id: str) -> list[User]:
+    """Active ADMIN users in an org — used to email everyone who can act on
+    an approval request (in-app team-wide notices already reach them via
+    recipient_user_id=NULL; email needs an explicit recipient list)."""
+    return (
+        db.query(User)
+        .filter(User.org_id == org_id, User.role == UserRole.ADMIN.value, User.is_active.is_(True))
+        .all()
+    )
+
+
+async def get_org_admins_async(db: AsyncSession, org_id: str) -> list[User]:
+    result = await db.execute(
+        select(User).where(User.org_id == org_id, User.role == UserRole.ADMIN.value, User.is_active.is_(True))
+    )
+    return list(result.scalars().all())
 
 
 def create_bulk_launch_notification(
@@ -142,11 +162,38 @@ async def create_approval_required_notification_async(
     return notification
 
 
+async def create_access_requested_notification_async(
+    db: AsyncSession,
+    *,
+    requester: User,
+) -> Notification:
+    """Team-wide: every ADMIN sharing requester.org_id sees this. `requester`
+    is the newly created pending account (is_active=False) created by
+    POST /auth/request-access — it must already be flushed to the session
+    so created_by_user_id's FK to users.id resolves within the same
+    transaction."""
+    notification = Notification(
+        org_id=requester.org_id,
+        created_by_user_id=requester.id,
+        recipient_user_id=None,
+        action="ACCESS_REQUESTED",
+        resource_type="user",
+        resource_id=requester.id,
+        har_file_name=None,
+        is_read=False,
+    )
+    db.add(notification)
+    await db.flush()
+    return notification
+
+
 def _serialize(notification: Notification, operator_name: str | None) -> dict:
     return {
         "id": notification.id,
         "operator_name": operator_name or "Unknown",
         "action": notification.action,
+        "resource_type": notification.resource_type,
+        "resource_id": notification.resource_id,
         "har_file_name": notification.har_file_name,
         "is_read": notification.is_read,
         "created_at": notification.created_at.isoformat() if notification.created_at else None,
@@ -220,3 +267,24 @@ async def mark_all_notifications_read(db: AsyncSession, user: User) -> int:
         notification.is_read = True
     await db.flush()
     return len(notifications)
+
+
+async def delete_notification(db: AsyncSession, user: User, notification_id: str) -> bool:
+    """Deletes a notification the caller can see (same visibility rule as
+    list/mark-read): an ADMIN can dismiss any team-wide notice in their org,
+    an OPERATOR only their own. Deleting a team-wide notice removes it for
+    every admin in the org, not just the one who dismissed it — there's no
+    per-viewer read/dismiss state for recipient_user_id=NULL rows."""
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.org_id == user.org_id,
+            _visibility_clause(user),
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        return False
+    await db.delete(notification)
+    await db.flush()
+    return True

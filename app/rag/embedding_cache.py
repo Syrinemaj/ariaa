@@ -2,7 +2,7 @@
 Content-addressed embedding cache — Redis only (TTL 24 h).
 
 Tier 1 : Redis (TTL 24 h) — sub-millisecond.
-Tier 2 : LocalEmbeddingClient (BAAI/bge-small-en) — on Redis miss.
+Tier 2 : the configured embedding provider (settings.EMBEDDING_PROVIDER) — on Redis miss.
 
 Persistent storage of embeddings for real endpoints is handled exclusively
 by vector_store.index_endpoint_embedding(), which links each embedding to
@@ -20,7 +20,7 @@ from typing import List, Optional
 
 import redis.asyncio as aioredis
 
-from app.rag.embeddings.client import LocalEmbeddingClient
+from app.ai.base_client import EmbeddingClientProtocol
 
 _REDIS_TTL_SECONDS: int = 86_400  # 24 hours
 
@@ -29,7 +29,7 @@ class EmbeddingCache:
     def __init__(
         self,
         redis: aioredis.Redis,
-        ai_client: LocalEmbeddingClient,
+        ai_client: EmbeddingClientProtocol,
     ) -> None:
         self.redis = redis
         self.ai_client = ai_client

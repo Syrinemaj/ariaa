@@ -44,11 +44,7 @@ _DEFAULT_OVERHEAD = 200  # fallback for unknown task types
 
 def _active_model() -> str:
     """Return the model name used for token counting."""
-    if settings.AI_PROVIDER == "groq":
-        return settings.GROQ_MODEL
-    if settings.AI_PROVIDER == "bedrock":
-        return settings.BEDROCK_MODEL
-    return settings.AZURE_OPENAI_MODEL
+    return settings.BEDROCK_MODEL
 
 
 def estimate_prompt_tokens(prompt_text: str, task_name: str = "") -> int:

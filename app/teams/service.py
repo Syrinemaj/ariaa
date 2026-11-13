@@ -28,16 +28,18 @@ def _team_dict(t: Team, member_count: int = 0, member_user_ids: list[str] | None
     }
 
 
-def _member_dict(u: User) -> dict:
+def _member_dict(u: User, is_team_admin: bool = False) -> dict:
     return {
         "id": u.id,
         "full_name": u.full_name,
         "email": u.email,
         "role": u.role,
+        "is_team_admin": is_team_admin,
     }
 
 
-async def create_team(db: AsyncSession, org_id: str, name: str) -> Team:
+async def create_team(db: AsyncSession, org_id: str, name: str, creator_user_id: str) -> Team:
+    """The creator is auto-enrolled as the team's admin — every team must have one."""
     name = name.strip()
     if not name:
         raise ValueError("Team name is required")
@@ -49,6 +51,9 @@ async def create_team(db: AsyncSession, org_id: str, name: str) -> Team:
     except IntegrityError:
         await db.rollback()
         raise ValueError("A team with this name already exists")
+
+    db.add(TeamMember(team_id=team.id, user_id=creator_user_id, is_team_admin=True))
+    await db.flush()
 
     return team
 
@@ -78,12 +83,12 @@ async def get_team_with_members(db: AsyncSession, team_id: str, org_id: str) -> 
         return None
 
     members_result = await db.execute(
-        select(User)
+        select(User, TeamMember.is_team_admin)
         .join(TeamMember, TeamMember.user_id == User.id)
         .where(TeamMember.team_id == team_id)
         .order_by(User.full_name)
     )
-    members = [_member_dict(u) for u in members_result.scalars().all()]
+    members = [_member_dict(u, is_admin) for u, is_admin in members_result.all()]
     member_ids = [m["id"] for m in members]
 
     return {**_team_dict(team, len(members), member_ids), "members": members}
@@ -120,7 +125,7 @@ async def delete_team(db: AsyncSession, team_id: str, org_id: str) -> bool:
     return True
 
 
-async def add_member(db: AsyncSession, team_id: str, org_id: str, user_id: str) -> TeamMember:
+async def add_member(db: AsyncSession, team_id: str, org_id: str, user_id: str, is_team_admin: bool = False) -> TeamMember:
     team_result = await db.execute(select(Team).where(Team.id == team_id, Team.org_id == org_id))
     if team_result.scalar_one_or_none() is None:
         raise ValueError("Team not found")
@@ -129,7 +134,7 @@ async def add_member(db: AsyncSession, team_id: str, org_id: str, user_id: str) 
     if user_result.scalar_one_or_none() is None:
         raise ValueError("User not found")
 
-    membership = TeamMember(team_id=team_id, user_id=user_id)
+    membership = TeamMember(team_id=team_id, user_id=user_id, is_team_admin=is_team_admin)
     db.add(membership)
     try:
         await db.flush()
@@ -137,6 +142,35 @@ async def add_member(db: AsyncSession, team_id: str, org_id: str, user_id: str) 
         await db.rollback()
         raise ValueError("User is already a member of this team")
 
+    return membership
+
+
+async def _count_team_admins(db: AsyncSession, team_id: str) -> int:
+    result = await db.execute(
+        select(TeamMember).where(TeamMember.team_id == team_id, TeamMember.is_team_admin.is_(True))
+    )
+    return len(result.scalars().all())
+
+
+async def set_team_member_admin(db: AsyncSession, team_id: str, org_id: str, user_id: str, is_team_admin: bool) -> TeamMember:
+    """Every team must keep at least one admin — demoting the last one is blocked."""
+    team_result = await db.execute(select(Team).where(Team.id == team_id, Team.org_id == org_id))
+    if team_result.scalar_one_or_none() is None:
+        raise ValueError("Team not found")
+
+    result = await db.execute(
+        select(TeamMember).where(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        raise ValueError("Membership not found")
+
+    if membership.is_team_admin and not is_team_admin:
+        if await _count_team_admins(db, team_id) <= 1:
+            raise ValueError("Cannot remove the last admin of a team — promote another member first")
+
+    membership.is_team_admin = is_team_admin
+    await db.flush()
     return membership
 
 
@@ -165,6 +199,9 @@ async def remove_member(db: AsyncSession, team_id: str, org_id: str, user_id: st
     membership = result.scalar_one_or_none()
     if membership is None:
         return False
+
+    if membership.is_team_admin and await _count_team_admins(db, team_id) <= 1:
+        raise ValueError("Cannot remove the last admin of a team — promote another member first")
 
     await db.delete(membership)
     await db.flush()

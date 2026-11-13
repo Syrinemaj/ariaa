@@ -19,14 +19,18 @@ def _render(**overrides):
 class TestFieldMappingRule:
     def test_rule_text_present(self):
         rendered = _render()
-        assert 'field_mapping doit être {}' in rendered
+        # Current rule (two distinct field_mapping uses) forbids the direct
+        # CSV/Excel column->param form outside data_source=csv/excel — it no
+        # longer requires field_mapping={} unconditionally, since the
+        # per-row conditional-rule form remains usable without a CSV source.
+        assert "n'utilise JAMAIS cette forme" in rendered
         assert "csv" in rendered.lower() and "excel" in rendered.lower()
 
     def test_renders_without_crashing_for_csv_source(self):
-        # Regression check: {{}} in the new rule must stay literal after
+        # Regression check: {{}} in the rule must stay literal after
         # .format() even when other placeholders (csv_columns) are filled.
         rendered = _render(data_source="csv", csv_columns="prénom, nom, email")
-        assert 'field_mapping doit être {}' in rendered
+        assert "n'utilise JAMAIS cette forme" in rendered
         assert "prénom, nom, email" in rendered
 
     def test_no_stray_double_braces_in_new_rule(self):

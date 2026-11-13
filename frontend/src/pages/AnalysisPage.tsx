@@ -6,7 +6,7 @@ import { useHarAnalysis } from '../hooks/useHarAnalysis'
 import { useRun } from '../contexts/RunContext'
 import { useToast } from '../contexts/ToastContext'
 import { listRuns, AnalysisRun } from '../lib/registryApi'
-import { Upload, Play, RefreshCw, Sparkles, Search, ArrowRight, FileCode2, Lock, Unlock, Database, Check, Network, Layers, Zap, Clock, List } from 'lucide-react'
+import { Upload, Play, RefreshCw, Sparkles, ArrowRight, FileCode2, Lock, Unlock, Database, Check, Network, Layers, Zap, Clock, List } from 'lucide-react'
 
 const PIPELINE_STEPS = [
   'Cleaning HTTP requests',
@@ -23,7 +23,6 @@ export default function AnalysisPage() {
   const { toast } = useToast()
   const [filename, setFilename] = useState('')
   const [file, setFile]         = useState<File | null>(null)
-  const [query, setQuery]       = useState('')
   const [historyRuns, setHistoryRuns] = useState<AnalysisRun[]>([])
   const [progressStep, setProgressStep] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -33,18 +32,12 @@ export default function AnalysisPage() {
     phase,
     result,
     endpoints,
-    indexState,
-    searchResults,
-    searching,
     error,
     upload,
-    triggerIndex,
-    search,
   } = useHarAnalysis()
 
   const isLoading   = phase === 'uploading' || phase === 'processing'
   const showResults = phase === 'done' && result !== null
-  const indexed     = indexState === 'done'
 
   // Animate progress steps while processing
   useEffect(() => {
@@ -103,7 +96,7 @@ export default function AnalysisPage() {
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Analyze a HAR file</h2>
-            <p className="text-sm ink-2 mt-1">Upload a .har / .jmx file to discover your endpoints, infer schemas, and detect workflows.</p>
+            <p className="text-sm ink-2 mt-1">Upload a .har  file to discover your endpoints, infer schemas, and detect workflows.</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => nav('/rag')} className="btn-secondary"><Sparkles className="w-4 h-4" /> Endpoint Search</button>
@@ -115,7 +108,7 @@ export default function AnalysisPage() {
         <div className="card overflow-hidden">
           <div className="grid lg:grid-cols-[1.2fr_1fr]">
             <div className="p-6">
-              <input ref={fileRef} type="file" accept=".har,.jmx" className="hidden"
+              <input ref={fileRef} type="file" accept=".har" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }} />
               <div onClick={() => fileRef.current?.click()}
                 onDragOver={e => e.preventDefault()}
@@ -128,7 +121,7 @@ export default function AnalysisPage() {
                   <Upload className="w-6 h-6 text-white" />
                 </div>
                 <p className="font-semibold" style={{ color: 'var(--ink)' }}>Drop your .har file here</p>
-                <p className="text-xs ink-2 mt-1">or click to browse · .har, .jmx</p>
+                <p className="text-xs ink-2 mt-1">or click to browse · .har</p>
                 {filename && (
                   <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono"
                     style={{ background: 'var(--card)', border: '1px solid var(--line)', color: 'var(--ink)' }}>
@@ -139,7 +132,7 @@ export default function AnalysisPage() {
               <div className="mt-4">
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5 ink-2">HAR file name</label>
                 <input type="text" value={filename} onChange={e => setFilename(e.target.value)}
-                  placeholder="e.g. capture-prod-2026.har" className="input w-full" />
+                  placeholder="e.g. capture-prod-2026.har" className="input w-full" autoComplete="off" />
               </div>
               {phase === 'error' && error && <p className="mt-3 text-xs text-red-600">{error}</p>}
               <div className="flex flex-wrap items-center gap-4 mt-4">
@@ -190,9 +183,8 @@ export default function AnalysisPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
-                { l: 'Run ID',                v: result.run_id.slice(0, 8) },
                 { l: 'Cleaned HTTP calls',    v: result.cleaned_api_calls.toLocaleString() },
                 { l: 'Normalized endpoints',  v: result.normalized_endpoints.toString() },
                 { l: 'Workflows detected',    v: result.saved_workflows.toString() },
@@ -234,58 +226,6 @@ export default function AnalysisPage() {
               </div>
             </div>
 
-            {/* RAG strip */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-4">
-              <div className="card pad flex flex-col gap-4">
-                <div>
-                  <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>RAG indexing</p>
-                  <p className="text-xs ink-2 mt-1">Embed {result.normalized_endpoints} endpoints for natural-language search.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${indexed ? 'bg-emerald-50 text-emerald-600' : ''}`}
-                    style={indexed ? {} : { background: 'color-mix(in oklch, var(--ink) 6%, var(--card))', color: 'var(--ink-2)' }}>
-                    {indexState === 'indexing'
-                      ? <RefreshCw className="w-5 h-5 animate-spin" />
-                      : indexed ? <Check className="w-5 h-5" />
-                      : <Database className="w-5 h-5" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{indexed ? 'Indexed' : 'Not indexed'}</p>
-                    <p className="text-xs font-mono ink-2">{indexed ? `${result.saved_endpoints} vectors` : '—'}</p>
-                  </div>
-                  <div className="flex-1" />
-                  <button onClick={() => void triggerIndex()} disabled={indexState === 'indexing'}
-                    className={indexed ? 'btn-secondary' : 'btn-primary'}>
-                    {indexed ? <><RefreshCw className="w-3.5 h-3.5" /> Re-index</> : <><Sparkles className="w-3.5 h-3.5" /> Index for AI</>}
-                  </button>
-                </div>
-                <p className="font-mono text-xs ink-2">POST /rag/index/{result.run_id}</p>
-              </div>
-              <div className="card pad">
-                <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink)' }}>Quick endpoint search</p>
-                <p className="text-xs ink-2 mb-3">Find an endpoint using natural language.</p>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ink-2" />
-                    <input value={query} onChange={e => setQuery(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && void search(query)}
-                      className="input !pl-9" placeholder="find users endpoints" />
-                  </div>
-                  <button onClick={() => void search(query)} disabled={searching} className="btn-primary">
-                    {searching ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                  </button>
-                </div>
-                <div className="mt-3 space-y-2">
-                  {(searchResults.length > 0 ? searchResults : endpoints.slice(3, 6).map(e => ({ method: e.method, path: e.path, score: 0, endpoint: e }))).map((r, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ border: '1px solid var(--line)' }}>
-                      <MethodBadge m={r.method} />
-                      <span className="font-mono text-xs flex-1 truncate" style={{ color: 'var(--ink)' }}>{r.path}</span>
-                      <span className="font-mono text-xs ink-2">{r.score > 0 ? r.score.toFixed(2) : ''}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
           </>
         )}
 

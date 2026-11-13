@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from sqlalchemy import Integer, String
+from sqlalchemy import Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,6 +10,9 @@ from app.db.mixins import TimestampMixin
 
 class IdempotencyRecord(TimestampMixin, Base):
     __tablename__ = "idempotency_records"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", "endpoint_key", name="uq_idempotency_key_endpoint"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
     automation_run_id: Mapped[str] = mapped_column(String, nullable=False)
@@ -19,3 +22,4 @@ class IdempotencyRecord(TimestampMixin, Base):
     idempotency_key: Mapped[str] = mapped_column(String, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String, nullable=False)
     response_reference: Mapped[dict] = mapped_column(JSONB, default=dict)
+    org_id: Mapped[str] = mapped_column(String, nullable=False)

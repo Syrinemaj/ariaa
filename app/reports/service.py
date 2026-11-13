@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from typing import Any, Optional
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 
 from sqlalchemy.orm import Session
 
@@ -9,20 +9,25 @@ from app.core.pagination import PaginationParams, build_paginated_response, pagi
 from app.models.analysis_run import AnalysisRun
 from app.models.audit_log import AuditLog
 from app.models.automation import AutomationRun
+from app.models.endpoint import Endpoint
+from app.models.user import User
 from app.reports.execution_report import build_automation_report
 from app.reports.metrics import compute_success_rate
 from app.reports.models import AnalysisRunReport, AutomationExecutionReport
 
 
-def _team_filter(model: Any, team_ids: Optional[List[str]]) -> Any:
-    """None = unrestricted (ADMIN). A list (possibly empty) scopes to those
-    team(s) plus unassigned/org-wide rows — mirrors
-    app.security.tenancy.team_visibility_clause for the sync report queries."""
-    if team_ids is None:
+def _owner_filter(model: Any, owner_id: Optional[str], team_id: Optional[str] = None) -> Any:
+    """None = unrestricted (ADMIN). team_id (resolved only when the operator
+    belongs to exactly one team) scopes to that team's resources, created by
+    anyone on the team — "members of a team see the same activity, analyzed
+    by anyone in the team." Falls back to owner_id (strictly the user's own
+    rows) when the operator isn't in exactly one team. Mirrors
+    app.security.tenancy.owner_visibility_clause for the sync report queries."""
+    if team_id is not None:
+        return model.team_id == team_id
+    if owner_id is None:
         return None
-    if team_ids:
-        return or_(model.team_id.in_(team_ids), model.team_id.is_(None))
-    return model.team_id.is_(None)
+    return model.created_by_user_id == owner_id
 
 
 def get_automation_report(db: Session, automation_run_id: str) -> Optional[AutomationExecutionReport]:
@@ -33,15 +38,16 @@ def get_reports_for_analysis_run(
     db: Session,
     analysis_run_id: str,
     org_id: Optional[str] = None,
-    team_ids: Optional[List[str]] = None,
+    owner_id: Optional[str] = None,
+    team_id: Optional[str] = None,
 ) -> AnalysisRunReport:
     query = db.query(AutomationRun).filter(AutomationRun.analysis_run_id == analysis_run_id)
     if org_id:
         query = query.filter(AutomationRun.org_id == org_id)
-    team_filter = _team_filter(AutomationRun, team_ids)
-    if team_filter is not None:
-        query = query.filter(team_filter)
-    runs: List[AutomationRun] = query.all()
+    owner_filter = _owner_filter(AutomationRun, owner_id, team_id)
+    if owner_filter is not None:
+        query = query.filter(owner_filter)
+    runs: list[AutomationRun] = query.all()
 
     total_steps = sum(r.total_steps for r in runs)
     total_success = sum(r.success_count for r in runs)
@@ -57,14 +63,16 @@ def get_reports_for_analysis_run(
     )
 
 
-def get_global_summary(db: Session, org_id: Optional[str] = None, team_ids: Optional[List[str]] = None) -> dict:
+def get_global_summary(
+    db: Session, org_id: Optional[str] = None, owner_id: Optional[str] = None, team_id: Optional[str] = None,
+) -> dict:
     query = db.query(AutomationRun)
     if org_id:
         query = query.filter(AutomationRun.org_id == org_id)
-    team_filter = _team_filter(AutomationRun, team_ids)
-    if team_filter is not None:
-        query = query.filter(team_filter)
-    runs: List[AutomationRun] = query.all()
+    owner_filter = _owner_filter(AutomationRun, owner_id, team_id)
+    if owner_filter is not None:
+        query = query.filter(owner_filter)
+    runs: list[AutomationRun] = query.all()
 
     total_runs = len(runs)
     total_steps = sum(r.total_steps for r in runs)
@@ -93,8 +101,9 @@ def get_daily_automation_trend(
     db: Session,
     org_id: Optional[str] = None,
     days: int = 30,
-    team_ids: Optional[List[str]] = None,
-) -> List[dict]:
+    owner_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+) -> list[dict]:
     """Automation runs created per day, over the last `days` days (zero-filled)."""
     since = datetime.now(timezone.utc) - timedelta(days=days - 1)
     since_midnight = since.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -109,9 +118,9 @@ def get_daily_automation_trend(
     )
     if org_id:
         query = query.filter(AutomationRun.org_id == org_id)
-    team_filter = _team_filter(AutomationRun, team_ids)
-    if team_filter is not None:
-        query = query.filter(team_filter)
+    owner_filter = _owner_filter(AutomationRun, owner_id, team_id)
+    if owner_filter is not None:
+        query = query.filter(owner_filter)
 
     counts_by_day = {str(row.day): row.count for row in query.all()}
 
@@ -130,7 +139,8 @@ def get_kpi_trends(
     db: Session,
     org_id: Optional[str] = None,
     window_days: int = 7,
-    team_ids: Optional[List[str]] = None,
+    owner_id: Optional[str] = None,
+    team_id: Optional[str] = None,
 ) -> dict:
     """Dashboard KPIs for the current window vs the equivalent previous window."""
     now = datetime.now(timezone.utc)
@@ -144,9 +154,9 @@ def get_kpi_trends(
         ).filter(AnalysisRun.created_at >= start, AnalysisRun.created_at < end)
         if org_id:
             query = query.filter(AnalysisRun.org_id == org_id)
-        team_filter = _team_filter(AnalysisRun, team_ids)
-        if team_filter is not None:
-            query = query.filter(team_filter)
+        owner_filter = _owner_filter(AnalysisRun, owner_id, team_id)
+        if owner_filter is not None:
+            query = query.filter(owner_filter)
         row = query.one()
         return {"runs": row.runs, "endpoints": row.endpoints}
 
@@ -158,9 +168,9 @@ def get_kpi_trends(
         ).filter(AutomationRun.created_at >= start, AutomationRun.created_at < end)
         if org_id:
             query = query.filter(AutomationRun.org_id == org_id)
-        team_filter = _team_filter(AutomationRun, team_ids)
-        if team_filter is not None:
-            query = query.filter(team_filter)
+        owner_filter = _owner_filter(AutomationRun, owner_id, team_id)
+        if owner_filter is not None:
+            query = query.filter(owner_filter)
         row = query.one()
         return {"runs": row.runs, "success": row.success, "steps": row.steps}
 
@@ -187,36 +197,118 @@ def get_automation_runs_paginated(
     org_id: Optional[str] = None,
     analysis_run_id: Optional[str] = None,
     status: Optional[str] = None,
-    team_ids: Optional[List[str]] = None,
+    source: Optional[str] = None,
+    owner_id: Optional[str] = None,
+    team_id: Optional[str] = None,
 ) -> dict:
     query = db.query(AutomationRun).order_by(AutomationRun.created_at.desc())
     if org_id:
         query = query.filter(AutomationRun.org_id == org_id)
-    team_filter = _team_filter(AutomationRun, team_ids)
-    if team_filter is not None:
-        query = query.filter(team_filter)
+    owner_filter = _owner_filter(AutomationRun, owner_id, team_id)
+    if owner_filter is not None:
+        query = query.filter(owner_filter)
     if analysis_run_id:
         query = query.filter(AutomationRun.analysis_run_id == analysis_run_id)
     if status:
         query = query.filter(AutomationRun.status == status)
+    if source:
+        query = query.filter(AutomationRun.source == source)
 
     items, total = paginate_query(query, pagination)
+
+    # Resolve runner names for this page — listing is team-shared
+    # (_owner_filter above), but GET /users is admin-only, so an operator
+    # has no other way to see who ran a teammate's automation.
+    creator_ids = {r.created_by_user_id for r in items if r.created_by_user_id}
+    creator_names: dict = {}
+    if creator_ids:
+        creator_names = dict(db.query(User.id, User.full_name).filter(User.id.in_(creator_ids)).all())
+
     serialized = [
         {
             "id": r.id,
             "workflow_name": r.workflow_name,
             "instruction": r.instruction,
             "dry_run": r.dry_run,
+            "source": r.source,
             "status": r.status,
             "total_steps": r.total_steps,
             "success_count": r.success_count,
             "failed_count": r.failed_count,
             "duration_seconds": r.duration_seconds,
             "created_at": r.created_at.isoformat() if r.created_at else None,
+            "created_by_user_id": r.created_by_user_id,
+            "created_by_name": creator_names.get(r.created_by_user_id) if r.created_by_user_id else None,
         }
         for r in items
     ]
     return build_paginated_response(serialized, total, pagination)
+
+
+def get_endpoints_summary(
+    db: Session,
+    org_id: str,
+    owner_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+) -> dict:
+    """Real total endpoint count across ALL analysis runs (org-wide), with a
+    business-domain breakdown — unlike the dashboard's per-recent-run KPI,
+    this is a true aggregate, not a sum over the last N runs."""
+    query = (
+        db.query(Endpoint.business_domain, func.count(Endpoint.id))
+        .join(AnalysisRun, Endpoint.run_id == AnalysisRun.id)
+        .filter(Endpoint.org_id == org_id)
+    )
+    owner_filter = _owner_filter(AnalysisRun, owner_id, team_id)
+    if owner_filter is not None:
+        query = query.filter(owner_filter)
+    rows = query.group_by(Endpoint.business_domain).all()
+
+    total = sum(count for _, count in rows)
+    by_domain = {(domain or "Other"): count for domain, count in rows}
+
+    return {"total": total, "by_domain": by_domain}
+
+
+def get_endpoints_risk(
+    db: Session,
+    org_id: str,
+    owner_id: Optional[str] = None,
+    team_id: Optional[str] = None,
+    limit: int = 5,
+) -> dict:
+    """Count + most recent endpoints flagged risk='high' in metadata_json,
+    across all analysis runs (org-wide). metadata_json is unindexed JSONB —
+    acceptable for a dashboard widget's scale, flagged as a known limitation
+    (Phase 4 data inventory) rather than engineered around here."""
+    risk_expr = Endpoint.metadata_json["risk"].astext
+
+    query = (
+        db.query(Endpoint)
+        .join(AnalysisRun, Endpoint.run_id == AnalysisRun.id)
+        .filter(Endpoint.org_id == org_id, risk_expr == "high")
+    )
+    owner_filter = _owner_filter(AnalysisRun, owner_id, team_id)
+    if owner_filter is not None:
+        query = query.filter(owner_filter)
+
+    total = query.count()
+    recent: list[Endpoint] = query.order_by(Endpoint.created_at.desc()).limit(limit).all()
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": e.id,
+                "method": e.method,
+                "path": e.path,
+                "canonical_key": e.canonical_key,
+                "business_domain": e.business_domain,
+                "run_id": e.run_id,
+            }
+            for e in recent
+        ],
+    }
 
 
 def get_audit_logs_paginated(
@@ -225,9 +317,15 @@ def get_audit_logs_paginated(
     org_id: str,
     action: Optional[str] = None,
     resource_type: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> dict:
+    # Left join (not inner) — user_id is nullable on AuditLog (e.g. failed
+    # login attempts against an unknown email have no user to join to), and
+    # a deleted user's past audit rows must stay visible, just with a blank
+    # actor name instead of disappearing from the log.
     query = (
-        db.query(AuditLog)
+        db.query(AuditLog, User.email, User.full_name)
+        .outerjoin(User, User.id == AuditLog.user_id)
         .filter(AuditLog.org_id == org_id)
         .order_by(AuditLog.created_at.desc())
     )
@@ -235,18 +333,22 @@ def get_audit_logs_paginated(
         query = query.filter(AuditLog.action == action)
     if resource_type:
         query = query.filter(AuditLog.resource_type == resource_type)
+    if user_id:
+        query = query.filter(AuditLog.user_id == user_id)
 
     items, total = paginate_query(query, pagination)
     serialized = [
         {
-            "id": r.id,
-            "action": r.action,
-            "resource_type": r.resource_type,
-            "resource_id": r.resource_id,
-            "user_id": r.user_id,
-            "metadata": r.metadata_json,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "id": log.id,
+            "action": log.action,
+            "resource_type": log.resource_type,
+            "resource_id": log.resource_id,
+            "user_id": log.user_id,
+            "user_email": email,
+            "user_name": full_name,
+            "metadata": log.metadata_json,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
         }
-        for r in items
+        for log, email, full_name in items
     ]
     return build_paginated_response(serialized, total, pagination)

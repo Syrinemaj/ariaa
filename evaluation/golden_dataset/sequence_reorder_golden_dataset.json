@@ -1,0 +1,213 @@
+[
+  {
+    "case_id": "sr_001",
+    "rule_type": "auth_first",
+    "difficulty": "easy",
+    "steps": [
+      {"key": "POST /api/v1/employees", "method": "POST", "path": "/api/v1/employees", "summary": "Create a new employee record"},
+      {"key": "POST /api/v1/auth/token", "method": "POST", "path": "/api/v1/auth/token", "summary": "Authenticate and obtain an access token"}
+    ],
+    "expected": {
+      "order_constraints": [["POST /api/v1/auth/token", "POST /api/v1/employees"]],
+      "min_confidence": 0.6
+    },
+    "notes": "cas le plus simple — 2 étapes, auth capturée en second alors qu'elle doit précéder toute autre étape"
+  },
+  {
+    "case_id": "sr_002",
+    "rule_type": "auth_first",
+    "difficulty": "medium",
+    "steps": [
+      {"key": "GET /api/v1/departments", "method": "GET", "path": "/api/v1/departments", "summary": "List departments"},
+      {"key": "POST /api/v1/contracts", "method": "POST", "path": "/api/v1/contracts", "summary": "Create a new contract"},
+      {"key": "POST /api/v1/auth/login", "method": "POST", "path": "/api/v1/auth/login", "summary": "Log in with email and password"},
+      {"key": "GET /api/v1/contracts/{id}", "method": "GET", "path": "/api/v1/contracts/{id}", "summary": "Fetch a contract by id"}
+    ],
+    "expected": {
+      "order_constraints": [
+        ["POST /api/v1/auth/login", "GET /api/v1/departments"],
+        ["POST /api/v1/auth/login", "POST /api/v1/contracts"],
+        ["POST /api/v1/auth/login", "GET /api/v1/contracts/{id}"]
+      ],
+      "min_confidence": 0.6
+    },
+    "notes": "auth capturée en 3e position sur 4 étapes — seule la contrainte 'auth avant tout le reste' est vérifiée, l'ordre relatif des 3 autres étapes n'est pas noté"
+  },
+  {
+    "case_id": "sr_003",
+    "rule_type": "auth_first",
+    "difficulty": "hard",
+    "steps": [
+      {"key": "DELETE /api/v1/products/{id}", "method": "DELETE", "path": "/api/v1/products/{id}", "summary": "Delete a product"},
+      {"key": "POST /api/v1/products", "method": "POST", "path": "/api/v1/products", "summary": "Create a new product"},
+      {"key": "POST /api/v1/auth/token", "method": "POST", "path": "/api/v1/auth/token", "summary": "Authenticate and obtain an access token"}
+    ],
+    "expected": {
+      "order_constraints": [
+        ["POST /api/v1/auth/token", "POST /api/v1/products"],
+        ["POST /api/v1/auth/token", "DELETE /api/v1/products/{id}"],
+        ["POST /api/v1/products", "DELETE /api/v1/products/{id}"]
+      ],
+      "min_confidence": 0.6
+    },
+    "notes": "PIÈGE — deux règles s'appliquent en même temps (auth d'abord ET delete après le post sur la même ressource) ; les deux contraintes doivent être satisfaites simultanément"
+  },
+  {
+    "case_id": "sr_004",
+    "rule_type": "delete_last",
+    "difficulty": "easy",
+    "steps": [
+      {"key": "DELETE /api/v1/products/{id}", "method": "DELETE", "path": "/api/v1/products/{id}", "summary": "Delete a product"},
+      {"key": "POST /api/v1/products", "method": "POST", "path": "/api/v1/products", "summary": "Create a new product"}
+    ],
+    "expected": {
+      "order_constraints": [["POST /api/v1/products", "DELETE /api/v1/products/{id}"]],
+      "min_confidence": 0.6
+    },
+    "notes": "cas le plus simple pour la règle DELETE-en-dernier — 2 étapes, ordre capturé inversé"
+  },
+  {
+    "case_id": "sr_005",
+    "rule_type": "delete_last",
+    "difficulty": "medium",
+    "steps": [
+      {"key": "DELETE /api/v1/contracts/{id}", "method": "DELETE", "path": "/api/v1/contracts/{id}", "summary": "Delete a contract"},
+      {"key": "GET /api/v1/contracts/{id}", "method": "GET", "path": "/api/v1/contracts/{id}", "summary": "Fetch a contract by id"},
+      {"key": "POST /api/v1/contracts", "method": "POST", "path": "/api/v1/contracts", "summary": "Create a new contract"}
+    ],
+    "expected": {
+      "order_constraints": [
+        ["POST /api/v1/contracts", "DELETE /api/v1/contracts/{id}"],
+        ["GET /api/v1/contracts/{id}", "DELETE /api/v1/contracts/{id}"]
+      ],
+      "min_confidence": 0.6
+    },
+    "notes": "DELETE doit passer après le POST et le GET du même préfixe de ressource — leur ordre relatif entre eux n'est pas noté"
+  },
+  {
+    "case_id": "sr_006",
+    "rule_type": "delete_last",
+    "difficulty": "hard",
+    "steps": [
+      {"key": "DELETE /api/v1/products/{id}", "method": "DELETE", "path": "/api/v1/products/{id}", "summary": "Delete a product"},
+      {"key": "POST /api/v1/orders", "method": "POST", "path": "/api/v1/orders", "summary": "Create a new order"},
+      {"key": "POST /api/v1/products", "method": "POST", "path": "/api/v1/products", "summary": "Create a new product"}
+    ],
+    "expected": {
+      "order_constraints": [["POST /api/v1/products", "DELETE /api/v1/products/{id}"]],
+      "min_confidence": 0.6
+    },
+    "notes": "PIÈGE — deux ressources différentes présentes (products et orders) ; le DELETE ne doit être poussé qu'après le POST de LA MÊME ressource (products), la position du POST orders (ressource non liée) est libre"
+  },
+  {
+    "case_id": "sr_007",
+    "rule_type": "post_before_get",
+    "difficulty": "easy",
+    "steps": [
+      {"key": "GET /api/v1/orders", "method": "GET", "path": "/api/v1/orders", "summary": "List orders"},
+      {"key": "POST /api/v1/orders", "method": "POST", "path": "/api/v1/orders", "summary": "Create a new order"}
+    ],
+    "expected": {
+      "order_constraints": [["POST /api/v1/orders", "GET /api/v1/orders"]],
+      "min_confidence": 0.6
+    },
+    "notes": "cas simple pour la règle POST-avant-GET sur la même ressource"
+  },
+  {
+    "case_id": "sr_008",
+    "rule_type": "post_before_get",
+    "difficulty": "medium",
+    "steps": [
+      {"key": "GET /api/v1/orders/{id}", "method": "GET", "path": "/api/v1/orders/{id}", "summary": "Fetch an order by id"},
+      {"key": "GET /api/v1/orders", "method": "GET", "path": "/api/v1/orders", "summary": "List orders"},
+      {"key": "POST /api/v1/orders", "method": "POST", "path": "/api/v1/orders", "summary": "Create a new order"}
+    ],
+    "expected": {
+      "order_constraints": [
+        ["POST /api/v1/orders", "GET /api/v1/orders/{id}"],
+        ["POST /api/v1/orders", "GET /api/v1/orders"]
+      ],
+      "min_confidence": 0.6
+    },
+    "notes": "le POST doit précéder LES DEUX lectures (liste et détail) — leur ordre relatif entre elles n'est pas noté"
+  },
+  {
+    "case_id": "sr_009",
+    "rule_type": "parent_child",
+    "difficulty": "medium",
+    "steps": [
+      {"key": "POST /api/v1/departments/{id}/employees", "method": "POST", "path": "/api/v1/departments/{id}/employees", "summary": "Add an employee to a department"},
+      {"key": "POST /api/v1/departments", "method": "POST", "path": "/api/v1/departments", "summary": "Create a new department"}
+    ],
+    "expected": {
+      "order_constraints": [["POST /api/v1/departments", "POST /api/v1/departments/{id}/employees"]],
+      "min_confidence": 0.6
+    },
+    "notes": "la ressource parente (department) doit être créée avant la ressource enfant (employee du department)"
+  },
+  {
+    "case_id": "sr_010",
+    "rule_type": "parent_child",
+    "difficulty": "hard",
+    "steps": [
+      {"key": "POST /api/v1/departments/{id}/employees", "method": "POST", "path": "/api/v1/departments/{id}/employees", "summary": "Add an employee to a department"},
+      {"key": "GET /api/v1/contracts", "method": "GET", "path": "/api/v1/contracts", "summary": "List contracts"},
+      {"key": "POST /api/v1/departments", "method": "POST", "path": "/api/v1/departments", "summary": "Create a new department"}
+    ],
+    "expected": {
+      "order_constraints": [["POST /api/v1/departments", "POST /api/v1/departments/{id}/employees"]],
+      "min_confidence": 0.6
+    },
+    "notes": "PIÈGE — une étape sans rapport (GET /contracts) est mêlée à la relation parent-enfant ; sa position ne doit pas être notée, seule la contrainte département-avant-employé compte"
+  },
+  {
+    "case_id": "sr_011",
+    "rule_type": "already_correct",
+    "difficulty": "easy",
+    "steps": [
+      {"key": "POST /api/v1/auth/token", "method": "POST", "path": "/api/v1/auth/token", "summary": "Authenticate and obtain an access token"},
+      {"key": "POST /api/v1/employees", "method": "POST", "path": "/api/v1/employees", "summary": "Create a new employee record"},
+      {"key": "GET /api/v1/employees/{id}", "method": "GET", "path": "/api/v1/employees/{id}", "summary": "Fetch an employee by id"}
+    ],
+    "expected": {
+      "order_constraints": [
+        ["POST /api/v1/auth/token", "POST /api/v1/employees"],
+        ["POST /api/v1/auth/token", "GET /api/v1/employees/{id}"],
+        ["POST /api/v1/employees", "GET /api/v1/employees/{id}"]
+      ]
+    },
+    "notes": "PIÈGE anti-sur-correction — la séquence est DÉJÀ dans le bon ordre (auth, create, read) ; le modèle ne doit rien casser. Pas de min_confidence exigé ici : conserver tel quel est correct, quelle que soit la confiance rapportée"
+  },
+  {
+    "case_id": "sr_012",
+    "rule_type": "already_correct",
+    "difficulty": "medium",
+    "steps": [
+      {"key": "POST /api/v1/contracts", "method": "POST", "path": "/api/v1/contracts", "summary": "Create a new contract"},
+      {"key": "GET /api/v1/contracts/{id}", "method": "GET", "path": "/api/v1/contracts/{id}", "summary": "Fetch a contract by id"},
+      {"key": "DELETE /api/v1/contracts/{id}", "method": "DELETE", "path": "/api/v1/contracts/{id}", "summary": "Delete a contract"}
+    ],
+    "expected": {
+      "order_constraints": [
+        ["POST /api/v1/contracts", "GET /api/v1/contracts/{id}"],
+        ["POST /api/v1/contracts", "DELETE /api/v1/contracts/{id}"],
+        ["GET /api/v1/contracts/{id}", "DELETE /api/v1/contracts/{id}"]
+      ]
+    },
+    "notes": "PIÈGE anti-sur-correction — create/read/delete déjà dans l'ordre logique correct, aucune règle n'est violée"
+  },
+  {
+    "case_id": "sr_013",
+    "rule_type": "genuinely_ambiguous",
+    "difficulty": "hard",
+    "steps": [
+      {"key": "GET /api/v1/reports/summary", "method": "GET", "path": "/api/v1/reports/summary", "summary": "Fetch a summary report"},
+      {"key": "GET /api/v1/notifications", "method": "GET", "path": "/api/v1/notifications", "summary": "List notifications"}
+    ],
+    "expected": {
+      "order_constraints": [],
+      "max_confidence": 0.6
+    },
+    "notes": "PIÈGE CONFIANCE — deux lectures indépendantes sans rapport métier, aucune des 4 règles ne s'applique ; le modèle ne doit pas inventer un ordre 'logique' avec une confiance élevée"
+  }
+]

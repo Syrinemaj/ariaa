@@ -7,12 +7,8 @@ from app.llm_observability.pricing import estimate_cost as _priced_estimate
 
 
 def active_model() -> str:
-    """Model name for the currently configured provider (settings.AI_PROVIDER)."""
-    if settings.AI_PROVIDER == "groq":
-        return settings.GROQ_MODEL
-    if settings.AI_PROVIDER == "bedrock":
-        return settings.BEDROCK_MODEL
-    return settings.AZURE_OPENAI_MODEL
+    """Model name for the active (Bedrock-only) completion provider."""
+    return settings.BEDROCK_MODEL
 
 
 def estimate_llm_cost(

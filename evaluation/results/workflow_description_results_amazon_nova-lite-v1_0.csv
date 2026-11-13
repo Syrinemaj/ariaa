@@ -1,0 +1,13 @@
+case_id,category,difficulty,n_steps,predicted_risk,risk_confidence,predicted_tags,summary,error
+wd_001,high_delete,easy,2,high,0.95,employee; record; management,The workflow creates and then deletes an employee record.,
+wd_002,high_payment,medium,2,medium,0.9,payment; charge; fetch,A customer's payment method is charged and then the payment is fetched by its ID.,
+wd_003,high_bulk,hard,2,high,0.95,employees; archiving; listing,The workflow archives multiple employee records in bulk and then lists the employees.,
+wd_004,medium_create_update,easy,2,medium,0.9,contract; employment; update,A new employment contract is created and then its details are updated.,
+wd_005,medium_create_update,medium,1,medium,0.9,employee; salary; update,Update an employee's salary,
+wd_006,low_readonly,easy,3,low,0.9,employees; departments; assignments,This workflow retrieves a list of employees and their departmental assignments.,
+wd_007,low_lowstakes,medium,2,low,0.9,notification; logging; user,The workflow sends a notification to a user and logs the action.,
+wd_008,ambiguous,hard,2,low,0.9,record; operation; update; generic,The workflow updates a record and performs a generic operation.,
+wd_009,ambiguous,hard,3,medium,0.9,employees; profile; notifications,"The workflow lists employees, updates an employee's profile, and sends a notification to the updated employee.",
+wd_010,high_delete,medium,3,high,0.9,product; inventory; e-commerce,"The workflow lists, creates, and deletes products.",
+wd_011,low_readonly,easy,1,low,1.0,order; fetch; read-only,Retrieve an order by its unique identifier.,
+wd_012,medium_create_update,hard,2,medium,0.9,department; employee; assignment,A new department is created and an employee is assigned to it.,

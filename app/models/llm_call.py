@@ -1,5 +1,5 @@
 """
-LLMCall — stores every Azure OpenAI call for cost tracking and correlation.
+LLMCall — stores every Bedrock call for cost tracking and correlation.
 
 Fix 14.2: request_id ties a call to the originating HTTP request (via the
 X-Request-ID header). celery_task_id ties async Celery task calls to their

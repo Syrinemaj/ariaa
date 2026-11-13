@@ -24,11 +24,19 @@ class TestTimestampMixin:
         assert ts.tzinfo == timezone.utc
 
     def test_utcnow_is_not_used(self):
-        """Verify datetime.utcnow is not imported or called in the mixin."""
+        """Verify datetime.utcnow() is never called in the mixin (only
+        mentioned in the module's explanatory docstring/comment)."""
+        import ast
         import inspect
         import app.db.mixins as mixins_module
-        source = inspect.getsource(mixins_module)
-        assert "utcnow" not in source, "datetime.utcnow() is deprecated — use datetime.now(timezone.utc)"
+        tree = ast.parse(inspect.getsource(mixins_module))
+        calls = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "utcnow"
+        ]
+        assert not calls, "datetime.utcnow() is deprecated — use datetime.now(timezone.utc)"
 
     def test_models_inherit_timestamps(self):
         """Key models must include created_at and updated_at columns."""
@@ -49,11 +57,19 @@ class TestAsyncSession:
         assert inspect.isasyncgenfunction(get_db)
 
     def test_session_local_is_sync(self):
+        # sessionmaker(class_=Session) builds an internal dynamic subclass
+        # of Session (same name, different object) — `is` identity on
+        # .class_ is fragile. isinstance() reflects the actual, intended
+        # guarantee: SessionLocal() produces a sync Session, not AsyncSession.
         from sqlalchemy.orm import Session
+        from sqlalchemy.ext.asyncio import AsyncSession
         from app.db.session import SessionLocal
-        # SessionLocal should produce sync Session objects
-        assert hasattr(SessionLocal, "class_")
-        assert SessionLocal.class_ is Session
+        instance = SessionLocal()
+        try:
+            assert isinstance(instance, Session)
+            assert not isinstance(instance, AsyncSession)
+        finally:
+            instance.close()
 
     def test_async_engine_uses_asyncpg_url(self):
         from app.db.session import async_engine

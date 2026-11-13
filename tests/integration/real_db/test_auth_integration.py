@@ -26,4 +26,4 @@ def test_me_with_token(client, admin_token):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert response.status_code == 200
-    assert response.json()["role"] == "admin"
+    assert response.json()["role"] == "ADMIN"

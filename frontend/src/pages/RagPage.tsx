@@ -39,14 +39,41 @@ function validateQuery(q: string): string {
   return ''
 }
 
+// Display-only rescale of the raw cosine score into a more legible
+// "confidence" bar/percentage. Cohere Embed Multilingual v3 (the embedding
+// provider — see app/core/config.py::EMBEDDING_PROVIDER) produces much lower
+// raw cosine scores than the old BGE model even for confident, correct
+// matches (measured empirically: ~0.70 for a well-separated match, as low as
+// ~0.37 for a narrow-domain-but-correct one; garbage queries top out ~0.28).
+// Showing the raw number directly made genuinely correct results look like a
+// failing grade. Anchors: floor 0.30 (the backend's own relevance floor —
+// app/core/config.py::PLAN_MIN_RAG_SCORE — nothing weaker is shown as
+// "relevant" in the first place), ceiling 0.70 (the strongest match measured
+// in validation). The raw score still drives ranking/filtering everywhere;
+// this only changes what's drawn on screen.
+const DISPLAY_SCORE_FLOOR = 0.30
+const DISPLAY_SCORE_CEILING = 0.70
+function displayConfidence(rawScore: number): number {
+  return Math.max(0, Math.min(1, (rawScore - DISPLAY_SCORE_FLOOR) / (DISPLAY_SCORE_CEILING - DISPLAY_SCORE_FLOOR)))
+}
+
 type RagResult = {
   method: string; path: string; canonical: string; domain: string; action: string
   score: number; embedding: string; risk: Risk; tags: string[]; samples: number
+  missingAspects: string[]
 }
 
+// How many nearest-neighbor candidates the embedding stage fetches before
+// the relevance judge (app/rag/relevance_judge.py) filters them down to
+// genuinely-matching ones. No longer a user-facing control — the judge runs
+// on every search now (see RagPage history), so the final result count
+// depends on real relevance, not this number; this only bounds how wide a
+// net the first retrieval pass casts, which matters more on large real-world
+// APIs (hundreds of endpoints) than on small demo runs.
+const CANDIDATE_POOL_SIZE = 10
+
 export default function RagPage() {
-  const [query, setQuery]       = useState('create a new employee with payroll and badge')
-  const [topK, setTopK]         = useState(5)
+  const [query, setQuery]       = useState('')
   const [runs, setRuns]         = useState<AnalysisRun[]>([])
   const [runId, setRunId]       = useState('')
   const [running, setRunning]         = useState(false)
@@ -54,7 +81,7 @@ export default function RagPage() {
   const [indexDone, setIndexDone]     = useState(false)
   const [expanded, setExpanded]       = useState<number | null>(null)
   const [results, setResults]         = useState<RagResult[]>([])
-  const [lowRelevance, setLowRelevance] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
 
   useEffect(() => {
     listRuns({ limit: 50 }).then(data => {
@@ -67,9 +94,21 @@ export default function RagPage() {
     if (!query.trim() || !runId || validateQuery(query)) return
     setRunning(true)
     setExpanded(null)
-    setLowRelevance(false)
     try {
-      const data = await ragSearch(query, runId, topK)
+      const data = await ragSearch(query, runId, CANDIDATE_POOL_SIZE)
+      // The backend is the single source of truth for "is this relevant":
+      // /rag/search already drops anything below score_threshold (default
+      // 0.35 — app/rag/models.py::SemanticSearchRequest). A second,
+      // score-based "low relevance" heuristic used to re-judge results that
+      // had already cleared that bar, using thresholds tuned for the old
+      // BGE embedding model — after the Cohere migration it flagged
+      // essentially every query, including clearly correct ones (e.g. a
+      // confident match could score as low as ~0.37 under Cohere, well
+      // under the old 0.75 cutoff). Removed rather than re-tuned: nothing
+      // the frontend can derive from the score shape is more reliable than
+      // the backend's own filter. An empty result set (hasSearched &&
+      // results.length === 0 below) already covers the real "nothing
+      // relevant found" case.
       const mapped = data.results.map(r => ({
         method:    r.method,
         path:      r.path,
@@ -81,14 +120,15 @@ export default function RagPage() {
         risk:      ((r.metadata?.risk as string) || 'low') as Risk,
         tags:      (r.metadata?.tags as string[]) || [],
         samples:   0,
+        // Set by the backend relevance judge (app/rag/relevance_judge.py)
+        // when this endpoint is the right core match but doesn't support
+        // every specific thing named in the query (e.g. "create an
+        // employee with payroll and badge" -> the create-employee
+        // endpoint, but payroll/badge aren't real fields on it).
+        missingAspects: (r.metadata?.missing_aspects as string[]) || [],
       }))
       setResults(mapped)
-      if (mapped.length > 0) {
-        const scores = mapped.map(r => r.score)
-        const maxScore = Math.max(...scores)
-        const scoreSpread = maxScore - Math.min(...scores)
-        setLowRelevance(maxScore < 0.75 || scoreSpread < 0.03)
-      }
+      setHasSearched(true)
     } catch {
       // keep existing results on error
     } finally {
@@ -122,14 +162,14 @@ export default function RagPage() {
         </div>
 
         <div className="card pad">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_200px_auto] gap-3 items-end">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_auto] gap-3 items-end">
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Query</p>
               <div className="relative">
                 <Sparkles className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--brand)' }} />
-                <input value={query} onChange={e => { setQuery(e.target.value); setLowRelevance(false) }}
+                <input value={query} onChange={e => setQuery(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && void search()}
-                  className="input !pl-9" placeholder="e.g. revoke a badge for a terminated employee" />
+                  className="input !pl-9" placeholder="e.g. revoke a badge for a terminated employee" autoComplete="off" />
               </div>
               {query.trim().length > 0 && validateQuery(query) && (
                 <p className="mt-1 text-xs" style={{ color: '#f43f5e' }}>{validateQuery(query)}</p>
@@ -141,13 +181,6 @@ export default function RagPage() {
                 {runOptions.length === 0 && <option value="">— no runs —</option>}
                 {runOptions.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
               </select>
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-bold tracking-widest uppercase ink-2">Endpoint</span>
-                <span className="text-xs font-mono" style={{ color: 'var(--ink)' }}>{topK}</span>
-              </div>
-              <input type="range" min="1" max="20" value={topK} onChange={e => setTopK(+e.target.value)} className="w-full" />
             </div>
             <div className="flex gap-2">
               <button onClick={() => void search()} disabled={running || !runId || !!validateQuery(query)} className="btn-primary"
@@ -176,19 +209,19 @@ export default function RagPage() {
           </div>
         </div>
 
-        {results.length === 0 && !running && (
+        {results.length === 0 && !running && !hasSearched && (
           <p className="text-sm ink-2 text-center py-6">
             {runId ? 'Enter a query and click Search to find endpoints.' : 'Select a run first, then run the search.'}
           </p>
         )}
 
-        {lowRelevance && results.length > 0 && (
+        {results.length === 0 && !running && hasSearched && (
           <div className="p-3 rounded-xl flex items-start gap-2 text-xs"
             style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', color: '#92400e', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-500" />
             <div>
-              <p className="font-semibold">Low relevance results — the query does not seem to match the indexed endpoints.</p>
-              <p className="mt-1 opacity-80">Semantic search always returns the {results.length} closest endpoints, even without a real match. Rephrase using precise business terms (e.g. "create an employee", "retrieve orders").</p>
+              <p className="font-semibold">No relevant endpoints found for this query.</p>
+              <p className="mt-1 opacity-80">Rephrase using precise business terms (e.g. "create an employee", "retrieve orders").</p>
             </div>
           </div>
         )}
@@ -204,16 +237,22 @@ export default function RagPage() {
                   <span className="font-mono text-sm flex-1 min-w-[200px]" style={{ color: 'var(--ink)' }}>{r.path}</span>
                   <span className="pill" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', borderColor: 'var(--line)', color: 'var(--ink-2)' }}>{r.domain}</span>
                   <span className="pill" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', borderColor: 'var(--line)', color: 'var(--ink-2)' }}>{r.action}</span>
-                  <div className="flex items-center gap-2 min-w-[140px]">
+                  <div className="flex items-center gap-2 min-w-[140px]" title={`Raw similarity score: ${r.score.toFixed(4)}`}>
                     <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
-                      <div className="h-1.5 rounded-full grad-bg" style={{ width: `${r.score * 100}%` }} />
+                      <div className="h-1.5 rounded-full grad-bg" style={{ width: `${displayConfidence(r.score) * 100}%` }} />
                     </div>
-                    <span className="font-mono text-xs" style={{ color: 'var(--ink)' }}>{r.score.toFixed(2)}</span>
+                    <span className="font-mono text-xs" style={{ color: 'var(--ink)' }}>{Math.round(displayConfidence(r.score) * 100)}%</span>
                   </div>
                   <button onClick={() => setExpanded(isOpen ? null : i)} className="btn-ghost !p-1.5">
                     <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
                 </div>
+                {r.missingAspects.length > 0 && (
+                  <div className="px-4 pb-3 -mt-1 flex items-start gap-1.5 text-xs" style={{ color: '#92400e' }}>
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500" />
+                    <span>Partial match — this endpoint does not support: {r.missingAspects.join(', ')}</span>
+                  </div>
+                )}
                 {isOpen && (() => {
                   const emb = parseEmbedding(r.embedding)
                   const reqFields  = (emb['Request fields']  || '').split(',').map(s => s.trim()).filter(Boolean)

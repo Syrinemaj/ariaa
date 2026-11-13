@@ -19,6 +19,7 @@ Normalisation des ports :
 """
 from __future__ import annotations
 
+import ipaddress
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 from urllib.parse import ParseResult, urlparse
@@ -29,6 +30,7 @@ from fastapi import HTTPException, status
 from app.core.config import settings
 from app.security.pinned_dns_transport import (
     SSRFError,
+    _is_forbidden_ip,
     create_pinned_transport,
 )
 
@@ -80,10 +82,26 @@ def _parse_and_check_url(url: str) -> tuple[str, str]:
     Returns (hostname, normalized_base).
     Raises SSRFError on violation.
 
-    When settings.ALLOW_HTTP_TARGETS=True (dev mode) the HTTPS-only check,
-    blocked-hostname list, and domain allowlist are all skipped so that local
-    mock APIs (http://host.docker.internal:9000, http://localhost:9000, …)
-    can be reached without touching production safety rules.
+    When settings.ALLOW_HTTP_TARGETS=True (dev mode), only the HTTPS-only
+    requirement and the configured domain allowlist (ALLOWED_TARGET_DOMAINS,
+    an organization-specific business list) are relaxed, so that local mock
+    APIs reached by NAME (http://host.docker.internal:9000,
+    http://my-mock-api:9000, …) don't need to be added to a production
+    allowlist. The blocked-hostname list and the check against literal
+    dangerous IP addresses below are NEVER skipped, dev mode or not — they
+    are the actual SSRF defense, not a business-configured allowlist.
+
+    Bug fixed here: a prior version also skipped these two checks in dev
+    mode, which disabled SSRF protection entirely for any http:// target —
+    confirmed by tests/integration/real_db/test_ssrf_guard_integration.py,
+    where every dangerous literal (localhost, 127.0.0.1, 169.254.169.254,
+    10.0.0.1, 192.168.1.1) passed through unblocked. A resolved DNS NAME
+    (host.docker.internal) can still legitimately land on a private IP in
+    dev mode — see create_safe_client()'s own dev-mode branch, which never
+    resolves the hostname at all — but a literal IP address typed directly
+    in the URL has no such legitimate "named local dev host" justification,
+    so it is checked unconditionally against the same forbidden ranges used
+    by pinned_dns_transport.py.
     """
     parsed = urlparse(url.strip())
     _dev_http = settings.ALLOW_HTTP_TARGETS
@@ -98,8 +116,18 @@ def _parse_and_check_url(url: str) -> tuple[str, str]:
 
     hostname = parsed.hostname.lower()
 
-    if not _dev_http and hostname in _BLOCKED_HOSTNAMES:
+    if hostname in _BLOCKED_HOSTNAMES:
         raise SSRFError(f"Hostname {hostname!r} is explicitly forbidden")
+
+    try:
+        literal_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        literal_ip = None
+    if literal_ip is not None and _is_forbidden_ip(literal_ip):
+        raise SSRFError(
+            f"{hostname!r} is a forbidden IP address (private network / "
+            "loopback / cloud metadata endpoint)"
+        )
 
     normalized_base = normalize_url_base(parsed)
     if not _dev_http:

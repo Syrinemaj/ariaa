@@ -8,14 +8,13 @@ reproducible identically on every run.
 
     python -m evaluation.run_scripts.run_normalization_eval
 
-To measure the REAL LLM-fallback rate and compare providers/models on the
+To measure the REAL LLM-fallback rate and compare Bedrock models on the
 2 confidence-gated points (group_normalizer.py / semantic_normalizer.py),
-opt in explicitly — THIS COSTS REAL TOKENS on whichever provider you pick:
+opt in explicitly — THIS COSTS REAL TOKENS:
 
     python -m evaluation.run_scripts.run_normalization_eval --with-ai
-    python -m evaluation.run_scripts.run_normalization_eval --with-ai --provider groq
-    python -m evaluation.run_scripts.run_normalization_eval --with-ai --provider bedrock --model eu.anthropic.claude-haiku-4-5
-    python -m evaluation.run_scripts.run_normalization_eval --with-ai --provider bedrock --model eu.anthropic.claude-sonnet-5
+    python -m evaluation.run_scripts.run_normalization_eval --with-ai --model eu.anthropic.claude-haiku-4-5
+    python -m evaluation.run_scripts.run_normalization_eval --with-ai --model eu.anthropic.claude-sonnet-5
 
 To compare several Bedrock models, run this script once per model (each
 run is independent and writes its own results CSV suffixed by model — see
@@ -38,7 +37,6 @@ import os
 import sys
 from typing import List, Optional
 
-from app.core.config import settings
 from app.ingestion.models import TrafficEntry
 from app.normalization.service import normalize_entries
 from evaluation.judge.normalization_judge import judge_normalization_case
@@ -84,36 +82,29 @@ def _pricing_key(model_id: str) -> str:
     return model_id
 
 
-def _build_client(provider: str, model: Optional[str]):
+def _build_client(model: Optional[str]):
     """Returns (real_client, api_model_id, pricing_model_id). Only called
     when --with-ai is set — the default deterministic path never imports a
-    provider client at all."""
-    if provider == "groq":
-        from app.ai.groq_client import GroqClient
-        api_model = model or settings.GROQ_MODEL
-        return GroqClient(), api_model, api_model
-    if provider == "bedrock":
-        from app.ai.bedrock_client import BedrockClient
-        from evaluation.tracer._clock_fix import apply_clock_fix
-        # ARIA-EVAL: sandbox-only workaround — no-op (offset < 60s) on a
-        # correctly NTP-synced machine. See _clock_fix.py docstring.
-        offset = apply_clock_fix()
-        if offset.total_seconds() != 0:
-            print(f"⏱ Correctif d'horloge appliqué : {offset} (sandbox uniquement)")
-        api_model = model or _DEFAULT_BEDROCK_MODEL
-        return BedrockClient(model=api_model), api_model, _pricing_key(api_model)
-    raise ValueError(f"Unknown provider: {provider!r} (expected 'groq' or 'bedrock')")
+    client at all."""
+    from app.ai.bedrock_client import BedrockClient
+    from evaluation.tracer._clock_fix import apply_clock_fix
+    # ARIA-EVAL: sandbox-only workaround — no-op (offset < 60s) on a
+    # correctly NTP-synced machine. See _clock_fix.py docstring.
+    offset = apply_clock_fix()
+    if offset.total_seconds() != 0:
+        print(f"⏱ Correctif d'horloge appliqué : {offset} (sandbox uniquement)")
+    api_model = model or _DEFAULT_BEDROCK_MODEL
+    return BedrockClient(model=api_model), api_model, _pricing_key(api_model)
 
 
 def _patch_normalization_clients(tracing_client: TracingClient) -> None:
     """Monkeypatch the 2 known AI-client instantiation points so
     app/normalization/{group_normalizer,semantic_normalizer}.py construct
-    `tracing_client` instead of a real provider client — no app/ file edited
+    `tracing_client` instead of a real BedrockClient — no app/ file edited
     for eval purposes. Both modules call create_ai_client() (see
-    app/ai/base_client.py — provider selection now goes through this single
-    factory instead of each module importing GroqClient directly), so
-    patching that one name in each module covers whichever provider
-    settings.AI_PROVIDER actually points at.
+    app/ai/base_client.py), so patching that one name in each module is
+    enough to intercept every LLM call, regardless of which Bedrock model
+    it's configured for.
     group_normalizer.py's own optional ai_client= parameter isn't reached by
     normalize_entries() today, so patching the factory name is the only
     lever available without an app/ change."""
@@ -163,7 +154,6 @@ def run_single_case(case: dict, use_ai: bool = False) -> dict:
 
 def run_eval(
     use_ai: bool = False,
-    provider: str = "groq",
     model: Optional[str] = None,
     out_suffix: str = "",
     case_ids: Optional[List[str]] = None,
@@ -182,7 +172,7 @@ def run_eval(
 
     pricing_model_id = None
     if use_ai:
-        real_client, api_model, pricing_model_id = _build_client(provider, model)
+        real_client, api_model, pricing_model_id = _build_client(model)
         # ARIA-EVAL: budget_guard, when passed, is shared across every call
         # this TracingClient makes — and, when run_eval() is invoked once per
         # model by run_model_comparison.py, across models too (same instance
@@ -193,7 +183,7 @@ def run_eval(
             budget_guard=budget_guard, max_tokens=max_tokens,
         )
         _patch_normalization_clients(tracing_client)
-        print(f"⚠ --with-ai actif : provider={provider} model={api_model} "
+        print(f"⚠ --with-ai actif : model={api_model} "
               f"(pricing lookup: {pricing_model_id}, max_tokens={max_tokens}) — coûte des tokens réels\n")
 
     results: List[dict] = []
@@ -212,7 +202,7 @@ def run_eval(
     print("══ RÉSULTATS ══")
     print(f"Cas testés         : {len(results)} / {len(cases)} demandés"
           + (" (arrêt anticipé — budget)" if len(results) < len(cases) else ""))
-    print(f"Mode               : {'use_ai=True (' + provider + '/' + str(model or '(défaut)') + ') — tokens réels' if use_ai else 'use_ai=False (déterministe)'}")
+    print(f"Mode               : {'use_ai=True (' + str(model or '(défaut)') + ') — tokens réels' if use_ai else 'use_ai=False (déterministe)'}")
     print(f"Recall             : {recall(results):.2%}  (TP/(TP+FN) sur les positions ID)")
     print(f"Precision          : {precision(results):.2%}  (TP/(TP+FP))")
     print(f"Specificity        : {specificity(results):.2%}  (TN/(TN+FP) — ex-'precision', régression Bug 1)")
@@ -263,7 +253,7 @@ def run_eval(
         latencies = [
             c["latency_ms"] for r in results if "trace" in r for c in r["trace"]["calls"]
         ]
-        print(f"\n── Coût / latence estimés ({provider}/{model or '(défaut)'}) ──")
+        print(f"\n── Coût / latence estimés ({model or '(défaut)'}) ──")
         print(f"  Appels LLM réels   : {total_calls}")
         print(f"  Coût total estimé  : ${total_cost:.4f}")
         if latencies:
@@ -340,12 +330,9 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--with-ai", action="store_true",
                          help="Active le fallback LLM réel (coûte des tokens)")
-    parser.add_argument("--provider", choices=["groq", "bedrock"], default="groq",
-                         help="Provider pour le fallback LLM (défaut: groq)")
     parser.add_argument("--model", default=None,
-                         help="ID de modèle exact (ex: eu.anthropic.claude-sonnet-5). "
-                              "Défaut : settings.GROQ_MODEL pour groq, "
-                              f"{_DEFAULT_BEDROCK_MODEL} pour bedrock.")
+                         help="ID de modèle Bedrock exact (ex: eu.anthropic.claude-sonnet-5). "
+                              f"Défaut : {_DEFAULT_BEDROCK_MODEL}.")
     parser.add_argument("--out-suffix", default="",
                          help="Suffixe du fichier CSV de sortie, pour ne pas écraser "
                               "les résultats d'un autre modèle (ex: --out-suffix haiku45)")
@@ -366,7 +353,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         args = _parse_args()
         run_eval(
-            use_ai=args.with_ai, provider=args.provider, model=args.model,
+            use_ai=args.with_ai, model=args.model,
             out_suffix=args.out_suffix,
             case_ids=args.cases.split(",") if args.cases else None,
             budget_guard=BudgetGuard(args.budget) if args.budget is not None else None,

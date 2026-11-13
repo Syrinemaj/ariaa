@@ -1,0 +1,24 @@
+[
+  {
+    "model": "deepseek.v3.2",
+    "skipped": false,
+    "cases_completed": 12,
+    "completion_rate": 0.8333333333333334,
+    "domain_match": 0.8,
+    "action_match": 0.4,
+    "tag_relevance": 1.0,
+    "confidence_calibration": 1.0,
+    "cost_usd": 0.027022000000000004
+  },
+  {
+    "model": "amazon.nova-lite-v1:0",
+    "skipped": false,
+    "cases_completed": 12,
+    "completion_rate": 1.0,
+    "domain_match": 0.6,
+    "action_match": 0.45454545454545453,
+    "tag_relevance": 1.0,
+    "confidence_calibration": 0.8333333333333334,
+    "cost_usd": 0.0006320000000000006
+  }
+]

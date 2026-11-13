@@ -43,8 +43,9 @@ _BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passage
 
 class LocalEmbeddingClient:
     """
-    Wraps sentence-transformers with the same embedding interface as
-    AzureOpenAIClient so call-sites need no changes beyond the type annotation.
+    Wraps sentence-transformers with the EmbeddingClientProtocol interface
+    (see app/ai/base_client.py) so call-sites need no changes beyond the
+    type annotation.
     """
 
     _model = None  # class-level singleton — shared across all instances

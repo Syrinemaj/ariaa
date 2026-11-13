@@ -1,0 +1,46 @@
+@startuml ui_catalogue_api
+' Maquette structurelle (wireframe), pas une capture d'écran réelle.
+' À remplacer par une véritable capture de l'application exécutée.
+!theme plain
+scale 1
+
+salt
+{
+  {T
+    + Catalogue d'API | Analyses > Catalogue
+  }
+  ==
+  {SI "Rechercher un endpoint..." | .}
+  --
+  {#
+    Méthode | Chemin | Domaine | Action | Confiance
+    GET | /employees/{employee_id} | ressources humaines | consulter | 0.91
+    POST | /employees | ressources humaines | créer | 0.88
+    PATCH | /employees/{employee_id}/contract | ressources humaines | mettre à jour | 0.74
+    . | . | . | . | .
+  }
+  ==
+  { Endpoint sélectionné : GET /employees/{employee_id}
+    {
+      Résumé | "Récupère les informations d'un employé par son identifiant."
+      Domaine métier | ressources humaines
+      Action métier | consulter
+      Authentification inférée | session
+    }
+    {
+      Schéma de réponse (inféré)
+      {
+        id : string (requis)
+        full_name : string (requis)
+        department : string
+        hire_date : string (date)
+        manager_id : string | null
+      }
+    }
+    {
+      Étiquettes
+      [employé] [lecture] [RH]
+    }
+  }
+}
+@enduml

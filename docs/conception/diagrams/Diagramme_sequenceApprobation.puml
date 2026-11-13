@@ -1,0 +1,35 @@
+@startuml Diagramme_sequenceApprobation
+!theme plain
+
+actor Opérateur
+actor Administrateur
+participant "API\n(app/api/automation.py\n/ app/api/bulk.py)" as API
+database "PostgreSQL" as PG
+participant "approval_service.py" as Approval
+participant "GET /approvals\n(app/api/approvals.py)" as List
+queue "Redis (broker, queue execution)" as Broker
+
+Opérateur -> API : soumet un plan nécessitant approbation
+API -> PG : INSERT AutomationRun(status=pending_approval)
+API -> PG : INSERT AutomationApproval(status=pending)
+API -> PG : INSERT Notification (destinataire: admins)
+
+Administrateur -> List : GET /approvals (liste en attente)
+List -> PG : SELECT AutomationApproval WHERE status=pending
+List --> Administrateur : plans en attente + score de risque + raisons
+
+alt Administrateur approuve
+  Administrateur -> API : POST /approvals/{id}/approve {comment}
+  API -> Approval : approval.status = "approved"
+  Approval -> PG : UPDATE AutomationApproval
+  API -> PG : UPDATE AutomationRun.status = running
+  API -> Broker : enqueue l'exécution réelle
+  Broker -> Broker : (worker) re-vérifie check_execution_policy\njuste avant l'exécution réelle
+else Administrateur rejette
+  Administrateur -> API : POST /approvals/{id}/reject {comment}
+  API -> PG : UPDATE AutomationApproval.status = rejected
+  API -> PG : UPDATE AutomationRun.status = failed
+  API -> PG : INSERT Notification (destinataire: opérateur)
+end
+
+@enduml

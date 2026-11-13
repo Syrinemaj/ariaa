@@ -1,0 +1,16 @@
+cas,attendu,obtenu,ok
+"1. GET en environnement full_access, seuils par defaut",ALLOW,ALLOW,True
+"1. POST en environnement full_access, seuils par defaut",REQUIRE_APPROVAL,REQUIRE_APPROVAL,True
+"1. DELETE en environnement full_access, seuils par defaut",REQUIRE_APPROVAL,REQUIRE_APPROVAL,True
+2. Endpoint interdit par regle explicite (role ignore par construction),BLOCK,BLOCK,True
+3. Environnement sans politique configuree,BLOCK,BLOCK,True
+4. Execution reelle (dry_run=False) sans approbation accordee,ApprovalRequiredError,ApprovalRequiredError,True
+6. SSRF -- cible http://127.0.0.1/,blocked,blocked,True
+6. SSRF -- cible http://10.0.0.5/,blocked,blocked,True
+6. SSRF -- cible http://169.254.169.254/latest/meta-data/,blocked,blocked,True
+6. SSRF -- cible https://example.com/,allowed,allowed,True
+7. Parametre de chemin '../../etc',PathTraversalError,PathTraversalError,True
+8. Upload capture.txt comme fichier HAR,HTTPException_400,HTTPException_400,True
+9a. Limite de taille CSV configuree (BULK_FILE_MAX_SIZE_MB),20,20,True
+9b. Limite de lignes CSV configuree (BULK_MAX_ROWS),10000,10000,True
+10. 6 tentatives de login en moins d'une minute,429_on_6th,429_on_6th,True

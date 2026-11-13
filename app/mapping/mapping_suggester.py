@@ -1,5 +1,6 @@
 from typing import Any, Dict, List
 
+from app.bulk_execution.batch_state import ENTITY_ID_ALIASES, normalize_action
 from app.mapping.field_mapper import candidate_names, normalize_field_name
 
 
@@ -12,6 +13,7 @@ FIELD_SYNONYMS = {
     "contractType": {"contract", "contract_type", "type_contrat", "contracttype"},
     "startDate":    {"start_date", "startdate", "date_debut", "hire_date", "joining_date"},
     "phone":        {"phone", "phone_number", "telephone", "mobile"},
+    "nom_employe":  {"nom", "employe", "nom_de_lemploye", "employee_name", "employee", "nom_complet", "salarie", "nom_salarie"},
 }
 
 
@@ -22,9 +24,16 @@ def extract_target_fields_from_plan(plan: Dict[str, Any]) -> List[Dict[str, Any]
     and POST /employees/payroll) is listed only once — the first step that
     declares it wins. This prevents duplicate "missing" entries in the mapping UI
     when several steps share the same request schema fields.
+
+    Fields auto-resolved from an EARLIER step's response (employee_id after a
+    "Create Employee" step, etc. — see ENTITY_ID_ALIASES) are skipped entirely:
+    they're never something a CSV column should supply, so they shouldn't show
+    up in the mapping table as an unmapped/"missing" target. Mirrors the same
+    virtual-state walk as required_input_fields() (app/automation/payload_mapper.py).
     """
     target_fields: List[Dict[str, Any]] = []
     seen_fields: set[str] = set()
+    virtual_state: set[str] = set()
 
     import logging as _log
     _logger = _log.getLogger(__name__)
@@ -38,6 +47,8 @@ def extract_target_fields_from_plan(plan: Dict[str, Any]) -> List[Dict[str, Any]
         )
 
         for field_name in properties.keys():
+            if field_name in virtual_state:
+                continue
             if field_name in seen_fields:
                 continue
             seen_fields.add(field_name)
@@ -46,6 +57,10 @@ def extract_target_fields_from_plan(plan: Dict[str, Any]) -> List[Dict[str, Any]
                 "target_endpoint": step.get("canonical_key"),
                 "step_order": step.get("order"),
             })
+
+        response_schema = step.get("response_schema") or {}
+        virtual_state.update((response_schema.get("properties") or {}).keys())
+        virtual_state.update(ENTITY_ID_ALIASES.get(normalize_action(step.get("action")), ()))
 
     return target_fields
 

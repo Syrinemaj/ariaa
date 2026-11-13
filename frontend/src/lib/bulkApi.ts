@@ -13,6 +13,7 @@ export interface DataFileUploadResult {
 }
 
 export interface MappingSuggestion {
+  id: string | null
   source_field: string
   target_field: string | null
   target_endpoint?: string
@@ -81,10 +82,11 @@ export interface BulkJobProgress {
   batches_done: number
   automation_run_id: string | null
   progress_pct: number
+  dry_run: boolean
 }
 
 export interface BatchSummary {
-  batch_index: number
+  batch_number: number
   status: string
   success_count: number
   failed_count: number
@@ -106,6 +108,11 @@ export interface BulkReport {
   failed_count: number
   batch_summary: BatchSummary[]
   row_errors: RowError[]
+  // Rows whose create hit a 409 "already exists" and were auto-resolved to
+  // the existing record instead of failing — see
+  // app/bulk_execution/conflict_resolution.py. Not failures: counted in
+  // success_count, just worth showing separately from a brand-new create.
+  duplicate_rows: RowError[]
 }
 
 // ── API calls ─────────────────────────────────────────────────────────────────
@@ -126,6 +133,17 @@ export function suggestMapping(
     data_file_id: dataFileId,
     plan,
   })
+}
+
+export interface MappingApproveResult {
+  id: string
+  source_field: string
+  target_field: string | null
+  approved: boolean
+}
+
+export function approveMapping(mappingId: string, approved: boolean = true): Promise<MappingApproveResult> {
+  return api.patch(`/bulk/mapping/${encodeURIComponent(mappingId)}/approve`, { approved })
 }
 
 export function validateBulk(
@@ -155,8 +173,7 @@ export function dryRunBulk(
 export function executeBulk(
   plan: BackendAutomationPlan,
   dataFileId: string,
-  baseUrl: string,
-  authHeaders: Record<string, string>,
+  connectionId: string,
   dryRun: boolean,
   batchSize: number,
   allowPartial: boolean,
@@ -165,8 +182,7 @@ export function executeBulk(
   return api.post('/bulk/execute', {
     plan,
     data_file_id: dataFileId,
-    base_url: baseUrl,
-    auth_headers: authHeaders,
+    connection_id: connectionId,
     dry_run: dryRun,
     batch_size: batchSize,
     allow_partial_execution: allowPartial,
@@ -174,8 +190,59 @@ export function executeBulk(
   })
 }
 
+// Same call every time, on the first click AND every poll tick while waiting
+// on admin approval — the backend (app/api/bulk.py) finds any existing
+// "pending_approval" run for this exact data_file+user before creating a new
+// one, so repeating it is "check the decision", not "submit again". See
+// AutomationPage.tsx's callExecute for the identical pattern.
+export interface BulkApprovalCheckResult {
+  code: 'APPROVED' | 'NOT_REQUIRED'
+  message: string
+  automation_run_id: string | null
+}
+
+// Governance/approval check ONLY — never starts execution, even when the
+// answer is "approved" (see app/api/bulk.py::request_bulk_approval). Used by
+// the wizard's Approval step to request/poll real admin sign-off before the
+// operator ever reaches the separate "Execute for real" step.
+export function requestBulkApproval(
+  plan: BackendAutomationPlan,
+  dataFileId: string,
+  connectionId: string,
+): Promise<BulkApprovalCheckResult> {
+  return api.post('/bulk/request-approval', {
+    plan,
+    data_file_id: dataFileId,
+    connection_id: connectionId,
+  })
+}
+
+export function executeBulkReal(
+  plan: BackendAutomationPlan,
+  dataFileId: string,
+  connectionId: string,
+  batchSize: number,
+  allowPartial: boolean,
+): Promise<BulkExecuteResult> {
+  return api.post('/bulk/execute', {
+    plan,
+    data_file_id: dataFileId,
+    connection_id: connectionId,
+    dry_run: false,
+    batch_size: batchSize,
+    allow_partial_execution: allowPartial,
+    approval_granted: true,
+  })
+}
+
 export function getBulkJobProgress(jobId: string): Promise<BulkJobProgress> {
   return api.get(`/jobs/${jobId}/progress`)
+}
+
+// Cooperative cancel — in-flight rows finish, nothing new starts. See
+// app/api/jobs.py::cancel_bulk_job for the full behavior.
+export function cancelBulkJob(jobId: string): Promise<{ job_id: string; status: string }> {
+  return api.post(`/jobs/${jobId}/cancel`)
 }
 
 export function getBulkReport(automationRunId: string): Promise<BulkReport> {

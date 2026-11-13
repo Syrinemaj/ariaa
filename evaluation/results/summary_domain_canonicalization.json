@@ -1,0 +1,32 @@
+[
+  {
+    "model": "deepseek.v3.2",
+    "skipped": false,
+    "cases_completed": 10,
+    "completion_rate": 1.0,
+    "count_accuracy": 0.9,
+    "coverage": 0.9,
+    "distinctness": 1.0,
+    "cost_usd": 0.005573999999999999
+  },
+  {
+    "model": "amazon.nova-lite-v1:0",
+    "skipped": false,
+    "cases_completed": 10,
+    "completion_rate": 1.0,
+    "count_accuracy": 0.1,
+    "coverage": 1.0,
+    "distinctness": 1.0,
+    "cost_usd": 0.00017799999999999934
+  },
+  {
+    "model": "mistral.mistral-large-2402-v1:0",
+    "skipped": false,
+    "cases_completed": 10,
+    "completion_rate": 0.0,
+    "count_accuracy": 0.0,
+    "coverage": 0.0,
+    "distinctness": 0.0,
+    "cost_usd": 0.009333999999999999
+  }
+]

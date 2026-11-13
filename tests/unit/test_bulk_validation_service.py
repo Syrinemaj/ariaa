@@ -32,6 +32,7 @@ class TestValidateBulkDataStatus:
         monkeypatch.setattr(bulk_validation_service, "get_approved_mappings", lambda **kw: {})
         monkeypatch.setattr(bulk_validation_service, "apply_mapping_to_row", lambda row, mappings: row)
         monkeypatch.setattr(bulk_validation_service, "resolve_row_references", lambda mapped: mapped)
+        monkeypatch.setattr(bulk_validation_service, "plan_needed_fields", lambda plan: set())
         monkeypatch.setattr(bulk_validation_service, "validate_row_against_plan", lambda *a: [])
         monkeypatch.setattr(bulk_validation_service, "validate_contract_type", lambda *a: [])
 
@@ -67,6 +68,7 @@ class TestValidateBulkDataStatus:
         monkeypatch.setattr(bulk_validation_service, "get_approved_mappings", lambda **kw: {})
         monkeypatch.setattr(bulk_validation_service, "apply_mapping_to_row", lambda row, mappings: row)
         monkeypatch.setattr(bulk_validation_service, "resolve_row_references", lambda mapped: mapped)
+        monkeypatch.setattr(bulk_validation_service, "plan_needed_fields", lambda plan: set())
         monkeypatch.setattr(bulk_validation_service, "validate_row_against_plan", lambda *a: [])
         monkeypatch.setattr(bulk_validation_service, "validate_contract_type", lambda *a: [])
         monkeypatch.setattr(bulk_validation_service, "validate_row_business_rules", lambda *a: [])

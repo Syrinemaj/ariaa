@@ -1,5 +1,5 @@
 """
-Pydantic models for every LLM response shape produced by AzureOpenAIClient.
+Pydantic models for every LLM response shape produced by BedrockClient.
 
 Why: json.loads() accepts any JSON structure including hallucinated fields
 (e.g. confidence=999, missing required keys). These models enforce:

@@ -1,47 +1,35 @@
 """
 Unit tests — EmbeddingCache (Section 11.2).
 
-All external dependencies (Redis, PostgreSQL, Azure OpenAI) are mocked.
+EmbeddingCache is a Redis-only, content-addressed cache (see module
+docstring in app/rag/embedding_cache.py): Redis hit -> return cached
+embedding; Redis miss -> compute via ai_client and cache in Redis.
+Persistent storage for real endpoints is a separate concern handled by
+vector_store.index_endpoint_embedding(), not by this class.
 """
 from __future__ import annotations
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.rag.embedding_cache import EmbeddingCache
 
 FAKE_EMBEDDING = [0.1, 0.2, 0.3]
-FAKE_HASH = "abc123"
 
 
-def _make_cache(
-    redis_get=None,
-    redis_setex=AsyncMock(),
-    redis_set=AsyncMock(),
-    db_result=None,
-    ai_result=None,
-):
+def _make_cache(redis_get=None, ai_result=None):
     redis = AsyncMock()
     redis.get = AsyncMock(return_value=redis_get)
-    redis.setex = redis_setex
-
-    db = AsyncMock()
-    scalar_mock = MagicMock()
-    scalar_mock.embedding = FAKE_EMBEDDING if db_result else None
-    execute_result = MagicMock()
-    execute_result.scalar_one_or_none.return_value = scalar_mock if db_result else None
-    db.execute = AsyncMock(return_value=execute_result)
-    db.add = MagicMock()
-    db.flush = AsyncMock()
+    redis.setex = AsyncMock()
 
     ai_client = AsyncMock()
     ai_client.create_embedding_async = AsyncMock(
         return_value=ai_result or FAKE_EMBEDDING
     )
 
-    return EmbeddingCache(redis=redis, db=db, ai_client=ai_client)
+    return EmbeddingCache(redis=redis, ai_client=ai_client)
 
 
 class TestContentHash:
@@ -78,32 +66,21 @@ class TestRedisHit:
         cache = _make_cache(redis_get=serialized)
         result = await cache.get_or_create_embedding("GET", "/users", {})
         assert result == FAKE_EMBEDDING
-        # DB and AI client must NOT be called
-        cache.db.execute.assert_not_called()
+        # AI client must NOT be called on a cache hit
         cache.ai_client.create_embedding_async.assert_not_called()
 
 
-class TestDbHit:
+class TestCacheMiss:
     @pytest.mark.asyncio
-    async def test_db_hit_warms_redis_and_returns_embedding(self):
-        cache = _make_cache(redis_get=None, db_result=True)
-        result = await cache.get_or_create_embedding("GET", "/users", {})
-        assert result == FAKE_EMBEDDING
-        # Redis must be warmed
-        cache.redis.setex.assert_called_once()
-        # AI client must NOT be called
-        cache.ai_client.create_embedding_async.assert_not_called()
-
-
-class TestCompleteMiss:
-    @pytest.mark.asyncio
-    async def test_complete_miss_calls_ai_and_saves_everywhere(self):
-        cache = _make_cache(redis_get=None, db_result=False)
+    async def test_miss_calls_ai_and_caches_in_redis(self):
+        cache = _make_cache(redis_get=None)
         result = await cache.get_or_create_embedding("POST", "/items", {})
         assert result == FAKE_EMBEDDING
         cache.ai_client.create_embedding_async.assert_called_once()
-        # Must save to Redis
         cache.redis.setex.assert_called_once()
-        # Must save to DB
-        cache.db.add.assert_called_once()
-        cache.db.flush.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_miss_embeds_method_and_path(self):
+        cache = _make_cache(redis_get=None)
+        await cache.get_or_create_embedding("POST", "/items", {})
+        cache.ai_client.create_embedding_async.assert_called_once_with("POST /items")

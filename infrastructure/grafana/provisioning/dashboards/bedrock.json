@@ -4,155 +4,371 @@
   "description": "Tokens et coûts pour le provider Bedrock (AI_PROVIDER=bedrock, actif par défaut — modèle courant : deepseek.v3.2, voir app/core/config.py::BEDROCK_MODEL). Fonctionne avec n'importe quel modèle Bedrock configuré, pas seulement Claude — les panels 'par modèle' se réajustent automatiquement si BEDROCK_MODEL change.",
   "version": 2,
   "refresh": "30s",
-  "time": { "from": "now-6h", "to": "now" },
-  "tags": ["aria", "bedrock", "deepseek", "llm"],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "tags": [
+    "aria",
+    "bedrock",
+    "deepseek",
+    "llm"
+  ],
   "schemaVersion": 38,
   "panels": [
-
-    { "id": 100, "type": "row", "title": "📊 Résumé Bedrock", "collapsed": false,
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
-
     {
-      "id": 1, "title": "Tokens totaux (24h)", "type": "stat",
-      "gridPos": { "x": 0, "y": 1, "w": 8, "h": 4 },
-      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "thresholds" },
-          "thresholds": { "steps": [
-            { "color": "green", "value": null },
-            { "color": "yellow", "value": 50000 },
-            { "color": "red", "value": 500000 }
-          ]}
-        }
-      },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "expr": "sum(increase(aria_llm_tokens_total{provider=\"bedrock\"}[24h]))",
-        "legendFormat": "Tokens"
-      }]
+      "id": 100,
+      "type": "row",
+      "title": "📊 Résumé Bedrock",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
     },
-
     {
-      "id": 2, "title": "Coût estimé (24h)", "type": "stat",
-      "gridPos": { "x": 8, "y": 1, "w": 8, "h": 4 },
-      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["sum"] } },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyUSD", "decimals": 4,
-          "color": { "mode": "thresholds" },
-          "thresholds": { "steps": [
-            { "color": "green", "value": null },
-            { "color": "yellow", "value": 1 },
-            { "color": "red", "value": 5 }
-          ]}
-        }
+      "id": 1,
+      "title": "Tokens totaux (24h)",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 8,
+        "h": 4
       },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "expr": "sum(increase(aria_llm_cost_total{provider=\"bedrock\"}[24h]))",
-        "legendFormat": "Coût USD"
-      }]
-    },
-
-    {
-      "id": 3, "title": "Tokens/min (actuel)", "type": "stat",
-      "gridPos": { "x": 16, "y": 1, "w": 8, "h": 4 },
-      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "thresholds" },
-          "thresholds": { "steps": [
-            { "color": "green", "value": null },
-            { "color": "orange", "value": 5000 },
-            { "color": "red", "value": 20000 }
-          ]}
-        }
-      },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "expr": "sum(rate(aria_llm_tokens_total{provider=\"bedrock\"}[1m])) * 60",
-        "legendFormat": "Tokens/min"
-      }]
-    },
-
-    { "id": 200, "type": "row", "title": "📈 Consommation dans le temps", "collapsed": false,
-      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 } },
-
-    {
-      "id": 4, "title": "Tokens/min — par tâche", "type": "timeseries",
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": { "lineWidth": 2, "fillOpacity": 15 }
-        }
-      },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "expr": "sum by (task_name) (rate(aria_llm_tokens_total{provider=\"bedrock\"}[1m]) * 60)",
-        "legendFormat": "{{task_name}}"
-      }]
-    },
-
-    {
-      "id": 5, "title": "Coût/heure — par modèle", "type": "timeseries",
-      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyUSD", "decimals": 6,
-          "custom": { "lineWidth": 2, "fillOpacity": 15 }
-        }
-      },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "expr": "sum by (model_name) (rate(aria_llm_cost_total{provider=\"bedrock\"}[5m]) * 3600)",
-        "legendFormat": "{{model_name}}"
-      }]
-    },
-
-    {
-      "id": 6, "title": "Répartition tokens par modèle", "type": "piechart",
-      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
       "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        }
       },
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "expr": "sum by (model_name) (aria_llm_tokens_total{provider=\"bedrock\"})",
-        "legendFormat": "{{model_name}}"
-      }]
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50000
+              },
+              {
+                "color": "red",
+                "value": 500000
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(aria_llm_tokens_total{provider=\"bedrock\"}[24h]))",
+          "legendFormat": "Tokens"
+        }
+      ]
     },
-
     {
-      "id": 7, "title": "Répartition tokens par tâche", "type": "piechart",
-      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
-      "options": {
-        "displayLabels": ["name", "percent"],
-        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      "id": 2,
+      "title": "Coût estimé (24h)",
+      "type": "stat",
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 8,
+        "h": 4
       },
-      "fieldConfig": { "defaults": { "unit": "short" } },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "prometheus" },
-        "expr": "sum by (task_name) (aria_llm_tokens_total{provider=\"bedrock\"})",
-        "legendFormat": "{{task_name}}"
-      }]
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 4,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(aria_llm_cost_total{provider=\"bedrock\"}[24h]))",
+          "legendFormat": "Coût USD"
+        }
+      ]
     },
-
+    {
+      "id": 3,
+      "title": "Tokens/min (actuel)",
+      "type": "stat",
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 8,
+        "h": 4
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5000
+              },
+              {
+                "color": "red",
+                "value": 20000
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(aria_llm_tokens_total{provider=\"bedrock\"}[1m])) * 60",
+          "legendFormat": "Tokens/min"
+        }
+      ]
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "📈 Consommation dans le temps",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 4,
+      "title": "Tokens/min — par tâche",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 8
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (task_name) (rate(aria_llm_tokens_total{provider=\"bedrock\"}[1m]) * 60)",
+          "legendFormat": "{{task_name}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Coût/heure — par modèle",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 6,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model_name) (rate(aria_llm_cost_total{provider=\"bedrock\"}[5m]) * 3600)",
+          "legendFormat": "{{model_name}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Répartition tokens par modèle",
+      "type": "piechart",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (model_name) (aria_llm_tokens_total{provider=\"bedrock\"})",
+          "legendFormat": "{{model_name}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Répartition tokens par tâche",
+      "type": "piechart",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value",
+            "percent"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (task_name) (aria_llm_tokens_total{provider=\"bedrock\"})",
+          "legendFormat": "{{task_name}}"
+        }
+      ]
+    },
     {
       "id": 8,
       "title": "📋 Note — statut de la migration",
       "type": "text",
-      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
       "options": {
         "mode": "markdown",
-        "content": "## ✅ Bedrock actif — provider par défaut\n\n**État actuel :**\n- `AI_PROVIDER=bedrock`, `BEDROCK_MODEL=deepseek.v3.2` (app/core/config.py, .env)\n- deepseek.v3.2 choisi après comparaison avec moonshotai.kimi-k2.5 sur le golden dataset param-detection (140 cas, `evaluation/run_scripts/run_param_detection_eval.py`)\n- `app/ai/bedrock_client.py` implémente `classify_api_call` + `structured_chat`, avec retry-once sur absence de tool call (deepseek consomme parfois des tokens de raisonnement avant l'appel d'outil — max_tokens par défaut relevé à 1500)\n- Tarification dans `app/llm_observability/pricing.py` (`deepseek.v3.2`, taux `default_estimated` — non vérifié sur une page de pricing Bedrock en direct)\n- Rollback vers Groq/Azure : changer `AI_PROVIDER` dans `.env`, aucun changement de code requis\n\nComparaison de coûts inter-modèles : `GET /llm/compare-models` ou `python -m scripts.compare_llm_models`"
+        "content": "## Bedrock — seul fournisseur IA\n\n**État actuel :**\n- `AI_PROVIDER=bedrock`, `BEDROCK_MODEL=amazon.nova-lite-v1:0` (app/core/config.py, .env)\n- amazon.nova-lite-v1:0 choisi après comparaison à 8 tâches contre deepseek.v3.2 (le défaut précédent) : qualité pondérée quasi identique (84.9% vs 85.1%), ~37x moins cher, ~2.4x plus rapide avec une latence bien plus régulière (evaluation/aggregate.py, evaluation/results/full_comparison.csv)\n- `app/ai/bedrock_client.py` implémente `classify_api_call` + `structured_chat`, avec retry-once sur absence de tool call (les modèles de raisonnement comme deepseek.v3.2 consomment parfois des tokens de raisonnement avant l'appel d'outil — max_tokens par défaut à 1500)\n- Tarification dans `app/llm_observability/pricing.py`\n- GroqClient et AzureOpenAIClient ont été supprimés du projet — Bedrock est l'unique fournisseur, plus de rollback possible par simple changement de variable\n\nComparaison de coûts inter-modèles Bedrock : `GET /llm/compare-models` ou `python -m scripts.compare_llm_models`"
       }
     }
   ]

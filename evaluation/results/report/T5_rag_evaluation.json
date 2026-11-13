@@ -1,0 +1,552 @@
+{
+  "date_utc": "2026-11-12T00:07:38.745059+00:00",
+  "commit": "52c6a7f42e586271020ce14187956cbd79018712",
+  "run_id": "06f866a1-d8d6-4900-b3a0-cd3bc02c568c",
+  "catalogue": "83 endpoints reels (hr-rich-client, anonymise -- aucune donnee personnelle dans les requetes de test)",
+  "sans_juge": {
+    "rows": [
+      {
+        "id": "q01",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /cxf/bc/usermgt/login",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q02",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 0,
+        "recall_at_5": 1,
+        "mrr": 0.5,
+        "top_result": "GET /cxf/bc/usermgt/connecteduser",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q03",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/pingsession",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q04",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/pingsession",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q05",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/disconnect",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q06",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/disconnect",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q07",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/get-user-profile",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q08",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/get-user-profile",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q09",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/msg-update-dossier",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q10",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/msg-update-dossier",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q11",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/sitemap",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q12",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/sitemap",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q13",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/widget/hra_fr_payrollindicator/config",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q14",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 0,
+        "recall_at_5": 1,
+        "mrr": 0.5,
+        "top_result": "GET /cxf/widget/hra_fr_payrollcontrolindicator/config",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q15",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/rich-client/select-role",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q16",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/rich-client/select-role",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q17",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /cxf/news/getpublishednews",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q18",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /cxf/news/getpublishednews",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q19",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/accessmanager/getaccessibleelementsbycategory/mainmenu",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q20",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/accessmanager/getaccessibleelementsbycategory/mainmenu",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q21",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/hrqsql",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q22",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/hrqsql",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q23",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /hr-rich-client/hrservlet/hradmin",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q24",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /hr-rich-client/hrservlet/hradmin",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q25",
+        "lang": "en",
+        "difficulty": "out_of_catalog",
+        "recall_at_1": null,
+        "recall_at_5": null,
+        "mrr": null,
+        "top_result": "POST /cxf/tasks/requests/counters",
+        "out_of_catalog_empty": false
+      }
+    ],
+    "global": {
+      "n": 24,
+      "recall_at_1": 0.917,
+      "recall_at_5": 1.0,
+      "mrr": 0.958
+    },
+    "fr": {
+      "n": 12,
+      "recall_at_1": 0.833,
+      "recall_at_5": 1.0,
+      "mrr": 0.917
+    },
+    "en": {
+      "n": 12,
+      "recall_at_1": 1.0,
+      "recall_at_5": 1.0,
+      "mrr": 1.0
+    },
+    "out_of_catalog_handled_honestly": false
+  },
+  "avec_juge": {
+    "rows": [
+      {
+        "id": "q01",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /cxf/bc/usermgt/login",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q02",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /cxf/bc/usermgt/login",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q03",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/pingsession",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q04",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/pingsession",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q05",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/disconnect",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q06",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/usermgt/disconnect",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q07",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/get-user-profile",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q08",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/get-user-profile",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q09",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/msg-update-dossier",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q10",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/openhr/msg-update-dossier",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q11",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/sitemap",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q12",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/sitemap",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q13",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/widget/hra_fr_payrollindicator/config",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q14",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 0,
+        "recall_at_5": 1,
+        "mrr": 0.5,
+        "top_result": "GET /cxf/widget/hra_fr_payrollcontrolindicator/config",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q15",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/rich-client/select-role",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q16",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/services/rich-client/select-role",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q17",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /cxf/news/getpublishednews",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q18",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /cxf/news/getpublishednews",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q19",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/accessmanager/getaccessibleelementsbycategory/mainmenu",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q20",
+        "lang": "fr",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /cxf/bc/accessmanager/getaccessibleelementsbycategory/mainmenu",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q21",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/hrqsql",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q22",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "POST /hr-rich-client/hrservlet/hrqsql",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q23",
+        "lang": "en",
+        "difficulty": "easy",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /hr-rich-client/hrservlet/hradmin",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q24",
+        "lang": "fr",
+        "difficulty": "hard_paraphrase",
+        "recall_at_1": 1,
+        "recall_at_5": 1,
+        "mrr": 1.0,
+        "top_result": "GET /hr-rich-client/hrservlet/hradmin",
+        "out_of_catalog_empty": false
+      },
+      {
+        "id": "q25",
+        "lang": "en",
+        "difficulty": "out_of_catalog",
+        "recall_at_1": null,
+        "recall_at_5": null,
+        "mrr": null,
+        "top_result": null,
+        "out_of_catalog_empty": true
+      }
+    ],
+    "global": {
+      "n": 24,
+      "recall_at_1": 0.958,
+      "recall_at_5": 1.0,
+      "mrr": 0.979
+    },
+    "fr": {
+      "n": 12,
+      "recall_at_1": 0.917,
+      "recall_at_5": 1.0,
+      "mrr": 0.958
+    },
+    "en": {
+      "n": 12,
+      "recall_at_1": 1.0,
+      "recall_at_5": 1.0,
+      "mrr": 1.0
+    },
+    "out_of_catalog_handled_honestly": true
+  }
+}

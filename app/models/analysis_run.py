@@ -13,6 +13,7 @@ class AnalysisRun(TimestampMixin, OrgScopedMixin, UserOwnedMixin, TeamScopedMixi
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
     file_name: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="processing")
+    job_id: Mapped[str | None] = mapped_column(String, nullable=True)
     total_cleaned_api_calls: Mapped[int] = mapped_column(Integer, default=0)
     total_normalized_endpoints: Mapped[int] = mapped_column(Integer, default=0)
     total_schema_results: Mapped[int] = mapped_column(Integer, default=0)

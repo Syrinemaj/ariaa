@@ -27,6 +27,12 @@ export interface JobStatus {
   error?: string
 }
 
+export interface JsonSchemaNode {
+  type?: string
+  properties?: Record<string, JsonSchemaNode>
+  required?: string[]
+}
+
 export interface RunEndpoint {
   id: string
   method: string
@@ -43,6 +49,9 @@ export interface RunEndpoint {
   ai_description: string | null
   ai_tags: string[]
   ai_confidence: number | null
+  path_parameters: unknown[]
+  request_schema: JsonSchemaNode | null
+  response_schema: JsonSchemaNode | null
 }
 
 export interface HarTokenEstimate {

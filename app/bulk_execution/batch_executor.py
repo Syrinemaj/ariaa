@@ -22,9 +22,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.service import sanitize_payload
 from app.automation.executor import execute_step
 from app.automation.payload_mapper import map_payload_for_step
+from app.automation.retry_manager import with_retries
 from app.bulk_execution.batch_state import update_state_from_response
+from app.bulk_execution.conflict_resolution import find_existing_record, is_duplicate_conflict
+from app.bulk_execution.rate_limiter import RedisRateLimiter
+from app.bulk_execution.retry_policy import is_retryable_step_result
+from app.core.config import settings
 from app.db.redis_client import get_redis
-from app.idempotency.service import save_success_idempotency, should_skip_due_to_idempotency
+from app.idempotency.key_generator import generate_idempotency_key
+from app.idempotency.service import (
+    acquire_idempotency_lock,
+    mark_idempotency_failure,
+    mark_idempotency_success,
+    should_skip_due_to_idempotency,
+)
 from app.models.automation import AutomationStepLog
 from app.models.bulk_batch import BulkBatch, BulkBatchRow
 from app.models.data_file import DataRow
@@ -32,6 +43,28 @@ from app.planner.models import AutomationPlan
 
 # Commit toutes les N lignes — évite les sessions > 30 min
 BATCH_COMMIT_SIZE = 10
+
+# Status codes that say something about the target's HEALTH (overload,
+# timeout, throttling). Any other 4xx (400 bad data, 404 unknown id, 409
+# duplicate, 422 validation...) means the endpoint answered correctly about
+# one row's data — counting those as failures would let a few bad rows open
+# the breaker and cascade-fail every healthy row after them (observed in a
+# real run: 5 rows rejected with 422 opened it for the whole file).
+_HEALTH_FAILURE_STATUS_CODES = {408, 429}
+
+# execute_step() (app/automation/executor.py) also returns status_code=None
+# for checks done BEFORE any request is sent; those say nothing about the
+# target's health either.
+_PRE_REQUEST_ERROR_PREFIXES = ("Security:", "Validation error:")
+
+
+def is_health_failure(status_code: int | None, error_message: str | None = None) -> bool:
+    """True when a failed call should count toward opening the circuit breaker:
+    no HTTP response because the request itself failed (connection refused,
+    DNS, timeout), a 5xx, or a 408/429."""
+    if status_code is None:
+        return not (error_message or "").startswith(_PRE_REQUEST_ERROR_PREFIXES)
+    return status_code >= 500 or status_code in _HEALTH_FAILURE_STATUS_CODES
 
 
 async def execute_batch(
@@ -74,6 +107,11 @@ async def execute_batch(
     row_errors: List[dict] = []
 
     redis = get_redis()
+    rate_limiter = RedisRateLimiter(
+        redis_client=redis,
+        job_id=job_id or automation_run_id,
+        max_requests_per_second=settings.BULK_RATE_LIMIT_PER_SECOND,
+    )
 
     # Deltas reported to the shared job counter so far — hincrby() is atomic
     # and additive across concurrent batches, unlike hset() which would
@@ -94,30 +132,70 @@ async def execute_batch(
         reported_success = success_count
         reported_failed = failed_count
 
+    # Cooperative cancellation (POST /jobs/{job_id}/cancel) — checked between
+    # rows, never mid-row: a row's HTTP call, once sent, always finishes
+    # (aborting a request already received by the target API can't be done
+    # safely — no way to know if it was already applied). Rows not yet
+    # reached are left completely untouched (still "valid"/"dry_run_success"),
+    # not marked failed, so POST /bulk/resume can pick them up later.
+    cancelled = False
+
     for i, data_row in enumerate(rows):
+        if job_id and redis.hget(f"job:{job_id}", "cancel_requested") == "1":
+            cancelled = True
+            break
+
         state: Dict[str, Any] = {"row_index": data_row.row_index}
         row_failed = False
+        row_duplicate = False  # a create 409'd as "already exists" and we found the existing record
+        row_error_detail: Dict[str, Any] | None = None  # last failure's real {error_code, message} — replaces the old flat "Execution failed" string
         row_result: Dict[str, Any] = {}
 
         for step in plan.steps:
             if circuit_registry and await circuit_registry.is_open(step.canonical_key):
                 row_failed = True
+                row_error_detail = {
+                    "error_code": "CIRCUIT_OPEN",
+                    "message": f"{step.method} {step.path}: Circuit breaker open — endpoint temporarily unavailable",
+                }
                 row_errors.append({
                     "row_index": data_row.row_index,
-                    "step": step.canonical_key,
+                    "step": f"{step.method} {step.path}",
                     "error": "Circuit breaker open — endpoint temporarily unavailable",
                     "status_code": None,
                 })
                 break
 
-            if await should_skip_due_to_idempotency(
-                db=db,
-                workflow_name=plan.workflow_name,
-                endpoint_key=step.canonical_key,
-                org_id=org_id,
-                business_fields=data_row.normalized_data,
-            ):
-                continue
+            idempotency_key = None
+            if dry_run:
+                # Pas d'effet de bord réel à dédupliquer — simple lecture, pour
+                # éviter de re-simuler une étape déjà réellement exécutée.
+                if await should_skip_due_to_idempotency(
+                    db=db,
+                    workflow_name=plan.workflow_name,
+                    endpoint_key=step.canonical_key,
+                    org_id=org_id,
+                    business_fields=data_row.normalized_data,
+                ):
+                    continue
+            else:
+                idempotency_key = generate_idempotency_key(
+                    workflow_name=plan.workflow_name,
+                    endpoint_key=step.canonical_key,
+                    org_id=org_id,
+                    business_fields=data_row.normalized_data,
+                )
+                acquired = await acquire_idempotency_lock(
+                    db=db,
+                    idempotency_key=idempotency_key,
+                    endpoint_key=step.canonical_key,
+                    org_id=org_id,
+                    automation_run_id=automation_run_id,
+                    row_index=data_row.row_index,
+                    data_row_id=data_row.id,
+                )
+                if not acquired:
+                    continue
 
             # field_sources (provenance per field) intentionally unused here —
             # app/automation/batch_processor.py's stale-update-field guard
@@ -129,14 +207,23 @@ async def execute_batch(
                 state=state,
             )
 
-            result = await execute_step(
-                step=step,
-                payload=payload,
-                state=state,
-                client=client,
-                base_url=base_url,
-                auth_headers=auth_headers,
-                dry_run=dry_run,
+            await rate_limiter.wait()
+
+            async def _call(s=step, p=payload, st=state):
+                return await execute_step(
+                    step=s,
+                    payload=p,
+                    state=st,
+                    client=client,
+                    base_url=base_url,
+                    auth_headers=auth_headers,
+                    dry_run=dry_run,
+                )
+
+            result = await with_retries(
+                operation=_call,
+                retries=1 if dry_run else settings.BULK_STEP_RETRIES,
+                is_retryable=is_retryable_step_result,
             )
 
             db.add(AutomationStepLog(
@@ -169,40 +256,124 @@ async def execute_batch(
                 )
 
                 if not dry_run:
-                    await save_success_idempotency(
+                    await mark_idempotency_success(
                         db=db,
-                        automation_run_id=automation_run_id,
-                        data_row_id=data_row.id,
-                        row_index=data_row.row_index,
-                        workflow_name=plan.workflow_name,
+                        idempotency_key=idempotency_key,
                         endpoint_key=step.canonical_key,
-                        org_id=org_id,
-                        business_fields=data_row.normalized_data,
                         response_reference={
                             "status_code": result.status_code,
                             "response_payload": result.response_payload,
                         },
                     )
             else:
-                if circuit_registry:
+                # Human-facing label — step.canonical_key is org_id-prefixed
+                # for registry-storage uniqueness (see app/models endpoints
+                # unique constraint), never meant for display; using it
+                # directly in a message just showed the raw UUID prefix,
+                # truncated by the UI long before the actually useful text.
+                step_label = f"{step.method} {step.path}"
+
+                is_conflict = is_duplicate_conflict(result.status_code, result.response_payload)
+                existing_record = None
+                if is_conflict:
+                    existing_record = await find_existing_record(
+                        client=client,
+                        base_url=base_url,
+                        auth_headers=auth_headers,
+                        create_path=step.path,
+                        payload=payload,
+                    )
+
+                if existing_record is not None:
+                    # Resolved: the row's create 409'd because the record
+                    # already exists, and we found exactly one match —
+                    # continue this row as if the create had just succeeded,
+                    # seeding its fields into `state` the same way a fresh
+                    # create's response would (ENTITY_ID_ALIASES etc.), so a
+                    # later step (e.g. "submit leave request") still resolves
+                    # employee_id. The endpoint itself is healthy here — a
+                    # 409 duplicate isn't a health signal, so this counts as
+                    # a circuit-breaker success, not a failure.
+                    if circuit_registry:
+                        await circuit_registry.record_success(step.canonical_key)
+                    row_duplicate = True
+                    state = update_state_from_response(
+                        state=state,
+                        response_payload=existing_record,
+                        action=step.action,
+                    )
+                    row_result[step.canonical_key] = {
+                        **result.model_dump(),
+                        "resolved_via_duplicate": True,
+                        "resolved_existing_record": existing_record,
+                    }
+                    if not dry_run and idempotency_key:
+                        await mark_idempotency_success(
+                            db=db,
+                            idempotency_key=idempotency_key,
+                            endpoint_key=step.canonical_key,
+                            response_reference={
+                                "status_code": result.status_code,
+                                "response_payload": existing_record,
+                                "resolved_via_duplicate": True,
+                            },
+                        )
+                    continue
+
+                # A 409 duplicate — resolved or not — is a business-logic
+                # response, not an infra/health signal: the endpoint answered
+                # correctly. Previously this always called record_failure,
+                # so a handful of legitimate duplicates (e.g. re-running a
+                # file whose rows already exist) could trip the circuit
+                # breaker open and cascade-fail every remaining row in the
+                # batch with CIRCUIT_OPEN, unrelated to any real problem.
+                # Same reasoning extended to every non-health 4xx (see
+                # is_health_failure): only availability problems trip it.
+                if circuit_registry and is_health_failure(result.status_code, result.error_message):
                     await circuit_registry.record_failure(step.canonical_key)
 
                 row_failed = True
+                row_error_detail = {
+                    "error_code": "DUPLICATE_UNRESOLVED" if is_conflict else str(result.status_code or "ERROR"),
+                    "message": (
+                        f"{step_label}: Duplicate conflict (409) — couldn't uniquely "
+                        f"identify the existing record to resume from: {result.error_message}"
+                        if is_conflict
+                        else f"{step_label}: {result.error_message}"
+                    ),
+                }
                 row_errors.append({
                     "row_index": data_row.row_index,
-                    "step": step.canonical_key,
+                    "step": step_label,
                     "error": result.error_message,
                     "status_code": result.status_code,
                 })
+                if not dry_run and idempotency_key:
+                    await mark_idempotency_failure(
+                        db=db,
+                        idempotency_key=idempotency_key,
+                        endpoint_key=step.canonical_key,
+                        error=result.error_message or "unknown error",
+                    )
                 break
 
         if row_failed:
             failed_count += 1
             data_row.status = "failed"
-            data_row.error_message = "Execution failed"
+            data_row.error_message = row_error_detail["message"] if row_error_detail else "Execution failed"
+            # Surfaced by app/bulk_reports/row_report.py::get_failed_rows —
+            # a top-level sentinel key (not a real plan step) so the report
+            # can distinguish "unresolved duplicate" from a generic error
+            # without re-deriving it from each step's raw result dict.
+            if row_error_detail:
+                row_result["_row_error"] = row_error_detail
         else:
             success_count += 1
-            data_row.status = "success" if not dry_run else "dry_run_success"
+            data_row.status = (
+                "success_duplicate" if (row_duplicate and not dry_run)
+                else "success" if not dry_run
+                else "dry_run_success"
+            )
 
         db.add(BulkBatchRow(
             batch_id=batch.id,
@@ -221,10 +392,12 @@ async def execute_batch(
             _report_progress_delta()
 
     # ── Finalisation du batch ─────────────────────────────────────────────────
-    batch.status = "completed"
+    batch.status = "cancelled" if cancelled else "completed"
     batch.success_count = success_count
     batch.failed_count = failed_count
     batch.metadata_json = {"duration_seconds": round(time.time() - started_at, 3)}
+    if cancelled:
+        batch.metadata_json["cancelled_at_row"] = i
 
     await db.commit()
     # Report whatever's left since the last intermediate checkpoint (or the
@@ -244,4 +417,5 @@ async def execute_batch(
         "success_count": success_count,
         "failed_count": failed_count,
         "errors": row_errors,
+        "cancelled": cancelled,
     }

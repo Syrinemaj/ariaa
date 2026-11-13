@@ -109,8 +109,8 @@ def analyze_business_intent(
     """
     Analyse an instruction and return a structured BusinessIntent.
 
-    client — an AIClientProtocol instance (BedrockClient, GroqClient or
-    AzureOpenAIClient). Falls back to create_ai_client() when not provided
+    client — an AIClientProtocol instance (BedrockClient).
+    Falls back to create_ai_client() when not provided
     (Celery / standalone usage).
     known_domains — business domains already discovered for the target run
     (see planner/service.py::_get_known_domains). Grounds the domain guess in

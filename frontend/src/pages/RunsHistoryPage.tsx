@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import { listRuns, updateRun, deleteRun, AnalysisRun } from '../lib/registryApi'
-import { listUsers, BackendUser } from '../lib/usersApi'
 import { useAuth } from '../contexts/AuthContext'
 import { useRun } from '../contexts/RunContext'
 import {
   Upload, Database, Network, Layers, Search,
   RefreshCw, ChevronLeft, ChevronRight, Sparkles,
-  Shield, User, Trash2, Pencil, Check, X, TriangleAlert,
+  Shield, User, Users, Trash2, Pencil, Check, X, TriangleAlert,
 } from 'lucide-react'
 
 // ── Delete confirmation modal ──────────────────────────────────────────────────
@@ -136,10 +135,6 @@ export default function RunsHistoryPage() {
   const [page, setPage]           = useState(0)
   const [loading, setLoading]     = useState(false)
 
-  // Admin only: map userId → display name
-  const [userMap, setUserMap]     = useState<Record<string, string>>({})
-  const [loadingUsers, setLoadingUsers] = useState(false)
-
   const [q, setQ]                       = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
 
@@ -151,20 +146,6 @@ export default function RunsHistoryPage() {
   // Delete modal
   const [pendingDelete, setPendingDelete] = useState<AnalysisRun | null>(null)
   const [deletingId, setDeletingId]       = useState<string | null>(null)
-
-  // Load all workspace users (admin only) to display uploader names
-  useEffect(() => {
-    if (!isAdmin) return
-    setLoadingUsers(true)
-    listUsers()
-      .then((users: BackendUser[]) => {
-        const map: Record<string, string> = {}
-        users.forEach(u => { map[u.id] = u.full_name || u.email })
-        setUserMap(map)
-      })
-      .catch(() => {})
-      .finally(() => setLoadingUsers(false))
-  }, [isAdmin])
 
   function loadPage(p: number) {
     setLoading(true)
@@ -180,10 +161,10 @@ export default function RunsHistoryPage() {
 
   useEffect(() => { loadPage(0) }, [])
 
-  // Operators see only their own runs; admins see everything
-  const visibleRuns = isAdmin
-    ? runs
-    : runs.filter(r => r.created_by_user_id === user?.id)
+  // The backend already scopes this: admins see every run in the org,
+  // operators see their own runs plus their team's (owner_visibility_clause)
+  // — no extra client-side restriction on top of that.
+  const visibleRuns = runs
 
   const filtered = visibleRuns.filter(r => {
     const matchQ = q === '' ||
@@ -241,7 +222,7 @@ export default function RunsHistoryPage() {
 
   const uploaderName = (run: AnalysisRun): string => {
     if (!run.created_by_user_id) return '—'
-    return userMap[run.created_by_user_id] || run.created_by_user_id.slice(0, 8) + '…'
+    return run.created_by_name || run.created_by_user_id.slice(0, 8) + '…'
   }
 
   return (
@@ -263,8 +244,8 @@ export default function RunsHistoryPage() {
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 ink-2" />
-                  Your analyses · {visibleRuns.length} HAR files uploaded
+                  <Users className="w-3.5 h-3.5 ink-2" />
+                  Team analyses · {visibleRuns.length} HAR files
                 </span>
               )}
             </p>
@@ -292,7 +273,7 @@ export default function RunsHistoryPage() {
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ink-2" />
               <input value={q} onChange={e => setQ(e.target.value)}
                 className="input !pl-9"
-                placeholder="Search by file name or ID…" />
+                placeholder="Search by file name or ID…" autoComplete="off" />
             </div>
             <label className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm cursor-pointer"
               style={{ border: '1px solid var(--line)', background: 'var(--card)' }}>
@@ -322,32 +303,29 @@ export default function RunsHistoryPage() {
                   <th className="text-left px-4 py-2.5">Status</th>
                   <th className="text-left px-4 py-2.5">Endpoints</th>
                   <th className="text-left px-4 py-2.5">Date</th>
-                  {/* Uploader column — admins only */}
-                  {isAdmin && (
-                    <th className="text-left px-4 py-2.5">
-                      <span className="inline-flex items-center gap-1.5">
-                        <User className="w-3 h-3" /> Uploaded by
-                      </span>
-                    </th>
-                  )}
+                  <th className="text-left px-4 py-2.5">
+                    <span className="inline-flex items-center gap-1.5">
+                      <User className="w-3 h-3" /> Uploaded by
+                    </span>
+                  </th>
                   <th className="text-left px-4 py-2.5">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {(loading || loadingUsers) && (
+                {loading && (
                   <tr>
-                    <td colSpan={isAdmin ? 6 : 5} className="px-4 py-12 text-center">
+                    <td colSpan={6} className="px-4 py-12 text-center">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto ink-2" />
                     </td>
                   </tr>
                 )}
 
-                {!loading && !loadingUsers && filtered.length === 0 && (
+                {!loading && filtered.length === 0 && (
                   <tr>
-                    <td colSpan={isAdmin ? 6 : 5} className="px-4 py-12 text-center">
+                    <td colSpan={6} className="px-4 py-12 text-center">
                       <p className="text-sm ink-2">
                         {visibleRuns.length === 0
-                          ? "You haven't uploaded a HAR file yet."
+                          ? "No HAR analyses yet — from you or your team."
                           : 'No files match your search.'}
                       </p>
                       {visibleRuns.length === 0 && (
@@ -359,7 +337,7 @@ export default function RunsHistoryPage() {
                   </tr>
                 )}
 
-                {!loading && !loadingUsers && filtered.map(r => {
+                {!loading && filtered.map(r => {
                   const isOwner = r.created_by_user_id === user?.id
                   return (
                     <tr key={r.id}
@@ -385,6 +363,7 @@ export default function RunsHistoryPage() {
                                   onChange={e => setEditName(e.target.value)}
                                   onKeyDown={e => { if (e.key === 'Enter') doSaveEdit(); if (e.key === 'Escape') doCancelEdit() }}
                                   className="input !py-1 !px-2 text-xs font-mono w-40"
+                                  autoComplete="off"
                                 />
                                 <button onClick={e => { e.stopPropagation(); doSaveEdit() }} disabled={savingEdit}
                                   className="btn-ghost !p-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-40" title="Save">
@@ -434,15 +413,12 @@ export default function RunsHistoryPage() {
                         </p>
                       </td>
 
-                      {/* Uploader — admin only */}
-                      {isAdmin && (
-                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                          <UserChip
-                            name={uploaderName(r)}
-                            isCurrentUser={isOwner}
-                          />
-                        </td>
-                      )}
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <UserChip
+                          name={uploaderName(r)}
+                          isCurrentUser={isOwner}
+                        />
+                      </td>
 
                       {/* Actions */}
                       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
@@ -463,26 +439,30 @@ export default function RunsHistoryPage() {
                             <Layers className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Separator */}
-                          <span className="w-px h-4 mx-0.5 shrink-0" style={{ background: 'var(--line)' }} />
-
-                          <button
-                            onClick={e => startEdit(r, e)}
-                            disabled={editingId === r.id}
-                            className="btn-ghost !py-1 !px-2 text-xs disabled:opacity-40"
-                            title="Rename">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={e => handleDelete(r, e)}
-                            disabled={deletingId === r.id}
-                            className="btn-ghost !py-1 !px-2 text-xs hover:text-red-500 disabled:opacity-40"
-                            title="Delete this analysis">
-                            {deletingId === r.id
-                              ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              : <Trash2 className="w-3.5 h-3.5" />
-                            }
-                          </button>
+                          {/* Rename/delete — only the run's own creator or an admin can mutate it
+                              (matches the backend: viewing is team-shared, mutating stays owner-only) */}
+                          {(isOwner || isAdmin) && (
+                            <>
+                              <span className="w-px h-4 mx-0.5 shrink-0" style={{ background: 'var(--line)' }} />
+                              <button
+                                onClick={e => startEdit(r, e)}
+                                disabled={editingId === r.id}
+                                className="btn-ghost !py-1 !px-2 text-xs disabled:opacity-40"
+                                title="Rename">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={e => handleDelete(r, e)}
+                                disabled={deletingId === r.id}
+                                className="btn-ghost !py-1 !px-2 text-xs hover:text-red-500 disabled:opacity-40"
+                                title="Delete this analysis">
+                                {deletingId === r.id
+                                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  : <Trash2 className="w-3.5 h-3.5" />
+                                }
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

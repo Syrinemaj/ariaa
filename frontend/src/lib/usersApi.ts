@@ -35,6 +35,10 @@ export function deactivateUser(id: string) {
   return api.patch<BackendUser>(`/users/${id}/deactivate`)
 }
 
+export function deleteUser(id: string) {
+  return api.del(`/users/${id}`)
+}
+
 export function updateUserRole(id: string, role: string) {
   return api.patch<BackendUser>(`/users/${id}/role`, { role })
 }

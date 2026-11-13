@@ -1,0 +1,145 @@
+[
+  {
+    "case_id": "wg_001",
+    "scenario": "HR — employés vs départements",
+    "difficulty": "easy",
+    "endpoints": [
+      {"method": "GET", "path": "/employees", "business_action": "fetch"},
+      {"method": "POST", "path": "/employees", "business_action": "create"},
+      {"method": "GET", "path": "/employees/{id}", "business_action": "fetch"},
+      {"method": "PATCH", "path": "/employees/{id}", "business_action": "update"},
+      {"method": "GET", "path": "/departments", "business_action": "fetch"},
+      {"method": "GET", "path": "/departments/{id}/employees", "business_action": "fetch"}
+    ],
+    "expected_partition": [[0, 1, 2, 3], [4, 5]],
+    "notes": "deux capacités métier distinctes : gestion des employés (CRUD) vs consultation des départements — ne doivent pas fusionner malgré le mot 'employees' partagé"
+  },
+  {
+    "case_id": "wg_002",
+    "scenario": "Facturation — cycle de vie cohérent",
+    "difficulty": "medium",
+    "endpoints": [
+      {"method": "GET", "path": "/invoices/{id}", "business_action": "fetch"},
+      {"method": "POST", "path": "/invoices", "business_action": "create"},
+      {"method": "PATCH", "path": "/invoices/{id}", "business_action": "update"},
+      {"method": "DELETE", "path": "/invoices/{id}", "business_action": "delete"},
+      {"method": "GET", "path": "/invoices/{id}/pdf", "business_action": "fetch"}
+    ],
+    "expected_partition": [[0, 1, 2, 3, 4]],
+    "notes": "PIÈGE ANTI-SUR-DÉCOUPAGE — 5 méthodes différentes sur la même ressource (facture) ; doivent rester UN SEUL groupe, pas 5 groupes à cause de la diversité des verbes HTTP"
+  },
+  {
+    "case_id": "wg_003",
+    "scenario": "RH + facturation mélangées",
+    "difficulty": "easy",
+    "endpoints": [
+      {"method": "GET", "path": "/employees", "business_action": "fetch"},
+      {"method": "POST", "path": "/employees", "business_action": "create"},
+      {"method": "GET", "path": "/invoices", "business_action": "fetch"},
+      {"method": "POST", "path": "/invoices", "business_action": "create"},
+      {"method": "PATCH", "path": "/invoices/{id}", "business_action": "update"}
+    ],
+    "expected_partition": [[0, 1], [2, 3, 4]],
+    "notes": "deux domaines métier réellement indépendants (RH / facturation) — ne doivent jamais se retrouver dans le même groupe"
+  },
+  {
+    "case_id": "wg_004",
+    "scenario": "Authentification isolée + catalogue produit",
+    "difficulty": "hard",
+    "endpoints": [
+      {"method": "POST", "path": "/auth/refresh", "business_action": "authenticate"},
+      {"method": "GET", "path": "/products", "business_action": "fetch"},
+      {"method": "GET", "path": "/products/{id}", "business_action": "fetch"},
+      {"method": "POST", "path": "/products", "business_action": "create"},
+      {"method": "PATCH", "path": "/products/{id}", "business_action": "update"}
+    ],
+    "expected_partition": [[0], [1, 2, 3, 4]],
+    "notes": "PIÈGE — le rafraîchissement de jeton n'a aucun rapport métier avec le catalogue produit ; doit rester un groupe à lui seul (singleton légitime), pas forcé dans l'autre groupe pour 'éviter un singleton'"
+  },
+  {
+    "case_id": "wg_005",
+    "scenario": "Panier / commande — flux cohérent",
+    "difficulty": "medium",
+    "endpoints": [
+      {"method": "POST", "path": "/carts", "business_action": "create"},
+      {"method": "POST", "path": "/carts/{id}/items", "business_action": "create"},
+      {"method": "DELETE", "path": "/carts/{id}/items/{item_id}", "business_action": "delete"},
+      {"method": "POST", "path": "/carts/{id}/checkout", "business_action": "create"}
+    ],
+    "expected_partition": [[0, 1, 2, 3]],
+    "notes": "étapes successives d'une même tâche métier (constituer puis valider un panier) — un seul groupe malgré des verbes/actions différents"
+  },
+  {
+    "case_id": "wg_006",
+    "scenario": "Employés vs notifications",
+    "difficulty": "easy",
+    "endpoints": [
+      {"method": "POST", "path": "/employees", "business_action": "create"},
+      {"method": "GET", "path": "/employees/{id}", "business_action": "fetch"},
+      {"method": "POST", "path": "/notifications/send", "business_action": "send"},
+      {"method": "GET", "path": "/notifications/{id}/status", "business_action": "fetch"}
+    ],
+    "expected_partition": [[0, 1], [2, 3]],
+    "notes": "capacité métier (gestion employé) vs capacité transverse (envoi de notification) — deux groupes distincts"
+  },
+  {
+    "case_id": "wg_007",
+    "scenario": "Trois domaines simultanés",
+    "difficulty": "medium",
+    "endpoints": [
+      {"method": "GET", "path": "/employees", "business_action": "fetch"},
+      {"method": "POST", "path": "/employees", "business_action": "create"},
+      {"method": "GET", "path": "/products", "business_action": "fetch"},
+      {"method": "POST", "path": "/products", "business_action": "create"},
+      {"method": "GET", "path": "/orders", "business_action": "fetch"},
+      {"method": "POST", "path": "/orders", "business_action": "create"}
+    ],
+    "expected_partition": [[0, 1], [2, 3], [4, 5]],
+    "notes": "trois domaines métier de taille égale, aucun indice de similarité textuelle entre eux — teste le passage à l'échelle à 3 groupes"
+  },
+  {
+    "case_id": "wg_008",
+    "scenario": "RH étendu — 12 endpoints, 5 groupes",
+    "difficulty": "hard",
+    "endpoints": [
+      {"method": "POST", "path": "/auth/login", "business_action": "authenticate"},
+      {"method": "GET", "path": "/employees", "business_action": "fetch"},
+      {"method": "POST", "path": "/employees", "business_action": "create"},
+      {"method": "GET", "path": "/employees/{id}", "business_action": "fetch"},
+      {"method": "PATCH", "path": "/employees/{id}", "business_action": "update"},
+      {"method": "DELETE", "path": "/employees/{id}", "business_action": "delete"},
+      {"method": "GET", "path": "/contracts/{id}", "business_action": "fetch"},
+      {"method": "POST", "path": "/contracts", "business_action": "create"},
+      {"method": "GET", "path": "/departments", "business_action": "fetch"},
+      {"method": "GET", "path": "/departments/{id}/employees", "business_action": "fetch"},
+      {"method": "GET", "path": "/payroll/{id}", "business_action": "fetch"},
+      {"method": "POST", "path": "/payroll/run", "business_action": "create"}
+    ],
+    "expected_partition": [[0], [1, 2, 3, 4, 5], [6, 7], [8, 9], [10, 11]],
+    "notes": "scénario le plus large — vérifie surtout la contrainte structurelle (chaque index apparaît exactement une fois, 5 groupes ≤ la borne haute de 6 recommandée par le prompt) autant que la pertinence métier ; contrats et employés restent volontairement séparés (ressources distinctes) plutôt que fusionnés"
+  },
+  {
+    "case_id": "wg_009",
+    "scenario": "Catalogue produit cohérent (variante e-commerce)",
+    "difficulty": "easy",
+    "endpoints": [
+      {"method": "GET", "path": "/products", "business_action": "fetch"},
+      {"method": "POST", "path": "/products", "business_action": "create"},
+      {"method": "PATCH", "path": "/products/{id}", "business_action": "update"},
+      {"method": "DELETE", "path": "/products/{id}", "business_action": "delete"}
+    ],
+    "expected_partition": [[0, 1, 2, 3]],
+    "notes": "deuxième cas de contrôle anti-sur-découpage, sur un domaine différent (produit plutôt que facture) pour vérifier que ce n'est pas un comportement propre à un seul type de ressource"
+  },
+  {
+    "case_id": "wg_010",
+    "scenario": "Deux singletons réellement indépendants",
+    "difficulty": "hard",
+    "endpoints": [
+      {"method": "POST", "path": "/feedback", "business_action": "create"},
+      {"method": "GET", "path": "/reports/export", "business_action": "fetch"}
+    ],
+    "expected_partition": [[0], [1]],
+    "notes": "PIÈGE — seulement 2 endpoints, aucun rapport métier entre eux (retour client vs export de rapport) ; ne doivent PAS être fusionnés en un seul groupe juste parce qu'il n'y a que 2 endpoints au total"
+  }
+]

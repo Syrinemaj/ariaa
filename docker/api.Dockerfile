@@ -25,4 +25,4 @@ COPY . .
 # Copy the built React app → FastAPI serves it from /app/static
 COPY --from=frontend-builder /frontend/dist ./static
 
-CMD ["sh", "-c", "alembic upgrade head && python -m scripts.seed_users && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

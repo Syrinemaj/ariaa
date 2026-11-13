@@ -1,0 +1,22 @@
+[
+  {
+    "model": "deepseek.v3.2",
+    "skipped": false,
+    "cases_completed": 13,
+    "completion_rate": 1.0,
+    "key_integrity": 1.0,
+    "order_constraints": 1.0,
+    "confidence_calibration": 1.0,
+    "cost_usd": 0.011865999999999998
+  },
+  {
+    "model": "amazon.nova-lite-v1:0",
+    "skipped": false,
+    "cases_completed": 13,
+    "completion_rate": 1.0,
+    "key_integrity": 1.0,
+    "order_constraints": 1.0,
+    "confidence_calibration": 0.9090909090909091,
+    "cost_usd": 0.00033399999999999923
+  }
+]

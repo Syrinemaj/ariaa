@@ -27,6 +27,8 @@ from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.automation import router as automation_router
 from app.api.bulk import router as bulk_router
+from app.api.connections import router as connections_router
+from app.api.governance import router as governance_router
 from app.api.jobs import router as jobs_router
 from app.api.maintenance import router as maintenance_router
 from app.api.notifications import router as notifications_router
@@ -54,20 +56,19 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ── AI completion client (Bedrock primary, Groq/Azure alternatives) ─────
+    # ── AI completion client (AWS Bedrock — the only completion provider) ───
     from app.ai.base_client import create_ai_client
     from app.llm_observability.cost_estimator import active_model
     app.state.ai_client = create_ai_client()
     logger.info("ai.provider.selected", provider=settings.AI_PROVIDER, model=active_model())
 
-    # ── Embedding client (always local sentence-transformers) ────────────────
-    # Loaded lazily on first call — no startup latency penalty.
-    from app.rag.embeddings.client import LocalEmbeddingClient
-    app.state.embedding_client = LocalEmbeddingClient()
+    # ── Embedding client (provider selected via settings.EMBEDDING_PROVIDER) ──
+    from app.ai.base_client import create_embedding_client
+    app.state.embedding_client = create_embedding_client()
     logger.info(
         "ai.embedding.selected",
-        provider="local",
-        model=settings.LOCAL_EMBEDDING_MODEL,
+        provider=settings.EMBEDDING_PROVIDER,
+        model=settings.BEDROCK_EMBEDDING_MODEL if settings.EMBEDDING_PROVIDER != "local" else settings.LOCAL_EMBEDDING_MODEL,
         dimensions=settings.EMBEDDING_DIMENSIONS,
     )
 
@@ -196,6 +197,8 @@ app.include_router(reports_router)
 app.include_router(bulk_router)
 app.include_router(approvals_router)
 app.include_router(audit_router)
+app.include_router(governance_router)
+app.include_router(connections_router)
 app.include_router(maintenance_router)
 app.include_router(notifications_router)
 app.include_router(jobs_router)

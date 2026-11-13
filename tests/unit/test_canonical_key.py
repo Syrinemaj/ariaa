@@ -20,6 +20,44 @@ class TestBuildCanonicalKey:
     def test_root_slash_preserved(self):
         assert build_canonical_key("GET", "/") == "GET /"
 
+    def test_discriminator_field_appended_when_present(self):
+        key = build_canonical_key(
+            "POST", "/rpc/dossier",
+            request_body={"sectionCode": "AG", "employeeId": "MABR01"},
+            discriminator_field="sectionCode",
+        )
+        assert key == "POST /rpc/dossier#AG"
+
+    def test_discriminator_field_ignored_when_absent_from_body(self):
+        key = build_canonical_key(
+            "POST", "/rpc/dossier",
+            request_body={"employeeId": "MABR01"},
+            discriminator_field="sectionCode",
+        )
+        assert key == "POST /rpc/dossier"
+
+    def test_falls_back_to_fixed_list_without_discriminator_field(self):
+        key = build_canonical_key(
+            "POST", "/hr-rich-client/hrservlet/services/openhr/msg-update-dossier",
+            request_body={"dataSectionName": "AG"},
+        )
+        assert key.endswith("#AG")
+
+    def test_explicit_none_does_not_fall_back_to_fixed_list(self):
+        # Batch detection ran (action_discriminator.py) and concluded there
+        # is no discriminator for this endpoint — that verdict must stick,
+        # even though the body happens to also contain a field from the
+        # legacy SopraHR-specific list. Otherwise the "generic" pipeline
+        # path silently re-depends on the SopraHR-only fallback whenever
+        # detection returns nothing, which is exactly what discriminator_field
+        # exists to prevent.
+        key = build_canonical_key(
+            "POST", "/hr-rich-client/hrservlet/services/openhr/msg-update-dossier",
+            request_body={"dataSectionName": "AG"},
+            discriminator_field=None,
+        )
+        assert key == "POST /hr-rich-client/hrservlet/services/openhr/msg-update-dossier"
+
 
 class TestBuildRegistryKey:
     def test_includes_org_id(self):

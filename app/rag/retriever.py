@@ -1,9 +1,12 @@
 """
 Semantic search — async SQLAlchemy, cosine distance via pgvector HNSW.
 
-Embedding provider: LocalEmbeddingClient (BAAI/bge-small-en, 384 dims).
-Queries are embedded with the BGE instruction prefix via
-create_embedding_query_async(); documents are indexed without prefix.
+Embedding provider: settings.EMBEDDING_PROVIDER (see
+app/ai/base_client.py::create_embedding_client() and
+app/core/config.py::EMBEDDING_PROVIDER) — Cohere Embed Multilingual v3 via
+Bedrock by default. Queries are embedded via create_embedding_query_async()
+(the query-side method, which may differ from the document-side one — see
+EmbeddingClientProtocol); documents are indexed via create_embedding_async().
 The query is embedded asynchronously (thread-pool executor) so the event
 loop is never blocked.
 """
@@ -14,7 +17,7 @@ from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.rag.embeddings.client import LocalEmbeddingClient
+from app.ai.base_client import EmbeddingClientProtocol
 from app.models.embedding import EndpointEmbedding
 from app.models.endpoint import Endpoint
 from app.rag.models import EndpointSearchResult
@@ -23,7 +26,7 @@ from app.rag.models import EndpointSearchResult
 async def semantic_search_endpoints(
     db: AsyncSession,
     query: str,
-    client: LocalEmbeddingClient,
+    client: EmbeddingClientProtocol,
     run_id: Optional[str] = None,
     org_id: Optional[str] = None,
     top_k: int = 5,
@@ -85,7 +88,7 @@ async def semantic_search_endpoints(
 async def retrieve_relevant_endpoints(
     db: AsyncSession,
     query: str,
-    client: LocalEmbeddingClient,
+    client: EmbeddingClientProtocol,
     run_id: Optional[str] = None,
     org_id: Optional[str] = None,
     top_k: int = 5,

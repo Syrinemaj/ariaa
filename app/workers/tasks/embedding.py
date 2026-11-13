@@ -2,8 +2,9 @@
 Tâche Celery — indexation des embeddings pgvector.
 
 Chaîne : process_har_pipeline → index_run_embeddings (automatique).
-Provider : LocalEmbeddingClient (BAAI/bge-small-en, 384 dims) — pas d'appel
-           réseau, modèle chargé en mémoire dans le worker.
+Provider : settings.EMBEDDING_PROVIDER — par défaut BedrockEmbeddingClient
+           (Cohere Embed Multilingual v3, 1024 dims, appel réseau Bedrock).
+           Voir app/ai/base_client.py::create_embedding_client().
 Cache content-addressed : si le texte d'un endpoint n'a pas changé,
 l'embedding n'est pas re-généré.
 Déduplication : lock Redis sur run_id.
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 def index_run_embeddings(self, run_id: str, org_id: str) -> dict:
     """
     Génère les embeddings pour tous les endpoints d'un run_id
-    et les stocke dans pgvector (384 dims, BAAI/bge-small-en).
+    et les stocke dans pgvector (dimensions = settings.EMBEDDING_DIMENSIONS).
     """
     try:
         result = asyncio.run(_run_embedding_async(run_id=run_id))
@@ -49,7 +50,7 @@ async def _run_embedding_async(run_id: str) -> dict:
 
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    from app.rag.embeddings.client import LocalEmbeddingClient
+    from app.ai.base_client import create_embedding_client
     from app.core.config import settings
     from app.rag.vector_store import index_embeddings_for_run
 
@@ -61,8 +62,7 @@ async def _run_embedding_async(run_id: str) -> dict:
     session_factory = async_sessionmaker(
         engine, class_=AsyncSession, expire_on_commit=False
     )
-    # LocalEmbeddingClient is a class-level singleton — safe to instantiate here.
-    client = LocalEmbeddingClient()
+    client = create_embedding_client()
 
     try:
         async with session_factory() as db:

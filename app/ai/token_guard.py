@@ -2,7 +2,7 @@
 token_guard — payload truncation before LLM submission.
 
 Delegates to token_counter.truncate_dict_to_token_limit() which uses
-tiktoken for accurate token counting. Uses the Groq model name for
+tiktoken for accurate token counting. Uses the active Bedrock model name for
 tiktoken encoding lookup (falls back to cl100k_base for unknown models).
 """
 import logging
@@ -20,14 +20,14 @@ def truncate_payload(payload: dict) -> tuple[dict, bool]:
     """
     safe, truncated = truncate_dict_to_token_limit(
         payload=payload,
-        model=settings.GROQ_MODEL,
+        model=settings.BEDROCK_MODEL,
         max_tokens=settings.LLM_MAX_INPUT_TOKENS,
     )
     if truncated:
         logger.warning(
             "token_guard: payload truncated to fit model context window "
             "(model=%s, limit=%d tokens)",
-            settings.GROQ_MODEL,
+            settings.BEDROCK_MODEL,
             settings.LLM_MAX_INPUT_TOKENS,
         )
     return safe, truncated

@@ -21,9 +21,10 @@ def suggest_and_save_mappings(
 
     for suggestion in suggestions:
         if not suggestion.get("source_field"):
+            suggestion["id"] = None
             continue
 
-        db.add(FieldMapping(
+        row = FieldMapping(
             analysis_run_id=analysis_run_id,
             source_field=suggestion["source_field"],
             target_field=suggestion["target_field"],
@@ -31,7 +32,10 @@ def suggest_and_save_mappings(
             confidence=suggestion.get("confidence", 0.0),
             source=suggestion.get("source", "rules"),
             approved=suggestion.get("approved", False),
-        ))
+        )
+        db.add(row)
+        db.flush()
+        suggestion["id"] = row.id
 
     db.commit()
 

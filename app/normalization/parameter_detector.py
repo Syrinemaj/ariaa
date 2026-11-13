@@ -281,7 +281,7 @@ def infer_parameter_name(
         if prefix in _PREFIX_TO_PARAM:
             param_name, confidence = _PREFIX_TO_PARAM[prefix]
             return param_name, "prefix_rules", confidence
-        # Unknown prefix → low confidence so Groq is called
+        # Unknown prefix → low confidence so the LLM fallback is called
         return "resource_id", "prefix_rules_ambiguous", 0.45
 
     # Amélioration 3 : préfixe + UUID complet — même logique de table de

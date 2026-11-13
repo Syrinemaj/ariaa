@@ -35,8 +35,8 @@ def enrich_endpoint_with_ai(endpoint: Endpoint, client=None) -> dict:
     """
     Enrich an endpoint with AI-generated metadata.
 
-    client — an AIClientProtocol instance (BedrockClient, GroqClient or
-    AzureOpenAIClient). Falls back to create_ai_client() if not provided
+    client — an AIClientProtocol instance (BedrockClient).
+    Falls back to create_ai_client() if not provided
     (Celery / standalone usage).
     """
     if client is None:

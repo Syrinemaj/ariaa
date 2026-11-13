@@ -1,0 +1,49 @@
+@startuml Diagramme_architecture_globale
+!theme plain
+skinparam componentStyle rectangle
+skinparam wrapWidth 200
+
+title Architecture globale d'ARIA
+
+actor "Opérateur / Administrateur" as User
+
+package "Frontend" {
+  [Application React/Vite\n(frontend/src)] as Frontend
+}
+
+package "Backend" {
+  [API FastAPI\n(app/main.py)] as API
+  [Worker(s) Celery\n(app/workers/celery_app.py)] as Worker
+}
+
+package "Données" {
+  database "PostgreSQL + pgvector\n(27 tables, index HNSW)" as PG
+  [Redis\n(broker Celery, cache,\nrate limit, disjoncteur)] as Redis
+}
+
+cloud "AWS Bedrock" {
+  [amazon.nova-lite-v1:0\n(complétion structurée)] as LLM
+  [cohere.embed-multilingual-v3\n(embeddings, 1024 dim)] as Embed
+}
+
+cloud "Système cible RH\n(hors ARIA)" as Target
+
+User --> Frontend : HTTPS
+Frontend --> API : HTTP/JSON (fetch), CORS\nJWT Bearer
+API --> PG : SQLAlchemy async (asyncpg)
+API --> Redis : dépôt de tâches (broker),\ncache, rate limit
+Worker --> Redis : consommation des tâches,\nbackend de résultats
+Worker --> PG : SQLAlchemy\n(accès BD du worker)
+API --> LLM : boto3 Converse\n(toolChoice forcé)
+API --> Embed : boto3\n(indexation / recherche)
+Worker --> LLM : boto3 Converse\n(tâches longues)
+Worker --> Target : httpx + transport DNS épinglé\n(exécution réelle des automatisations)
+
+note right of API
+  En production, le frontend construit
+  (frontend/dist) est servi directement
+  par l'API (StaticFiles + fallback SPA,
+  app/main.py) — pas de service séparé.
+end note
+
+@enduml

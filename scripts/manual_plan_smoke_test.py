@@ -2,13 +2,13 @@ import asyncio
 import json
 
 from app.db.session import AsyncSessionLocal
-from app.ai.groq_client import GroqClient
+from app.ai.base_client import create_ai_client
 from app.rag.embeddings.client import LocalEmbeddingClient
 from app.planner.service import create_plan_from_instruction
 
 
 async def main():
-    ai_client = GroqClient()
+    ai_client = create_ai_client()
     embedding_client = LocalEmbeddingClient()
 
     async with AsyncSessionLocal() as db:

@@ -1,5 +1,6 @@
-"""ARIA — Amazon Bedrock client (Converse API via boto3), additif : nouveau
-fichier, ne modifie ni groq_client.py ni azure_openai_client.py.
+"""ARIA — Amazon Bedrock client (Converse API via boto3). Seul client de
+complétion du projet — GroqClient et AzureOpenAIClient ont été supprimés
+après l'évaluation de sélection de modèle (evaluation/aggregate.py).
 
 Réécrit depuis une première version basée sur AnthropicBedrockMantle (SDK
 Anthropic) : Mantle retournait systématiquement 404 "model does not exist"
@@ -12,22 +13,26 @@ d'un second client dédié par famille de modèle.
 
 La sortie structurée passe par `toolConfig` avec un `toolChoice` forcé sur
 l'unique tool défini par `json_schema` — c'est le mécanisme standard de
-Converse pour obtenir un JSON garanti-conforme, pas un "mode JSON" séparé.
-Contrairement à GroqClient (json_object mode, non schema-aware — le schéma
-doit être injecté dans le prompt), ce mécanisme est structurellement plus
-proche d'Azure (response_format=json_schema, strict) : pas d'injection de
-schéma nécessaire ici.
+Converse pour obtenir un JSON garanti-conforme, pas un "mode JSON" séparé
+nécessitant une injection de schéma dans le prompt.
 
 Promoted to a full AIClientProtocol implementation (classify_api_call,
 truncation, retry, real-usage cost logging) when AI_PROVIDER=bedrock became
-the production default (deepseek.v3.2, chosen over moonshotai.kimi-k2.5
-after evaluation/run_scripts/run_param_detection_eval.py — see
-config.py::BEDROCK_MODEL). Reasoning models on this provider (deepseek.v3.2
-observed directly) can spend part of max_tokens on internal reasoning before
-emitting the tool call — if it runs out first, Converse returns no toolUse
-block at all rather than a malformed one. structured_chat retries once with
-an explicit nudge, then raises StructuredResponseError, mirroring how
-GroqClient handles its own malformed-response case.
+the production default. Originally deepseek.v3.2 (chosen after
+evaluation/run_scripts/run_param_detection_eval.py, a single-task
+comparison); replaced by amazon.nova-lite-v1:0 after a full 8-task
+comparison across every real LLM call site — statistically tied on quality,
+~37x cheaper, ~2.4x faster with far more consistent latency (see
+config.py::BEDROCK_MODEL and evaluation/results/full_comparison.csv).
+Reasoning models on this provider (deepseek.v3.2 observed directly) can
+spend part of max_tokens on internal reasoning before emitting the tool
+call — if it runs out first, Converse returns no toolUse block at all
+rather than a malformed one; this is part of why it lost the comparison
+(highly variable latency, occasional truncation). structured_chat retries
+once with an explicit nudge, then raises StructuredResponseError — this
+retry path matters less for the current default (amazon.nova-lite-v1:0 is
+not a reasoning model) but is kept as a general safety net for any Bedrock
+model behind this client, reasoning or not.
 
 Nécessite des credentials AWS résolus classiquement par boto3 (env vars /
 ~/.aws/credentials / IAM role) — jamais codés en dur ici. Si l'horloge
@@ -54,10 +59,14 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Default completion budget — 1500 gives headroom above the ~1200 empirically
-# required for deepseek.v3.2 to reliably reach its tool call (measured via
+# Default completion budget — 1500 was sized for deepseek.v3.2's reasoning
+# overhead (~1200 empirically required to reliably reach its tool call, see
 # evaluation/run_scripts/run_param_detection_eval.py: 56% completion at 300
-# tokens, 100% at 1200 tokens on the same 16-case sample).
+# tokens, 100% at 1200 on the same 16-case sample). Now more headroom than
+# amazon.nova-lite-v1:0 (the current default, not a reasoning model) needs,
+# but kept at 1500 rather than tightened: this client is shared by any
+# Bedrock model passed to it, including reasoning ones, and the cost of
+# unused headroom is far lower than the cost of truncation.
 _DEFAULT_MAX_TOKENS = 1500
 
 
@@ -140,7 +149,12 @@ class BedrockClient:
                 modelId=target_model,
                 system=[{"text": system_prompt}],
                 messages=[{"role": "user", "content": content}],
-                inferenceConfig={"maxTokens": max_tokens},
+                # settings.LLM_STRUCTURED_TEMPERATURE — was missing here, so
+                # this provider sampled at the model's own default temperature
+                # (well above 0.15) on every classification/enrichment call,
+                # producing different endpoint counts and business_domain
+                # wording run over run on the exact same HAR.
+                inferenceConfig={"maxTokens": max_tokens, "temperature": settings.LLM_STRUCTURED_TEMPERATURE},
                 toolConfig=tool_config,
             )
             self._log_usage(db, task_name, response.get("usage") or {}, target_model)
@@ -184,11 +198,10 @@ class BedrockClient:
 
     @staticmethod
     def _log_usage(db: Optional[Session], task_name: str, usage: dict, model: str) -> None:
-        """Unlike GroqClient/AzureOpenAIClient (openai SDK usage object with
-        .prompt_tokens/.completion_tokens), Converse returns usage as a plain
-        dict with inputTokens/outputTokens — real billed counts, not the
-        tiktoken estimate evaluation/tracer/normalization_tracer.py has to
-        fall back to when it can't see raw API usage."""
+        """Converse returns usage as a plain dict with inputTokens/
+        outputTokens — real billed counts, not the tiktoken estimate
+        evaluation/tracer/normalization_tracer.py has to fall back to when
+        it can't see raw API usage."""
         prompt_tokens = usage.get("inputTokens")
         completion_tokens = usage.get("outputTokens")
         if prompt_tokens is None or completion_tokens is None:
@@ -208,8 +221,8 @@ class BedrockClient:
             )
             return
 
-        # ARIA-OBS-FIX: same rationale as GroqClient._log_usage — most
-        # callers (planner, normalization...) never pass a db session since
+        # ARIA-OBS-FIX: most callers (planner, normalization...) never pass
+        # a db session since
         # structured_chat() is sync and the caller's session is often async.
         # Open a short-lived sync session so the call is persisted to
         # llm_calls (not just an in-process Prometheus counter that resets

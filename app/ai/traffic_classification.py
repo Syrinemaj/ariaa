@@ -3,14 +3,14 @@ Shared prompt + schema for the traffic classification task — the first
 filter of the whole pipeline (decides whether a captured HTTP call is a
 business API worth keeping before anything downstream runs).
 
-Prompt-engineering audit finding: this prompt used to be duplicated,
-near-verbatim but not identical, in GroqClient.classify_api_call and
-AzureOpenAIClient.classify_api_call — a fallback is supposed to be
-transparent (Azure is Groq's automatic fallback on rate limit/error), but
-two different wordings for the same task broke that guarantee. Both clients
-now import SYSTEM_PROMPT and CLASSIFY_SCHEMA from here instead of each
-carrying their own copy, so this kind of drift is no longer possible to
-introduce silently.
+Prompt-engineering audit finding (historical, from when Groq and Azure were
+still alternative providers): this prompt used to be duplicated,
+near-verbatim but not identical, across each client's own
+classify_api_call() — two different wordings for the same task, silently
+drifting apart. BedrockClient (the only completion client remaining) imports
+SYSTEM_PROMPT and CLASSIFY_SCHEMA from here rather than carrying its own
+copy, so this kind of drift is no longer possible to introduce even with a
+second provider in the future.
 """
 from __future__ import annotations
 

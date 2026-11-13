@@ -1,0 +1,4 @@
+har,entrees_brutes,apres_filtre_dur,kept_by_rules,rejected_by_rules,kept_by_ai,rejected_by_ai,endpoints_final,appels_llm_reels,cout_estime_usd
+petit,7,6,6,0,0,0,6,0,0.0
+moyen,16,16,16,0,0,0,15,0,0.0
+gros,728,279,165,18,51,45,84,96,0.0061

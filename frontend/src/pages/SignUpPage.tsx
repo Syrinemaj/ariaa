@@ -57,7 +57,9 @@ const SignUpPage: React.FC = () => {
       setSubmitted(true)
     } catch (err: unknown) {
       if (err instanceof ApiError) {
-        if (err.status === 422) {
+        if (err.status === 409) {
+          setApiError('An account with this email already exists. Try logging in instead.')
+        } else if (err.status === 422) {
           setApiError('Please check the information entered.')
         } else if (err.status === 429) {
           setApiError('Too many attempts. Try again in a few minutes.')

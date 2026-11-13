@@ -1,0 +1,1771 @@
+{
+  "connection_id": "7db171d2-b4b2-4b47-bf50-a9b3cee6a6b7",
+  "conflits_attendus": {
+    "dup_page1": [
+      "anis.ltaief@example.com",
+      "anis.saad@example.com",
+      "asma.baccouche@example.com"
+    ],
+    "dup_page_suivante": [
+      "ines.guesmi@example.com",
+      "ines.mzoughi@example.com",
+      "kais.jaziri@example.com"
+    ]
+  },
+  "runs": {
+    "nominal": {
+      "label": "nominal",
+      "csv": "t8_bulk_100.csv",
+      "data_file_id": "f02e66ba-10c3-4c9c-9486-4b52f253b81e",
+      "counts_before": {
+        "absence_requests": 115,
+        "employees": 108
+      },
+      "validation": {
+        "total_rows": 100,
+        "valid_rows": 100,
+        "invalid_rows": 0
+      },
+      "started_at": "2026-11-12T22:15:40.021232+00:00",
+      "job_id": "3f5934ab-fd00-49b0-a16b-453df24571e1",
+      "automation_run_id": "f91e4ef7-56b3-48e5-88f1-97948f7e54db",
+      "progress": {
+        "job_id": "3f5934ab-fd00-49b0-a16b-453df24571e1",
+        "status": "done",
+        "total": 100,
+        "completed": 100,
+        "failed": 0,
+        "batches": 2,
+        "batches_done": 2,
+        "automation_run_id": "f91e4ef7-56b3-48e5-88f1-97948f7e54db",
+        "progress_pct": 100.0,
+        "dry_run": false
+      },
+      "duration_s": 34.74,
+      "report": {
+        "bulk_report_id": "7d56da11-b09f-4962-8664-fa1b8da3735b",
+        "automation_run_id": "f91e4ef7-56b3-48e5-88f1-97948f7e54db",
+        "status": "running",
+        "success_count": 0,
+        "failed_count": 0,
+        "batch_summary": [
+          {
+            "batch_number": 1,
+            "start_row": 1,
+            "end_row": 50,
+            "status": "completed",
+            "success_count": 50,
+            "failed_count": 0
+          },
+          {
+            "batch_number": 2,
+            "start_row": 51,
+            "end_row": 100,
+            "status": "completed",
+            "success_count": 50,
+            "failed_count": 0
+          }
+        ],
+        "row_errors": [],
+        "duplicate_rows": []
+      },
+      "counts_after": {
+        "absence_requests": 215,
+        "employees": 108
+      }
+    },
+    "idempotence": {
+      "label": "idempotence",
+      "csv": "t8_bulk_100.csv",
+      "data_file_id": "f56759bc-d9b6-4572-b0c8-2b2c4d1163e9",
+      "counts_before": {
+        "absence_requests": 215,
+        "employees": 108
+      },
+      "validation": {
+        "total_rows": 100,
+        "valid_rows": 100,
+        "invalid_rows": 0
+      },
+      "started_at": "2026-11-12T22:16:23.313160+00:00",
+      "job_id": "965c49e5-fb22-487d-907d-958408dd1a02",
+      "automation_run_id": "d6c5f9bb-c597-43bd-ae28-8e1d243e09d0",
+      "progress": {
+        "job_id": "965c49e5-fb22-487d-907d-958408dd1a02",
+        "status": "done",
+        "total": 100,
+        "completed": 100,
+        "failed": 0,
+        "batches": 2,
+        "batches_done": 2,
+        "automation_run_id": "d6c5f9bb-c597-43bd-ae28-8e1d243e09d0",
+        "progress_pct": 100.0,
+        "dry_run": false
+      },
+      "duration_s": 18.9,
+      "report": {
+        "bulk_report_id": "2ca79951-3611-4368-aac7-06518254d5d8",
+        "automation_run_id": "d6c5f9bb-c597-43bd-ae28-8e1d243e09d0",
+        "status": "running",
+        "success_count": 0,
+        "failed_count": 0,
+        "batch_summary": [
+          {
+            "batch_number": 1,
+            "start_row": 1,
+            "end_row": 50,
+            "status": "completed",
+            "success_count": 50,
+            "failed_count": 0
+          },
+          {
+            "batch_number": 2,
+            "start_row": 51,
+            "end_row": 100,
+            "status": "completed",
+            "success_count": 50,
+            "failed_count": 0
+          }
+        ],
+        "row_errors": [],
+        "duplicate_rows": []
+      },
+      "counts_after": {
+        "absence_requests": 215,
+        "employees": 108
+      }
+    },
+    "conflits": {
+      "label": "conflits",
+      "csv": "t9_conflits_employes.csv",
+      "data_file_id": "de427cab-a7ea-4f2b-a46f-299fc0845b74",
+      "counts_before": {
+        "absence_requests": 215,
+        "employees": 108
+      },
+      "validation": {
+        "total_rows": 11,
+        "valid_rows": 11,
+        "invalid_rows": 0
+      },
+      "started_at": "2026-11-12T22:16:57.536349+00:00",
+      "job_id": "25a5b55a-93fe-4022-bf49-b00d8af65469",
+      "automation_run_id": "959c85f9-df0b-4d0d-8378-d12d26f4b23a",
+      "progress": {
+        "job_id": "25a5b55a-93fe-4022-bf49-b00d8af65469",
+        "status": "partial",
+        "total": 11,
+        "completed": 3,
+        "failed": 8,
+        "batches": 1,
+        "batches_done": 1,
+        "automation_run_id": "959c85f9-df0b-4d0d-8378-d12d26f4b23a",
+        "progress_pct": 100.0,
+        "dry_run": false
+      },
+      "duration_s": 17.57,
+      "report": {
+        "bulk_report_id": "a65a56ff-19f8-4476-a7ee-fca3670aace0",
+        "automation_run_id": "959c85f9-df0b-4d0d-8378-d12d26f4b23a",
+        "status": "running",
+        "success_count": 0,
+        "failed_count": 0,
+        "batch_summary": [
+          {
+            "batch_number": 1,
+            "start_row": 1,
+            "end_row": 11,
+            "status": "completed",
+            "success_count": 3,
+            "failed_count": 8
+          }
+        ],
+        "row_errors": [
+          {
+            "batch_number": 1,
+            "row_index": 1,
+            "error_code": "422",
+            "message": "POST /api/employees: {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"email\"],\"msg\":\"value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.\",\"input\":\"t9.nouveau1@absence-app.test\",\"ctx\":{\"reason\":\"The part after the @-sign is a special-use or reserved name that cannot be used with email.\"}}]}"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 2,
+            "error_code": "422",
+            "message": "POST /api/employees: {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"email\"],\"msg\":\"value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.\",\"input\":\"t9.nouveau2@absence-app.test\",\"ctx\":{\"reason\":\"The part after the @-sign is a special-use or reserved name that cannot be used with email.\"}}]}"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 10,
+            "error_code": "DUPLICATE_UNRESOLVED",
+            "message": "POST /api/employees: Duplicate conflict (409) — couldn't uniquely identify the existing record to resume from: {\"detail\":\"An employee with this email already exists\"}"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 3,
+            "error_code": "422",
+            "message": "POST /api/employees: {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"email\"],\"msg\":\"value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.\",\"input\":\"t9.nouveau3@absence-app.test\",\"ctx\":{\"reason\":\"The part after the @-sign is a special-use or reserved name that cannot be used with email.\"}}]}"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 4,
+            "error_code": "422",
+            "message": "POST /api/employees: {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"email\"],\"msg\":\"value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.\",\"input\":\"t9.nouveau4@absence-app.test\",\"ctx\":{\"reason\":\"The part after the @-sign is a special-use or reserved name that cannot be used with email.\"}}]}"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 5,
+            "error_code": "422",
+            "message": "POST /api/employees: {\"detail\":[{\"type\":\"value_error\",\"loc\":[\"body\",\"email\"],\"msg\":\"value is not a valid email address: The part after the @-sign is a special-use or reserved name that cannot be used with email.\",\"input\":\"t9.nouveau5@absence-app.test\",\"ctx\":{\"reason\":\"The part after the @-sign is a special-use or reserved name that cannot be used with email.\"}}]}"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 9,
+            "error_code": "DUPLICATE_UNRESOLVED",
+            "message": "POST /api/employees: Duplicate conflict (409) — couldn't uniquely identify the existing record to resume from: {\"detail\":\"An employee with this email already exists\"}"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 11,
+            "error_code": "DUPLICATE_UNRESOLVED",
+            "message": "POST /api/employees: Duplicate conflict (409) — couldn't uniquely identify the existing record to resume from: {\"detail\":\"An employee with this email already exists\"}"
+          }
+        ],
+        "duplicate_rows": [
+          {
+            "batch_number": 1,
+            "row_index": 6,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          },
+          {
+            "batch_number": 1,
+            "row_index": 7,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          },
+          {
+            "batch_number": 1,
+            "row_index": 8,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          }
+        ]
+      },
+      "counts_after": {
+        "absence_requests": 215,
+        "employees": 108
+      }
+    },
+    "conflits2": {
+      "label": "conflits2",
+      "csv": "t9_conflits2_employes.csv",
+      "data_file_id": "675f0c71-53d5-4693-bfe5-a7e082035084",
+      "counts_before": {
+        "absence_requests": 215,
+        "employees": 108
+      },
+      "validation": {
+        "total_rows": 11,
+        "valid_rows": 11,
+        "invalid_rows": 0
+      },
+      "started_at": "2026-11-12T22:18:59.575250+00:00",
+      "job_id": "1d9113c8-3fe4-4d2c-b1c2-b05826c70d07",
+      "automation_run_id": "daaa8979-6ee2-4dfc-b9e4-afedea6f02af",
+      "progress": {
+        "job_id": "1d9113c8-3fe4-4d2c-b1c2-b05826c70d07",
+        "status": "done",
+        "total": 11,
+        "completed": 11,
+        "failed": 0,
+        "batches": 1,
+        "batches_done": 1,
+        "automation_run_id": "daaa8979-6ee2-4dfc-b9e4-afedea6f02af",
+        "progress_pct": 100.0,
+        "dry_run": false
+      },
+      "duration_s": 23.73,
+      "report": {
+        "bulk_report_id": "2ebe8ea9-a622-406b-9f8c-bc4d64054bd9",
+        "automation_run_id": "daaa8979-6ee2-4dfc-b9e4-afedea6f02af",
+        "status": "running",
+        "success_count": 0,
+        "failed_count": 0,
+        "batch_summary": [
+          {
+            "batch_number": 1,
+            "start_row": 1,
+            "end_row": 11,
+            "status": "completed",
+            "success_count": 11,
+            "failed_count": 0
+          }
+        ],
+        "row_errors": [],
+        "duplicate_rows": [
+          {
+            "batch_number": 1,
+            "row_index": 6,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          },
+          {
+            "batch_number": 1,
+            "row_index": 7,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          },
+          {
+            "batch_number": 1,
+            "row_index": 8,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          },
+          {
+            "batch_number": 1,
+            "row_index": 9,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          },
+          {
+            "batch_number": 1,
+            "row_index": 10,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          },
+          {
+            "batch_number": 1,
+            "row_index": 11,
+            "error_code": "DUPLICATE_RESOLVED",
+            "message": "Resolved to an existing record instead of creating a new one."
+          }
+        ]
+      },
+      "counts_after": {
+        "absence_requests": 215,
+        "employees": 113
+      }
+    },
+    "disjoncteur": {
+      "label": "disjoncteur",
+      "csv": "t9_disjoncteur_100.csv",
+      "data_file_id": "750bdca1-47e9-4049-ac44-18b86d707859",
+      "counts_before": {
+        "absence_requests": 215,
+        "employees": 113
+      },
+      "validation": {
+        "total_rows": 100,
+        "valid_rows": 100,
+        "invalid_rows": 0
+      },
+      "started_at": "2026-11-12T22:19:38.724720+00:00",
+      "job_id": "7798c782-695a-4eb2-9646-17682cd568f4",
+      "automation_run_id": "c2bc89ce-1d59-47d7-9f04-e2c6ac0be38b",
+      "progress": {
+        "job_id": "7798c782-695a-4eb2-9646-17682cd568f4",
+        "status": "partial",
+        "total": 100,
+        "completed": 0,
+        "failed": 100,
+        "batches": 2,
+        "batches_done": 2,
+        "automation_run_id": "c2bc89ce-1d59-47d7-9f04-e2c6ac0be38b",
+        "progress_pct": 100.0,
+        "dry_run": false
+      },
+      "duration_s": 12.75,
+      "report": {
+        "bulk_report_id": "a9b6272c-067b-4bc8-acca-753661963312",
+        "automation_run_id": "c2bc89ce-1d59-47d7-9f04-e2c6ac0be38b",
+        "status": "running",
+        "success_count": 0,
+        "failed_count": 0,
+        "batch_summary": [
+          {
+            "batch_number": 1,
+            "start_row": 1,
+            "end_row": 50,
+            "status": "completed",
+            "success_count": 0,
+            "failed_count": 50
+          },
+          {
+            "batch_number": 2,
+            "start_row": 51,
+            "end_row": 100,
+            "status": "completed",
+            "success_count": 0,
+            "failed_count": 50
+          }
+        ],
+        "row_errors": [
+          {
+            "batch_number": 1,
+            "row_index": 9,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 1,
+            "error_code": "ERROR",
+            "message": "POST /api/requests: All connection attempts failed"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 2,
+            "error_code": "ERROR",
+            "message": "POST /api/requests: All connection attempts failed"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 3,
+            "error_code": "ERROR",
+            "message": "POST /api/requests: All connection attempts failed"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 4,
+            "error_code": "ERROR",
+            "message": "POST /api/requests: All connection attempts failed"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 5,
+            "error_code": "ERROR",
+            "message": "POST /api/requests: All connection attempts failed"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 6,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 7,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 8,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 10,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 11,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 12,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 13,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 14,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 15,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 16,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 17,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 18,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 19,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 20,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 21,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 22,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 23,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 24,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 25,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 26,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 27,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 28,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 29,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 30,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 31,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 32,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 33,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 34,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 35,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 36,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 37,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 38,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 39,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 40,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 41,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 42,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 43,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 44,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 45,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 46,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 47,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 48,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 49,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 1,
+            "row_index": 50,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 51,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 52,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 53,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 54,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 55,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 56,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 57,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 58,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 59,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 60,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 61,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 62,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 63,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 64,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 65,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 66,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 67,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 68,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 69,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 70,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 71,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 72,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 73,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 74,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 75,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 76,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 77,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 78,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 79,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 80,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 81,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 82,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 83,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 84,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 85,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 86,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 87,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 88,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 89,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 90,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 91,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 92,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 93,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 94,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 95,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 96,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 97,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 98,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 99,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          },
+          {
+            "batch_number": 2,
+            "row_index": 100,
+            "error_code": "CIRCUIT_OPEN",
+            "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+          }
+        ],
+        "duplicate_rows": []
+      },
+      "counts_after": {
+        "absence_requests": 215,
+        "employees": 113
+      },
+      "resume": {
+        "response": {
+          "job_id": "7798c782-695a-4eb2-9646-17682cd568f4",
+          "message": "All batches already completed. Nothing to resume.",
+          "resumed_batches": 0
+        },
+        "progress": {
+          "job_id": "7798c782-695a-4eb2-9646-17682cd568f4",
+          "status": "partial",
+          "total": 100,
+          "completed": 0,
+          "failed": 100,
+          "batches": 2,
+          "batches_done": 2,
+          "automation_run_id": "c2bc89ce-1d59-47d7-9f04-e2c6ac0be38b",
+          "progress_pct": 100.0,
+          "dry_run": false
+        },
+        "counts_before": {
+          "absence_requests": 215,
+          "employees": 113
+        },
+        "counts_after": {
+          "absence_requests": 215,
+          "employees": 113
+        },
+        "report": {
+          "bulk_report_id": "a9b6272c-067b-4bc8-acca-753661963312",
+          "automation_run_id": "c2bc89ce-1d59-47d7-9f04-e2c6ac0be38b",
+          "status": "partial_success",
+          "success_count": 0,
+          "failed_count": 100,
+          "batch_summary": [
+            {
+              "batch_number": 1,
+              "start_row": 1,
+              "end_row": 50,
+              "status": "completed",
+              "success_count": 0,
+              "failed_count": 50
+            },
+            {
+              "batch_number": 2,
+              "start_row": 51,
+              "end_row": 100,
+              "status": "completed",
+              "success_count": 0,
+              "failed_count": 50
+            }
+          ],
+          "row_errors": [
+            {
+              "batch_number": 1,
+              "row_index": 9,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 1,
+              "error_code": "ERROR",
+              "message": "POST /api/requests: All connection attempts failed"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 2,
+              "error_code": "ERROR",
+              "message": "POST /api/requests: All connection attempts failed"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 3,
+              "error_code": "ERROR",
+              "message": "POST /api/requests: All connection attempts failed"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 4,
+              "error_code": "ERROR",
+              "message": "POST /api/requests: All connection attempts failed"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 5,
+              "error_code": "ERROR",
+              "message": "POST /api/requests: All connection attempts failed"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 6,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 7,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 8,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 10,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 11,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 12,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 13,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 14,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 15,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 16,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 17,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 18,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 19,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 20,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 21,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 22,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 23,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 24,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 25,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 26,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 27,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 28,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 29,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 30,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 31,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 32,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 33,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 34,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 35,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 36,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 37,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 38,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 39,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 40,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 41,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 42,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 43,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 44,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 45,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 46,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 47,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 48,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 49,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 1,
+              "row_index": 50,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 51,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 52,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 53,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 54,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 55,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 56,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 57,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 58,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 59,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 60,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 61,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 62,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 63,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 64,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 65,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 66,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 67,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 68,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 69,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 70,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 71,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 72,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 73,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 74,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 75,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 76,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 77,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 78,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 79,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 80,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 81,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 82,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 83,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 84,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 85,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 86,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 87,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 88,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 89,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 90,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 91,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 92,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 93,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 94,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 95,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 96,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 97,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 98,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 99,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            },
+            {
+              "batch_number": 2,
+              "row_index": 100,
+              "error_code": "CIRCUIT_OPEN",
+              "message": "POST /api/requests: Circuit breaker open — endpoint temporarily unavailable"
+            }
+          ],
+          "duplicate_rows": []
+        }
+      },
+      "relances": [
+        {
+          "counts_before": {
+            "absence_requests": 215,
+            "employees": 113
+          },
+          "error": {
+            "status": 400,
+            "detail": "No rows available to execute — every row in this file has already been executed successfully, or none passed validation."
+          },
+          "counts_after": {
+            "absence_requests": 215,
+            "employees": 113
+          }
+        },
+        {
+          "counts_before": {
+            "absence_requests": 215,
+            "employees": 113
+          },
+          "automation_run_id": "11c72885-5314-4abd-ae87-1a4efc006e24",
+          "progress": {
+            "job_id": "14ea9802-d4b5-4ebb-8b78-cea56af6251d",
+            "status": "done",
+            "total": 100,
+            "completed": 100,
+            "failed": 0,
+            "batches": 2,
+            "batches_done": 2,
+            "automation_run_id": "11c72885-5314-4abd-ae87-1a4efc006e24",
+            "progress_pct": 100.0,
+            "dry_run": false
+          },
+          "duration_s": 14.6,
+          "report": {
+            "bulk_report_id": "c3a267ee-7743-4c1a-bcd3-273c776c13b3",
+            "automation_run_id": "11c72885-5314-4abd-ae87-1a4efc006e24",
+            "status": "running",
+            "success_count": 0,
+            "failed_count": 0,
+            "batch_summary": [
+              {
+                "batch_number": 1,
+                "start_row": 1,
+                "end_row": 50,
+                "status": "completed",
+                "success_count": 50,
+                "failed_count": 0
+              },
+              {
+                "batch_number": 2,
+                "start_row": 51,
+                "end_row": 100,
+                "status": "completed",
+                "success_count": 50,
+                "failed_count": 0
+              }
+            ],
+            "row_errors": [],
+            "duplicate_rows": []
+          },
+          "counts_after": {
+            "absence_requests": 315,
+            "employees": 113
+          }
+        }
+      ]
+    }
+  },
+  "essais_preliminaires": {
+    "nominal_sans_schema": {
+      "label": "nominal",
+      "csv": "t8_bulk_100.csv",
+      "data_file_id": "58b08cc8-d87f-4d0a-88ad-0a3180251c30",
+      "counts_before": {
+        "absence_requests": 115,
+        "employees": 108
+      },
+      "validation": {
+        "total_rows": 100,
+        "valid_rows": 100,
+        "invalid_rows": 0
+      },
+      "started_at": "2026-11-12T22:11:57.583306+00:00",
+      "error": {
+        "status": 202,
+        "detail": null
+      },
+      "counts_after": {
+        "absence_requests": 115,
+        "employees": 108
+      }
+    }
+  },
+  "conflits2_attendus": {
+    "dup_page1": [
+      "bassem.baccouche@example.com",
+      "bassem.benrejeb@example.com",
+      "bassem.hmida@example.com"
+    ],
+    "dup_page_suivante": [
+      "rim.khemiri@example.com",
+      "rim.khlifi@example.com",
+      "rim.triki@example.com"
+    ]
+  }
+}

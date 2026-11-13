@@ -2,7 +2,7 @@
 LLM observability service — persists call records and reports daily usage.
 
 Fix 14.2: request_id is read from the current ContextVar and stored with
-each LLM call so every Azure OpenAI call can be traced back to the HTTP
+each LLM call so every Bedrock call can be traced back to the HTTP
 request that triggered it (even through Celery task chains).
 
 Fix 14.3: print() replaced with structlog.
@@ -99,10 +99,10 @@ def print_current_ai_usage_today(db: Session) -> None:
 
 def get_model_cost_comparison(db: Session) -> dict:
     """
-    Project lifetime token usage onto every priced model (current Groq
-    model vs. the Bedrock Claude Haiku/Sonnet/Opus candidates) so you can
-    compare "what we're actually spending" against "what we'd spend on
-    model X" using real volume instead of guessing. Cheapest model first.
+    Project lifetime token usage onto every priced Bedrock model (current
+    model vs. the other Bedrock candidates) so you can compare "what we're
+    actually spending" against "what we'd spend on model X" using real
+    volume instead of guessing. Cheapest model first.
     """
     from app.llm_observability.pricing import compare_models
 

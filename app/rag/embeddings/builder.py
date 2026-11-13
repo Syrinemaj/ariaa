@@ -78,10 +78,9 @@ def build_endpoint_embedding_text(endpoint: Endpoint) -> str:
 
 def get_embedding(text: str) -> List[float]:
     """
-    Embed a single text string using the local sentence-transformers model.
-
-    Uses LocalEmbeddingClient with the class-level singleton — safe to call
-    from both FastAPI routes and Celery workers.
+    Embed a single text string using the configured embedding provider
+    (settings.EMBEDDING_PROVIDER) — safe to call from both FastAPI routes
+    and Celery workers.
     """
-    from app.rag.embeddings.client import LocalEmbeddingClient
-    return LocalEmbeddingClient().create_embedding(text)
+    from app.ai.base_client import create_embedding_client
+    return create_embedding_client().create_embedding(text)

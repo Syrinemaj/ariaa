@@ -1,0 +1,11 @@
+case_id,difficulty,n_raw_domains,expected_group_count,predicted_domains,predicted_count,error
+dc_001,easy,5,1,human_resources,1,
+dc_002,medium,4,1,contract_management,1,
+dc_003,medium,5,2,orders; products,2,
+dc_004,hard,4,2,localization; monitoring,2,
+dc_005,easy,4,1,authentication,1,
+dc_006,easy,4,1,notifications,1,
+dc_007,hard,8,4,human_resources; products; orders; authentication,4,
+dc_008,hard,3,1,misc; other; unknown,3,
+dc_009,easy,1,1,human_resources,1,
+dc_010,medium,6,2,department_management; project_management,2,

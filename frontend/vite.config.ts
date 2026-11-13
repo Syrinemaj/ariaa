@@ -21,22 +21,29 @@ export default defineConfig({
       interval: 300,
     },
     // Dev only — proxied vers FastAPI. Ignoré dans `npm run build`.
-    proxy: {
-      '/auth':        FASTAPI,
-      '/upload':      FASTAPI,
-      '/jobs':        FASTAPI,
-      '/registry':    FASTAPI,
-      '/llm':         FASTAPI,
-      '/rag':         FASTAPI,
-      '/users':       FASTAPI,
-      '/approvals':   FASTAPI,
-      '/reports':     FASTAPI,
-      '^/automation/': FASTAPI,
-      '/bulk':        FASTAPI,
-      '/openapi':     FASTAPI,
-      '/audit-logs':  FASTAPI,
-      '/maintenance': FASTAPI,
-    },
+    //
+    // Plusieurs de ces préfixes (/users, /bulk, /governance, /connections, …)
+    // sont AUSSI des routes React Router côté frontend — un rechargement dur
+    // (F5) sur /governance envoie une vraie navigation de page avec
+    // `Accept: text/html`, que le proxy interceptait et renvoyait vers
+    // FastAPI (qui n'a pas de route HTML à cette adresse → page blanche /
+    // 404). `bypass` laisse Vite servir index.html pour toute navigation de
+    // page, et ne proxie vers FastAPI que les vrais appels API (fetch/XHR,
+    // qui n'envoient pas `Accept: text/html` en tête de liste).
+    proxy: (() => {
+      const bypass = (req: { headers: Record<string, string | string[] | undefined> }) => {
+        const accept = req.headers.accept
+        if (typeof accept === 'string' && accept.split(',')[0]?.trim() === 'text/html') {
+          return '/index.html'
+        }
+      }
+      const targets = [
+        '/auth', '/upload', '/jobs', '/registry', '/llm', '/rag', '/users',
+        '/teams', '/approvals', '/notifications', '/reports', '^/automation/',
+        '/bulk', '/openapi', '/audit-logs', '/maintenance', '/governance', '/connections',
+      ]
+      return Object.fromEntries(targets.map(t => [t, { target: FASTAPI, bypass }]))
+    })(),
   },
   build: {
     // En prod, tout est servi depuis FastAPI sur le même origin → pas de CORS, pas de proxy

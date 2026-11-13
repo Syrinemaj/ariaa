@@ -1,0 +1,11 @@
+module,lignes_couvertes,lignes_totales,couverture_pct
+ingestion,98,261,37.5
+normalization,591,768,77.0
+rag,137,323,42.4
+planner,231,309,74.8
+governance,91,146,62.3
+approval,0,31,0.0
+automation,136,336,40.5
+bulk_execution,104,296,35.1
+security,133,286,46.5
+connections,60,185,32.4

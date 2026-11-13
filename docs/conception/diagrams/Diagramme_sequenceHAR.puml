@@ -1,0 +1,45 @@
+@startuml Diagramme_sequenceHAR
+!theme plain
+
+actor Opérateur
+participant "Frontend" as FE
+participant "POST /upload/har/analyze\n(app/api/upload.py)" as API
+queue "Redis (broker, queue ingestion)" as Broker
+participant "Worker Celery\n(app/workers/tasks/ingestion.py)" as Worker
+participant "traffic_cleaner.py\n+ noise_scoring.py" as Cleaner
+participant "amazon.nova-lite-v1:0\n(zone grise uniquement)" as LLM
+participant "normalization/*\n(parameter_detector,\ndynamic_segment_detector,\ngroup_normalizer)" as Norm
+database "PostgreSQL" as PG
+
+Opérateur -> FE : importe un fichier .har
+FE -> API : POST /upload/har/analyze (multipart)
+API -> API : har_parser.parse_har_file()\n-> liste de TrafficEntry
+API -> PG : INSERT AnalysisRun (status=running)
+API -> Broker : enqueue tâche d'ingestion
+API --> FE : 202 Accepted {job_id}
+
+Broker -> Worker : dépile la tâche
+Worker -> Cleaner : clean_traffic() — filtre dur\n(statiques, télémétrie, OPTIONS/HEAD, status=0)
+Cleaner -> Cleaner : score_entries()\n= compute_heuristic_score + compute_payload_score
+alt score >= 0.70
+  Cleaner -> Cleaner : conservé par les règles
+else score <= 0.30
+  Cleaner -> Cleaner : rejeté par les règles
+else zone grise [0.30, 0.70]
+  Cleaner -> LLM : structured_chat (classification)
+  LLM --> Cleaner : conservé / rejeté + domaine/action
+end
+
+Worker -> Norm : detect_parameter_type() par segment
+Norm -> Norm : detect_dynamic_positions()\n(statistique inter-requêtes, point fixe)
+Norm -> LLM : group_normalizer (si confiance < 0.70,\nun appel groupé par endpoint)
+Worker -> Worker : deduplicate_endpoints(),\nclassify_query_params()
+Worker -> PG : INSERT Endpoint, EndpointSchema\n(un par endpoint normalisé)
+Worker -> PG : UPDATE AnalysisRun (status=completed)
+
+FE -> API : GET /jobs/{job_id} (polling)
+API --> FE : progression / terminé
+FE -> API : GET /registry/runs/{id}/endpoints
+API --> FE : liste des endpoints détectés
+
+@enduml

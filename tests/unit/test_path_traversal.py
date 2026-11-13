@@ -87,11 +87,25 @@ class TestBuildAndValidateUrl:
         url = _build_and_validate_url(None, "/v1/users/123")
         assert url == "/v1/users/123"
 
-    def test_host_change_raises(self):
-        # Param injection that tries to change the netloc
+    def test_double_slash_injection_neutralized(self):
+        # A leading "//evil.com" (protocol-relative netloc injection) is
+        # defused by _build_and_validate_url()'s leading-slash stripping
+        # before urljoin ever sees it — it lands as a harmless same-host
+        # path segment, not a raised error.
+        url = _build_and_validate_url(
+            "https://api.example.com",
+            "//evil.com/admin",
+        )
+        from urllib.parse import urlparse
+        assert urlparse(url).netloc == "api.example.com"
+
+    def test_absolute_url_injection_raises(self):
+        # A resolved path that is itself a full absolute URL (no leading
+        # slash to strip) is NOT neutralized by lstrip("/") — urljoin
+        # treats it as a base override, changing the netloc. This is the
+        # case the host-change guard exists to catch.
         with pytest.raises(PathTraversalError, match="host changed"):
             _build_and_validate_url(
                 "https://api.example.com",
-                # After urljoin, //evil.com would take over the netloc
-                "//evil.com/admin",
+                "https://evil.com/admin",
             )

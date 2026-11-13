@@ -3,15 +3,26 @@ AI client protocols — structural subtyping via typing.Protocol.
 
 Two protocols are defined:
   AIClientProtocol     — completion methods, implemented by BedrockClient
-    (AI_PROVIDER=bedrock, the default), GroqClient (AI_PROVIDER=groq), and
-    AzureOpenAIClient (AI_PROVIDER=azure) — three independent providers,
-    none of them a fallback the others reach for internally. Pick one via
-    create_ai_client() below rather than importing a concrete client.
-  EmbeddingClientProtocol — embedding methods (LocalEmbeddingClient only)
+    (the only completion provider — see create_ai_client() below).
+  EmbeddingClientProtocol — embedding methods, implemented by
+    LocalEmbeddingClient and BedrockEmbeddingClient — see
+    create_embedding_client() below.
 
-BedrockClient, GroqClient and AzureOpenAIClient all satisfy AIClientProtocol
-without inheriting from it (duck typing / structural subtyping).
-LocalEmbeddingClient satisfies EmbeddingClientProtocol.
+GroqClient and AzureOpenAIClient used to be alternative implementations of
+AIClientProtocol, selected via AI_PROVIDER, before the model-selection
+evaluation (evaluation/aggregate.py) made Bedrock's cost/latency/reliability
+case decisive enough to drop the other two providers rather than keep
+maintaining three parallel implementations for two that were never used in
+production. BedrockClient satisfies AIClientProtocol without inheriting from
+it (duck typing / structural subtyping) — the Protocol stays, in case a
+second provider is ever worth adding back, but only one implementation
+exists today.
+
+Embeddings moved to the same pattern (EMBEDDING_PROVIDER setting +
+create_embedding_client() factory) when LocalEmbeddingClient
+(BAAI/bge-small-en, English-only) was replaced by BedrockEmbeddingClient
+(Cohere Embed Multilingual v3) as the default, for French/English
+cross-lingual retrieval — see app/core/config.py::EMBEDDING_PROVIDER.
 
 Usage in type annotations:
   def my_fn(client: AIClientProtocol) -> ...: ...
@@ -27,14 +38,14 @@ from sqlalchemy.orm import Session
 
 class StructuredResponseError(Exception):
     """Raised when an LLM's structured_chat response doesn't satisfy the
-    required schema fields even after a retry — see GroqClient.structured_chat.
+    required schema fields even after a retry — see BedrockClient.structured_chat.
     Callers should catch this and surface a clean error, not a raw KeyError."""
 
 
 @runtime_checkable
 class AIClientProtocol(Protocol):
     """
-    Completion client — implemented by GroqClient and AzureOpenAIClient.
+    Completion client — implemented by BedrockClient.
     Embeddings are intentionally excluded: use EmbeddingClientProtocol.
     """
 
@@ -72,38 +83,82 @@ class AIClientProtocol(Protocol):
 @runtime_checkable
 class EmbeddingClientProtocol(Protocol):
     """
-    Embedding client — implemented by LocalEmbeddingClient.
-    Kept separate from AIClientProtocol because the providers are different:
-    completions → Groq/Azure, embeddings → local sentence-transformers.
+    Embedding client — implemented by LocalEmbeddingClient and
+    BedrockEmbeddingClient. Kept separate from AIClientProtocol because
+    embedding and completion models are selected independently (see
+    create_embedding_client() below).
+
+    Declares the full surface real call sites depend on across app/rag/* —
+    document side (embed/embed_batch/create_embedding*) and query side
+    (embed_query/create_embedding_query_async), which differ because some
+    embedding models (BGE, Cohere's input_type) are asymmetric: a query is
+    embedded differently from the documents it's matched against.
     """
 
+    def embed(self, text: str) -> List[float]:
+        """Synchronous single-document embedding (indexing side)."""
+        ...
+
+    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        """Synchronous batch document embedding (indexing side)."""
+        ...
+
     def create_embedding(self, text: str) -> List[float]:
-        """Synchronous single-text embedding."""
+        """Synchronous single-text embedding. Alias of embed()."""
         ...
 
     async def create_embedding_async(self, text: str) -> List[float]:
-        """Asynchronous single-text embedding (non-blocking)."""
+        """Asynchronous single-document embedding (non-blocking)."""
+        ...
+
+    async def create_embedding_batch_async(self, texts: List[str]) -> List[List[float]]:
+        """Asynchronous batch document embedding (non-blocking)."""
+        ...
+
+    def embed_query(self, query: str) -> List[float]:
+        """Synchronous query embedding (retrieval side — may differ from embed())."""
+        ...
+
+    async def create_embedding_query_async(self, query: str) -> List[float]:
+        """Asynchronous query embedding (non-blocking)."""
         ...
 
 
 def create_ai_client() -> "AIClientProtocol":
     """
-    Constructs the primary completion client per settings.AI_PROVIDER —
-    every call site that used to hardcode GroqClient() (Celery tasks and
-    other standalone/non-FastAPI usage) should call this instead, so a
-    provider change is one .env line, not a code change in ~10 files.
+    Constructs the primary completion client — a BedrockClient configured
+    from settings.BEDROCK_MODEL/AWS_REGION. Every call site that builds its
+    own AI client (Celery tasks and other standalone/non-FastAPI usage)
+    should call this instead of instantiating BedrockClient directly, so a
+    model change stays one .env line, not a code change across every call
+    site (see app/core/config.py::BEDROCK_MODEL for why Bedrock is the only
+    provider).
+    """
+    from app.ai.bedrock_client import BedrockClient
+    from app.core.config import settings
 
-    Not to be confused with azure_openai_client.py's get_ai_client(request)
-    — that one is the FastAPI dependency returning the already-constructed
-    app.state.ai_client singleton; this one BUILDS a new client instance.
+    return BedrockClient(model=settings.BEDROCK_MODEL, aws_region=settings.AWS_REGION)
+
+
+def create_embedding_client() -> "EmbeddingClientProtocol":
+    """
+    Constructs the primary embedding client per settings.EMBEDDING_PROVIDER.
+    Every call site should call this instead of instantiating
+    LocalEmbeddingClient/BedrockEmbeddingClient directly, so switching
+    provider — or switching Bedrock model (Cohere → Titan fallback) — stays
+    a .env change, not a code change across every call site.
+
+    "local" and "bedrock" produce vectors of different dimensionality
+    (384 vs 1024) — switching EMBEDDING_PROVIDER at runtime without also
+    re-running the matching Alembic migration and reindexing every run
+    will fail at the pgvector column level (see app/core/config.py::
+    EMBEDDING_DIMENSIONS and migration 024).
     """
     from app.core.config import settings
 
-    if settings.AI_PROVIDER == "azure":
-        from app.ai.azure_openai_client import AzureOpenAIClient
-        return AzureOpenAIClient()
-    if settings.AI_PROVIDER == "bedrock":
-        from app.ai.bedrock_client import BedrockClient
-        return BedrockClient(model=settings.BEDROCK_MODEL, aws_region=settings.AWS_REGION)
-    from app.ai.groq_client import GroqClient
-    return GroqClient()
+    if settings.EMBEDDING_PROVIDER == "local":
+        from app.rag.embeddings.client import LocalEmbeddingClient
+        return LocalEmbeddingClient()
+
+    from app.rag.embeddings.bedrock_client import BedrockEmbeddingClient
+    return BedrockEmbeddingClient(model=settings.BEDROCK_EMBEDDING_MODEL, aws_region=settings.AWS_REGION)

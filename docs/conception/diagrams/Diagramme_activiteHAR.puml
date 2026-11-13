@@ -1,0 +1,49 @@
+@startuml Diagramme_activiteHAR
+!theme plain
+
+title Analyse d'une capture HAR — diagramme d'activité
+
+start
+:Import du fichier .har (POST /upload/har/analyze);
+:Parsing (har_parser.parse_har_file)\n-> liste de TrafficEntry;
+
+partition "Filtrage dur (sans IA)" {
+  :clean_traffic() — retire ressources statiques,\ndomaines de télémétrie, OPTIONS/HEAD,\nchemins d'infrastructure, status=0;
+}
+
+:score_entries()\n= compute_heuristic_score + compute_payload_score;
+
+if (score >= 0.70 ?) then (oui)
+  :conservé par les règles;
+elseif (score <= 0.30 ?) then (oui)
+  :rejeté par les règles;
+else (zone grise)
+  :semantic_filter — appel LLM (amazon.nova-lite-v1:0);
+  if (LLM : pertinent ?) then (oui)
+    :conservé;
+  else (non)
+    :rejeté;
+  endif
+endif
+
+partition "Normalisation (sur les entrées conservées)" {
+  :detect_parameter_type() par segment\n(motifs regex);
+  if (motif reconnu ?) then (non)
+    :detect_dynamic_positions()\n(statistique inter-requêtes, point fixe);
+    if (confiance >= 0.70 ?) then (non)
+      :group_normalizer — appel LLM groupé\npar endpoint;
+    endif
+  endif
+  :infer_parameter_name() — cascade de confiance;
+}
+
+:detect_action_discriminator_field()\n(endpoints multiplexés);
+:deduplicate_endpoints();
+:classify_query_params();
+:infer_schema_for_endpoint()\n(request/response schema, auth);
+:enrich_endpoint_with_ai()\n(domaine, action, résumé, tags, confiance);
+:build_endpoint_embedding_text()\n+ indexation pgvector;
+:Persistance (Endpoint, EndpointSchema,\nEndpointEmbedding);
+stop
+
+@enduml

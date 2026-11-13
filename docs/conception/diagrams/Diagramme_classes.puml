@@ -1,0 +1,179 @@
+@startuml Diagramme_classes
+!theme plain
+hide circle
+skinparam classAttributeIconSize 0
+
+class Organization {
+  id : string
+  name : string
+}
+
+class User {
+  id : string
+  org_id : string
+  email : string
+  role : {ADMIN, OPERATOR}
+  is_active : bool
+  failed_login_count : int
+  locked_until : datetime
+}
+
+class RefreshToken {
+  id : string
+  user_id : string
+  jti : string
+  expires_at : datetime
+}
+
+class Team
+class TeamMember
+
+class AnalysisRun {
+  id : string
+  status : string
+  file_name : string
+}
+
+class Endpoint {
+  id : string
+  method : string
+  path : string
+  canonical_key : string
+  business_domain : string
+  business_action : string
+}
+
+class EndpointSchema {
+  request_schema : JSON
+  response_schema : JSON
+  auth_type : string
+}
+
+class EndpointEmbedding {
+  embedding : vector(1024)
+  embedding_text : string
+  content_hash : string
+}
+
+class WorkflowModel {
+  id : string
+  name : string
+  business_domain : string
+  confidence : float
+}
+
+class WorkflowStepModel {
+  order : int
+  endpoint_id : string
+}
+
+class DataFile {
+  id : string
+  file_type : {csv, excel}
+  row_count : int
+}
+
+class DataRow {
+  index : int
+  status : {invalid, valid, success, failed}
+}
+
+class Connection {
+  id : string
+  name : string
+  base_url : string
+  environment : {test, preprod, prod}
+  auth_type : {api_key, service_account, oauth_client_credentials}
+  encrypted_secret : string
+  status : {active, revoked}
+}
+
+class ConnectionOperator
+
+class AutomationRun {
+  id : string
+  instruction : string
+  source : {simple, bulk}
+  status : string
+  dry_run : bool
+  plan_json : JSON
+  connection_id : string
+}
+
+class AutomationStepLog {
+  step_order : int
+  method : string
+  path : string
+  status : string
+  request_payload : JSON (sanitisé)
+  response_payload : JSON (sanitisé)
+}
+
+class AutomationApproval {
+  status : {pending, approved, rejected}
+  approved_by : string
+  comment : string
+}
+
+class BulkBatch {
+  status : {running, completed, cancelled}
+}
+
+class BulkBatchRow
+class BulkExecutionReport
+class IdempotencyRecord
+
+class GovernancePolicy {
+  risk_threshold_low : int = 1
+  risk_threshold_high : int = 10
+  environment_policies : JSON
+}
+
+class ForbiddenEndpointRule {
+  method : string
+  path_pattern : string
+}
+
+class AuditLog
+class Notification
+class LLMCall
+
+Organization "1" -- "*" User
+Organization "1" -- "*" Team
+Team "*" -- "*" User : TeamMember
+User "1" -- "*" RefreshToken
+
+Organization "1" -- "*" AnalysisRun
+User "1" -- "*" AnalysisRun : lance
+AnalysisRun "1" -- "*" Endpoint
+Endpoint "1" -- "0..1" EndpointSchema
+Endpoint "1" -- "0..1" EndpointEmbedding
+
+AnalysisRun "1" -- "*" WorkflowModel
+WorkflowModel "1" -- "*" WorkflowStepModel
+WorkflowStepModel "*" -- "1" Endpoint
+
+AnalysisRun "1" -- "*" DataFile
+DataFile "1" -- "*" DataRow
+
+Organization "1" -- "*" Connection
+Connection "1" -- "*" ConnectionOperator
+ConnectionOperator "*" -- "1" User
+User "1" -- "*" Connection : created_by
+
+AnalysisRun "1" -- "*" AutomationRun
+Connection "0..1" -- "*" AutomationRun
+AutomationRun "1" -- "*" AutomationStepLog
+AutomationRun "1" -- "0..1" AutomationApproval
+User "1" -- "*" AutomationApproval : décide
+
+AutomationRun "1" -- "*" BulkBatch
+BulkBatch "1" -- "*" BulkBatchRow
+AutomationRun "1" -- "0..1" BulkExecutionReport
+
+Organization "1" -- "1" GovernancePolicy
+Organization "1" -- "*" ForbiddenEndpointRule
+User "1" -- "*" AuditLog : génère
+User "1" -- "*" Notification
+
+@enduml

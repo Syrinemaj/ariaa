@@ -44,6 +44,14 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
         return False
 
 
+def run_email_coro_sync(coro) -> bool:
+    """Runs one of the async send_* coroutines from a sync (threadpool) FastAPI
+    route — e.g. app/api/bulk.py and app/api/approvals.py use sync Sessions
+    and plain `def` routes, which never have a running event loop in their
+    thread, so asyncio.run() here is safe (not nested)."""
+    return asyncio.run(coro)
+
+
 def _send_sync(to: str, subject: str, html_body: str) -> None:
     from_addr = settings.SMTP_FROM or settings.SMTP_USER
     msg = MIMEMultipart("alternative")
@@ -113,4 +121,52 @@ async def send_password_reset_email(to: str, full_name: str, reset_link: str) ->
         to=to,
         subject="ARIA — Reset your password",
         html_body=_base_layout("Reset your password", content),
+    )
+
+
+async def send_approval_requested_email(
+    to: str, admin_name: str, operator_name: str, resource_label: str, approvals_link: str,
+) -> bool:
+    content = f"""
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+      Hello <strong>{admin_name}</strong>,<br><br>
+      <strong>{operator_name}</strong> is waiting for your approval to run
+      <strong>{resource_label}</strong>.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+        <a href="{approvals_link}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:#fff;text-decoration:none;">
+          Review the request →
+        </a>
+      </td></tr>
+    </table>"""
+    return await send_email(
+        to=to,
+        subject=f"ARIA — {operator_name} needs your approval",
+        html_body=_base_layout("Approval requested", content),
+    )
+
+
+async def send_approval_decision_email(
+    to: str, operator_name: str, approved: bool, resource_label: str, comment: str | None,
+) -> bool:
+    verdict = "approved" if approved else "rejected"
+    color = "#16a34a" if approved else "#dc2626"
+    comment_html = (
+        f'<p style="margin:16px 0 0;color:#64748b;font-size:13px;line-height:1.5;">'
+        f'<strong>Comment:</strong> {comment}</p>'
+    ) if comment else ""
+    content = f"""
+    <p style="margin:0 0 4px;color:#475569;font-size:15px;line-height:1.6;">
+      Hello <strong>{operator_name}</strong>,
+    </p>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">
+      Your request to run <strong>{resource_label}</strong> was
+      <strong style="color:{color};text-transform:uppercase;">{verdict}</strong>.
+    </p>
+    {comment_html}"""
+    return await send_email(
+        to=to,
+        subject=f"ARIA — Your execution request was {verdict}",
+        html_body=_base_layout("Execution decision", content),
     )

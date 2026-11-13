@@ -17,6 +17,7 @@ export interface AutomationRun {
   id: string
   workflow_name: string
   dry_run: boolean
+  source: 'simple' | 'bulk'
   status: string
   total_steps: number
   success_count: number
@@ -25,6 +26,8 @@ export interface AutomationRun {
   created_at: string
   updated_at?: string
   instruction?: string
+  created_by_user_id?: string | null
+  created_by_name?: string | null
 }
 
 export interface StepLog {
@@ -36,6 +39,7 @@ export interface StepLog {
   request_payload: Record<string, unknown> | null
   response_payload: unknown | null
   error_message: string | null
+  created_at: string | null
 }
 
 export interface AutomationExecutionReport {
@@ -97,11 +101,13 @@ export function getKpiTrends(windowDays = 7): Promise<KpiTrends> {
   return api.get<KpiTrends>(`/reports/kpi-trends?window_days=${windowDays}`)
 }
 
-export function listAutomationRuns(params?: { limit?: number; page?: number; status?: string }) {
+export function listAutomationRuns(params?: { limit?: number; page?: number; status?: string; analysisRunId?: string; source?: 'simple' | 'bulk' }) {
   // Backend /reports/runs paginates via page/page_size (see app/core/pagination.py) —
   // `limit` here maps to page_size for callers that only care about a cap.
   const query: Record<string, string> = {}
   if (params?.status) query.status = params.status
+  if (params?.analysisRunId) query.analysis_run_id = params.analysisRunId
+  if (params?.source) query.source = params.source
   if (params?.limit !== undefined) query.page_size = String(params.limit)
   if (params?.page !== undefined) query.page = String(params.page)
   const qs = new URLSearchParams(query).toString()
@@ -124,4 +130,35 @@ export function deleteAutomationRun(id: string): Promise<void> {
 
 export function getAnalysisReport(runId: string): Promise<AnalysisRunReport> {
   return api.get<AnalysisRunReport>(`/reports/run/${runId}`)
+}
+
+export interface AuditLogEntry {
+  id: string
+  action: string
+  resource_type: string | null
+  resource_id: string | null
+  user_id: string | null
+  user_email: string | null
+  user_name: string | null
+  metadata: Record<string, unknown>
+  created_at: string | null
+}
+
+export function listAuditLogs(params?: {
+  action?: string
+  resource_type?: string
+  user_id?: string
+  page?: number
+  page_size?: number
+}) {
+  const query: Record<string, string> = {}
+  if (params?.action) query.action = params.action
+  if (params?.resource_type) query.resource_type = params.resource_type
+  if (params?.user_id) query.user_id = params.user_id
+  if (params?.page !== undefined) query.page = String(params.page)
+  if (params?.page_size !== undefined) query.page_size = String(params.page_size)
+  const qs = new URLSearchParams(query).toString()
+  return api.get<{ items: AuditLogEntry[]; total: number; page: number; page_size: number; total_pages: number }>(
+    `/reports/logs${qs ? `?${qs}` : ''}`
+  )
 }

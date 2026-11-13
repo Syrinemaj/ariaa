@@ -1,0 +1,53 @@
+@startuml Diagramme_sequencePlan
+!theme plain
+
+actor Opérateur
+participant "Frontend\n(AutomationPage)" as FE
+participant "POST /automation/plan\n(app/api/automation.py)" as API
+participant "intent_analyzer.py\n::analyze_business_intent" as Intent
+participant "amazon.nova-lite-v1:0" as LLM
+participant "retriever.py\n::semantic_search_endpoints" as RAG
+database "pgvector\n(endpoint_embeddings)" as PG
+participant "relevance_judge.py\n::verify_relevance_async" as Judge
+participant "plan_builder.py\n::build_automation_plan" as Builder
+participant "plan_generator.py\n::generate_plan_selection" as Generator
+participant "step_ordering.py\n::topological_sort_steps" as Topo
+participant "plan_validator.py" as Validator
+
+Opérateur -> FE : formule une instruction en langage naturel
+FE -> API : POST /automation/plan {instruction}
+API -> Intent : analyze_business_intent(instruction)
+Intent -> LLM : structured_chat (BusinessIntent)
+LLM --> Intent : intent, domain, entities, confidence
+Intent --> API : BusinessIntent
+
+alt confidence < PLAN_MIN_INTENT_CONFIDENCE (0.4)
+  API --> FE : plan rejeté\n(workflow_name="rejected_low_confidence")
+else confidence suffisante
+  API -> Builder : build_automation_plan(intent)
+  Builder -> RAG : semantic_search_endpoints(intention directe)
+  Builder -> RAG : semantic_search_endpoints(dépendances implicites)
+  RAG -> PG : ORDER BY embedding <=> query LIMIT top_k (5)
+  PG --> RAG : candidats + score cosinus
+  RAG -> Judge : verify_relevance_async(candidats)
+  Judge -> LLM : structured_chat (jugement de pertinence)
+  LLM --> Judge : relevant + missing_aspects par candidat
+  Judge --> RAG : candidats filtrés/annotés
+  RAG --> Builder : endpoints candidats (fusionnés, meilleur score)
+
+  Builder -> Generator : generate_plan_selection(candidats, intent)
+  Generator -> LLM : structured_chat (sélection + field_mapping)
+  LLM --> Generator : steps sélectionnés
+  Generator --> Builder : steps (filtrés anti-hallucination\n: canonical_key doit appartenir aux candidats RAG)
+
+  Builder -> Builder : _risk_level(method, quantity)\npar étape
+  Builder -> Topo : topological_sort_steps(steps)
+  Topo -> Topo : detect_schema_dependencies()\n+ tri de Kahn
+  Topo --> Builder : steps ordonnés (ou DependencyCycleError)
+  Builder -> Validator : validate_plan(plan)
+  Validator --> Builder : PlanValidationResult
+  Builder --> API : AutomationPlan (dry_run_default=true)
+  API --> FE : plan affiché (dry-run)
+end
+
+@enduml

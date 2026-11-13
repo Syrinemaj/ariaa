@@ -45,19 +45,32 @@ def _update_job_progress(
     failed_total = int(data.get("failed", 0))
     batches_failed_total = int(data.get("batches_failed", 0))
 
-    # Transition queued → running on first batch update
+    # Transition queued → running on first batch update — but never stomp
+    # "cancelling" (set by POST /jobs/{job_id}/cancel): a cancel requested
+    # before any batch had actually started must stay visible as cancelling,
+    # not flip back to a plain "running" that looks like nothing happened.
     if data.get("status") == "queued":
         redis.hset(f"job:{job_id}", "status", "running")
 
-    # Completion: all batches have reported in (success or final failure)
+    # Completion: all batches have reported in (success, final failure, or
+    # stopped early because of a cancellation)
     if batches and batches_done >= batches:
-        if completed == 0 and batches_failed_total > 0:
+        if data.get("cancel_requested") == "1":
+            final_status = "cancelled"
+        elif completed == 0 and batches_failed_total > 0:
             final_status = "failed"
         elif failed_total > 0 or batches_failed_total > 0:
             final_status = "partial"
         else:
             final_status = "done"
         redis.hset(f"job:{job_id}", "status", final_status)
+
+        # A2 : libère le verrou anti-double-exécution (app/api/bulk.py
+        # exec_lock) maintenant que le job est réellement terminé — jamais
+        # relâché sur le chemin de succès jusqu'ici.
+        data_file_id = data.get("data_file_id", "")
+        if data_file_id:
+            redis.delete(f"exec_lock:{data_file_id}")
 
         automation_run_id = data.get("automation_run_id", "")
         org_id = data.get("org_id", "")
@@ -68,6 +81,7 @@ def _update_job_progress(
                     "run_id": automation_run_id,
                     "job_id": job_id,
                     "org_id": org_id,
+                    "final_status": final_status,
                 },
                 queue="reporting",
             )
@@ -90,6 +104,7 @@ _COMPLETION_ACTION_BY_STATUS = {
     "done": "BULK_EXECUTION_COMPLETED",
     "partial": "BULK_EXECUTION_PARTIAL",
     "failed": "BULK_EXECUTION_FAILED",
+    "cancelled": "BULK_EXECUTION_CANCELLED",
 }
 
 
@@ -141,11 +156,23 @@ def execute_batch_task(
     batch_number: int,
     row_ids: list,
     plan_json: dict,
-    base_url: str,
-    auth_headers: dict,
+    connection_id: str,
     dry_run: bool,
     org_id: str = "",
 ) -> dict:
+    # A batch can sit in the Celery queue for a while before a worker picks
+    # it up — if cancellation was requested in the meantime, skip it
+    # entirely rather than starting work just to immediately stop at row 0
+    # (see the per-row check in batch_executor.py for a batch already
+    # in progress when cancellation is requested).
+    if get_redis().hget(f"job:{job_id}", "cancel_requested") == "1":
+        _update_batch_status(job_id, batch_number, "cancelled")
+        _update_job_progress(job_id)
+        return {
+            "batch_number": batch_number, "rows_count": 0,
+            "success_count": 0, "failed_count": 0, "errors": [], "cancelled": True,
+        }
+
     _update_batch_status(job_id, batch_number, "running")
 
     # Celery uses prefork — the async_engine connection pool is inherited from
@@ -168,8 +195,7 @@ def execute_batch_task(
                 batch_number=batch_number,
                 row_ids=row_ids,
                 plan_json=plan_json,
-                base_url=base_url,
-                auth_headers=auth_headers,
+                connection_id=connection_id,
                 dry_run=dry_run,
                 org_id=org_id,
             )
@@ -204,16 +230,18 @@ async def _run_batch_async(
     batch_number: int,
     row_ids: list,
     plan_json: dict,
-    base_url: str,
-    auth_headers: dict,
+    connection_id: str,
     dry_run: bool,
     org_id: str = "",
 ) -> dict:
     import redis.asyncio as aioredis
 
     from app.bulk_execution.batch_executor import execute_batch
+    from app.connections import service as connection_service
     from app.core.config import settings as _settings
     from app.db.session import AsyncSessionLocal
+    from app.governance import service as governance_service
+    from app.governance.policy_engine import check_execution_policy
     from app.models.data_file import DataRow
     from app.planner.models import AutomationPlan
     from app.resilience.circuit_breaker import RedisCircuitBreakerRegistry
@@ -223,6 +251,51 @@ async def _run_batch_async(
     plan = AutomationPlan.model_validate(plan_json)
 
     async with AsyncSessionLocal() as db:
+        connection = await connection_service.get_connection(db, org_id, connection_id)
+        if connection is None or connection.status != "active":
+            logger.error(
+                "Batch %d/%s: connection %s is missing or revoked — refusing to execute",
+                batch_number, job_id, connection_id,
+            )
+            return {
+                "batch_number": batch_number,
+                "rows_count": 0,
+                "success_count": 0,
+                "failed_count": len(row_ids),
+                "errors": ["Connection is missing or has been revoked since this batch was enqueued."],
+            }
+
+        # "Again, right before execution" (Feature 1) — re-run the policy
+        # check here rather than trusting the one done at submission
+        # (app/api/bulk.py::execute_bulk), since a batch can sit in the
+        # Celery queue for a long time before a worker actually picks it up
+        # and an admin may have tightened the policy in the meantime. Never
+        # applies to dry_run — no real call, nothing to gate.
+        if not dry_run:
+            policy = await governance_service.get_or_create_policy(db, org_id)
+            forbidden_rules = await governance_service.list_forbidden_rules(db, org_id)
+            policy_result = check_execution_policy(plan, policy, forbidden_rules, connection.environment)
+            if policy_result.is_blocked:
+                logger.error(
+                    "Batch %d/%s blocked by governance policy: %s",
+                    batch_number, job_id, policy_result.reasons,
+                )
+                return {
+                    "batch_number": batch_number,
+                    "rows_count": 0,
+                    "success_count": 0,
+                    "failed_count": len(row_ids),
+                    "errors": [f"Blocked by governance policy: {r}" for r in policy_result.reasons],
+                }
+
+        base_url = connection.base_url
+        auth_headers = (
+            {} if dry_run
+            else connection_service.build_auth_headers(
+                connection.auth_type, connection_service.get_decrypted_secret_for_execution(connection)
+            )
+        )
+
         # Fetch by the exact row IDs assigned to this batch at split time — NOT
         # by re-querying "WHERE status='valid' OFFSET/LIMIT". That filter mutates
         # as sibling batches flip rows to "success" concurrently, so a live

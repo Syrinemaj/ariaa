@@ -16,6 +16,7 @@ export interface TeamMember {
   full_name: string
   email: string
   role: string
+  is_team_admin: boolean
 }
 
 export interface TeamDetail extends Team {
@@ -50,4 +51,10 @@ export function addTeamMember(teamId: string, userId: string) {
 
 export function removeTeamMember(teamId: string, userId: string) {
   return api.del(`/teams/${teamId}/members/${userId}`)
+}
+
+export function setTeamMemberAdmin(teamId: string, userId: string, isTeamAdmin: boolean) {
+  return api.patch<{ team_id: string; user_id: string; is_team_admin: boolean }>(
+    `/teams/${teamId}/members/${userId}`, { is_team_admin: isTeamAdmin },
+  )
 }

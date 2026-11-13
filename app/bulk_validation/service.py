@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.bulk_validation.business_rules import validate_contract_type
 from app.bulk_validation.row_validator import validate_row_business_rules
-from app.bulk_validation.schema_validator import validate_row_against_plan
+from app.bulk_validation.schema_validator import plan_needed_fields, validate_row_against_plan
 from app.mapping.field_mapper import apply_mapping_to_row
 from app.mapping.service import get_approved_mappings
 from app.models.bulk_validation import BulkValidationError, BulkValidationRun
@@ -38,13 +38,14 @@ def validate_bulk_data(
     valid_count = 0
     invalid_count = 0
     all_errors = []
+    needed_fields = plan_needed_fields(plan)
 
     for row in rows:
         mapped = apply_mapping_to_row(row=row.raw_data, mappings=mappings)
         resolved = resolve_row_references(mapped)
 
         errors = []
-        errors.extend(validate_row_against_plan(resolved, plan, row.row_index))
+        errors.extend(validate_row_against_plan(resolved, plan, row.row_index, needed_fields))
         errors.extend(validate_row_business_rules(resolved, row.row_index))
         errors.extend(validate_contract_type(resolved, row.row_index))
 

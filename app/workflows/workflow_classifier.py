@@ -6,22 +6,14 @@ classify_workflow_name() returns a 4-tuple:
 
 description is always None here — this module no longer calls an LLM.
 
-Ownership note (prompt-engineering audit, see ingestion.py Step 5): naming a
-workflow used to be attempted by THREE separate LLM prompts (this module,
-workflow_descriptor.py, workflow_understanding.py) computing overlapping
-name/domain/confidence from the same step list, with no coordination — the
-last one to run (workflow_understanding.enrich_workflow_with_ai, in
-ingestion.py Step 5) always won, silently discarding whatever the other two
-produced. This module's LLM fallback (_classify_with_llm) was also never
-reachable in production: discover_workflows() is never called with a real
-ai_client at either of its two call sites (ingestion.py, workflows/service.py).
-
-Fix: this module now does keyword matching ONLY (cheap, deterministic,
-rules-first) as a provisional name used until Step 5 runs. All LLM-based
-naming lives solely in workflow_understanding.py — see that module's
-docstring for why it is the single source of truth for name/business_domain/
-confidence, and workflow_descriptor.py for the complementary (non-competing)
-summary/tags/risk enrichment.
+Ownership note: a workflow is normally named at creation time in
+clustering.py — either directly from a matched _FUNCTIONAL_CATEGORIES key,
+or by the LLM grouping call in app/ai/endpoint_grouping.py, which returns
+name + business_domain + summary in the same response that does the
+grouping. This module's keyword-only classification is reached ONLY as the
+offline fallback: no ai_client available, or the LLM grouping call failed —
+see clustering.py's _build_workflow_from_cluster. workflow_descriptor.py
+remains complementary (summary/tags/risk), not competing with naming.
 
 Coherence score:
     When endpoint embeddings are supplied, the confidence is adjusted:
@@ -83,9 +75,8 @@ def classify_workflow_name(
     Returns
     -------
     (name, business_domain, confidence, description) — description is always
-    None; kept in the return shape so ingestion.py/tests don't need a 3-tuple
-    special case, since workflow_understanding.py may still set a real
-    description downstream in Step 5.
+    None; kept in the return shape for backward compatibility with existing
+    call sites rather than changing this to a 3-tuple.
     """
     text = _workflow_text(steps)
 

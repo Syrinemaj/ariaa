@@ -67,10 +67,11 @@ async def build_automation_plan(
     csv_columns: List[str] | None = None,
 ) -> AutomationPlan:
     """
-    embedding_client — an EmbeddingClientProtocol instance (LocalEmbeddingClient).
-    Falls back to LocalEmbeddingClient() when not provided (standalone usage).
+    embedding_client — an EmbeddingClientProtocol instance. Falls back to
+    create_embedding_client() (settings.EMBEDDING_PROVIDER) when not
+    provided (standalone usage).
 
-    ai_client — an AIClientProtocol instance (GroqClient or AzureOpenAIClient).
+    ai_client — an AIClientProtocol instance (BedrockClient).
     # ARIA-RAG-FIX: when provided, the RAG-retrieved candidates are filtered
     # through generate_plan_selection() (app/planner/plan_generator.py)
     # instead of turning every RAG hit into a plan step unconditionally.
@@ -101,8 +102,8 @@ async def build_automation_plan(
         )
 
     if embedding_client is None:
-        from app.rag.embeddings.client import LocalEmbeddingClient
-        embedding_client = LocalEmbeddingClient()
+        from app.ai.base_client import create_embedding_client
+        embedding_client = create_embedding_client()
 
     # ARIA-WORKFLOW-V2: BusinessIntent has no singular "entity" field (checked
     # app/planner/models.py — only "entities: List[str]"). Using the first

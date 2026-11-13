@@ -1,0 +1,53 @@
+@startuml architecture_deploiement
+!theme plain
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+skinparam defaultTextAlignment center
+
+title Services Docker Compose et files Celery — environnement de développement
+
+package "docker-compose.yml (développement)" {
+
+  node "api\n(docker/api.Dockerfile)" as API
+  node "frontend\n(Vite dev server)" as FRONT
+  database "postgres\n(PostgreSQL 16 + pgvector)" as PG
+  database "redis\n(broker + cache)" as REDIS
+  node "prometheus" as PROM
+  node "grafana" as GRAF
+
+  node "worker\n(docker/worker.Dockerfile)" as WORKER {
+    queue "ingestion" as Q1
+    queue "embedding" as Q2
+    queue "execution" as Q3
+    queue "reporting" as Q4
+    queue "maintenance" as Q5
+  }
+}
+
+note bottom of WORKER
+  Routage par préfixe de tâche
+  (aria.tasks.ingestion.*, aria.tasks.embedding.*, ...)
+  Celery Beat : cleanup-expired-files-daily
+  (purge quotidienne à 2h UTC)
+end note
+
+FRONT --> API : appels API REST (HTTP)
+API --> PG : lecture / écriture (SQLAlchemy)
+API --> REDIS : mise en file des tâches
+WORKER --> REDIS : consommation des files
+WORKER --> PG : lecture / écriture (résultats)
+PROM --> API : scraping métriques
+PROM --> WORKER : scraping métriques
+GRAF --> PROM : requêtes de tableaux de bord
+
+note right of API
+  docker-compose.prod.yml : seulement
+  4 services applicatifs (api, worker,
+  postgres, redis) — le frontend est
+  construit dans une étape intermédiaire
+  de l'image API (FROM node:20-slim AS
+  frontend-builder) puis servi en statique
+  par l'image Python finale.
+end note
+
+@enduml

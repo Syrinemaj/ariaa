@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,40 @@ from app.planner.step_ordering import DependencyCycleError, topological_sort_ste
 
 
 FORBIDDEN_METHODS_BY_DEFAULT = {"DELETE"}
+
+# Write intents and the HTTP methods able to fulfil them. Read-only intents
+# (fetch, list, authenticate, other...) are not checked: any method may serve
+# them. Guards against "action substitution" — e.g. a delete request answered
+# by a GET + logout plan because the catalogue has no DELETE endpoint, which
+# would then pass governance as a harmless read-only plan.
+ACTION_REQUIRED_METHODS = {
+    "delete": {"DELETE"},
+    "create": {"POST", "PUT"},
+    "update": {"PUT", "PATCH", "POST"},
+}
+
+ACTION_COHERENCE_CODE = "ACTION_NOT_AVAILABLE"
+
+
+def check_action_coherence(plan: AutomationPlan) -> Optional[PlanValidationIssue]:
+    """Returns an error issue when the requested write action is performed
+    by none of the plan's steps, None otherwise."""
+    if not plan.intent or not plan.steps:
+        return None
+    action = (plan.intent.action or "").strip().lower()
+    required = ACTION_REQUIRED_METHODS.get(action)
+    if not required:
+        return None
+    methods = {step.method.upper() for step in plan.steps}
+    if methods & required:
+        return None
+    return PlanValidationIssue(
+        level="error",
+        message=(
+            f"{ACTION_COHERENCE_CODE}: the requested action '{action}' requires "
+            f"one of {sorted(required)}, but the plan only uses {sorted(methods)}."
+        ),
+    )
 
 
 def _validate_dependencies(plan: AutomationPlan) -> List[PlanValidationIssue]:
@@ -56,6 +90,10 @@ async def validate_plan(
         ))
 
     issues.extend(_validate_dependencies(plan))
+
+    coherence_issue = check_action_coherence(plan)
+    if coherence_issue:
+        issues.append(coherence_issue)
 
     for step in plan.steps:
         result = await db.execute(

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
     Mail, Lock, Eye, EyeOff, ArrowRight, User,
     AlertCircle, Clock, CheckCircle2, Info,
-    Zap, Shield, BarChart2, Activity, Cpu, GitBranch,
+    Zap, Shield, BarChart2, Activity, Play, GitBranch,
     Sun, Moon,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -172,7 +172,8 @@ export default function AuthPage() {
             setRDone(true)
         } catch (err: unknown) {
             if (err instanceof ApiError) {
-                if (err.status === 422) setRErr('Please check the information entered.')
+                if (err.status === 409) setRErr('An account with this email already exists. Try logging in instead.')
+                else if (err.status === 422) setRErr('Please check the information entered.')
                 else if (err.status === 429) setRErr('Too many attempts. Try again in 1 minute.')
                 else setRErr('An error occurred. Please try again.')
             } else {
@@ -213,10 +214,10 @@ export default function AuthPage() {
           transition: background-color 9999s ease-in-out 0s;
         }
 
-        /* PUB glides as curtain */
-        .pub { position:absolute; top:0; bottom:0; width:50%; z-index:10; transition:left 0.72s cubic-bezier(0.76,0,0.24,1); }
-        .pub.login    { left:0%;  }
-        .pub.register { left:50%; }
+        /* PUB glides as curtain — transform (compositor-only), not left (layout-triggering) */
+        .pub { position:absolute; top:0; bottom:0; left:0; width:50%; z-index:10; will-change:transform; transition:transform 0.72s cubic-bezier(0.76,0,0.24,1); }
+        .pub.login    { transform:translateX(0%);   }
+        .pub.register { transform:translateX(100%); }
 
         /* Form reveal */
         @keyframes revealR { from{opacity:0;transform:translateX(24px)} to{opacity:1;transform:translateX(0)} }
@@ -490,16 +491,16 @@ export default function AuthPage() {
                         <div className="mb-5">
                             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold mb-3 badge-glow"
                                 style={{ background: pub.eyebrowBg, border: `1px solid ${pub.eyebrowBorder}`, color: pub.eyebrowText }}>
-                                <Activity size={11} /> API Intelligence Platform
+                                <Activity size={11} /> API Reverse Engineering & Automation
                             </div>
                             <h1 className="font-black leading-[1.1] tracking-tight mb-2" style={{ fontSize: '2rem', color: pub.headline }}>
-                                Reverse engineer<br />
+                                From HAR traffic<br />
                                 <span style={{ background: 'linear-gradient(135deg,#dc2626,#f97316)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                                    any REST API.
+                                    to automation plans.
                                 </span>
                             </h1>
                             <p className="text-sm leading-relaxed" style={{ color: pub.body, maxWidth: '38ch' }}>
-                                Import HAR files, capture live traffic, and let AI automatically generate complete OpenAPI documentation.
+                                Import a HAR file and let ARIA's rules-first pipeline build the API registry, infer schemas, map workflows and generate executable automation plans.
                             </p>
                         </div>
 
@@ -508,7 +509,7 @@ export default function AuthPage() {
                             {[
                                 { icon: GitBranch, val: 247, suffix: '', label: 'Endpoints', color: MC.GET },
                                 { icon: Shield, val: 99, suffix: '%', label: 'Coverage', color: MC.POST },
-                                { icon: Cpu, val: 1247, suffix: '', label: 'LLM Calls', color: MC.PATCH },
+                                { icon: Play, val: 120, suffix: '+', label: 'Runs', color: MC.PATCH },
                             ].map(({ icon: Icon, val, suffix, label, color }) => (
                                 <div key={label} className="rounded-2xl p-3 shimmer relative overflow-hidden"
                                     style={{ background: pub.statCardBg, border: `1px solid ${pub.statCardBorder}` }}>
@@ -534,12 +535,12 @@ export default function AuthPage() {
                                         <span className="w-3 h-3 rounded-full" style={{ background: '#febc2e' }} />
                                         <span className="w-3 h-3 rounded-full" style={{ background: '#28c840' }} />
                                     </div>
-                                    <span className="text-xs font-bold ml-1" style={{ color: pub.terminalTitle, fontFamily: "'JetBrains Mono',monospace" }}>aria · live capture</span>
+                                    <span className="text-xs font-bold ml-1" style={{ color: pub.terminalTitle, fontFamily: "'JetBrains Mono',monospace" }}>aria · har pipeline</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: pub.recordingBg, border: `1px solid ${pub.recordingBorder}` }}>
                                         <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] pdot" />
-                                        <span className="text-[10px] font-bold" style={{ color: pub.recordingText }}>RECORDING</span>
+                                        <span className="text-[10px] font-bold" style={{ color: pub.recordingText }}>PROCESSING</span>
                                     </div>
                                 </div>
                             </div>
@@ -573,9 +574,10 @@ export default function AuthPage() {
                                 style={{ borderTop: `1px solid ${pub.footerTop}`, background: pub.footerBg }}>
                                 <div className="flex items-center gap-4">
                                     {[
-                                        { label: 'Requests', val: '1,247', color: MC.GET },
-                                        { label: 'Errors', val: '3', color: MC.DELETE },
-                                        { label: 'Avg.', val: '142ms', color: MC.POST },
+                                        { label: 'Registry', val: '247', color: MC.GET },
+                                        { label: 'Schemas', val: '231', color: MC.POST },
+                                        { label: 'Workflows', val: '18', color: MC.PATCH },
+                                        { label: 'Plans', val: '42', color: MC.DELETE },
                                     ].map(({ label, val, color }) => (
                                         <div key={label} className="flex items-center gap-1.5">
                                             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
@@ -586,14 +588,14 @@ export default function AuthPage() {
                                 </div>
                                 <div className="flex items-center gap-1 text-[10px]" style={{ color: pub.poweredText }}>
                                     <Zap size={10} />
-                                    <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>powered by groq</span>
+                                    <span style={{ fontFamily: "'JetBrains Mono',monospace" }}>powered by amazon bedrock</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Bottom */}
                         <div className="flex items-center justify-between mt-6">
-                            <p className="text-[11px]" style={{ color: pub.copyrightText }}>© 2026 ARIA · Final Year Project by Syrine Majdoub</p>
+                            <p className="text-[11px]" style={{ color: pub.copyrightText }}>© 2026 ARIA · Final Year Project by Syrine Majdoub · Sopra HR Software</p>
                             <div className="flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full"
                                 style={{ background: pub.bottomBadgeBg, border: `1px solid ${pub.bottomBadgeBorder}`, color: pub.bottomBadgeText }}>
                                 <BarChart2 size={9} /> ARIA v1.0

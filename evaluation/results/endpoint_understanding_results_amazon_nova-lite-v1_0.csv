@@ -1,0 +1,13 @@
+case_id,strata,difficulty,method,path,predicted_domain,predicted_action,predicted_tags,confidence,summary,error
+eu_001,confirm_existing,easy,PATCH,/api/v1/employees/{id}/salary,employees,update,employees; salary; update; patch; auth,0.9,Update the salary of a specific employee.,
+eu_002,refine_wrong_existing,hard,POST,/api/v1/billing/create,misc,create_invoice,billing; invoice; create; customer,0.9,Create a new invoice for a customer,
+eu_003,infer_from_null,medium,POST,/api/v1/orders,Order Management,Create Order,order; create; customer; items; total,0.9,Place a new order for a customer with specified items.,
+eu_004,sparse_schema_low_confidence,hard,GET,/api/v2/x/1,x,retrieve,x; retrieve; resource,0.7,Retrieve a specific resource 'x' by its unique identifier.,
+eu_005,confirm_existing,easy,DELETE,/api/v1/products/{id},products,delete,products; delete; inventory,0.9,Removes a specific product from the inventory,
+eu_006,refine_wrong_existing,hard,PATCH,/hr/api/leave-requests/{id},employees,update,hr; leave_request; update_status; employee,0.9,Update the status of a leave request for an employee.,
+eu_007,infer_from_null,medium,GET,/api/v1/payments/{id},payments,retrieve,payments; retrieve; payment_details; id,0.9,Retrieve details of a specific payment by its ID.,
+eu_008,sparse_schema_low_confidence,hard,POST,/svc/op,,,operation; submit; service,0.6,Submits an operation to the service,
+eu_009,confirm_existing,medium,POST,/api/v1/auth/sessions,auth,authenticate,auth; session; authenticate; token,0.9,Create a new session by authenticating with an email and password.,
+eu_010,refine_wrong_existing,hard,POST,/api/v2/do,misc,archive_project,project; archive; id; boolean,0.9,Archives a project by its ID.,
+eu_011,infer_from_null,medium,GET,/hr/api/departments/{id}/employees,HR,retrieve,hr; department; employees; retrieve; list,0.9,Retrieve a list of employees in a specific department.,
+eu_012,confirm_existing,easy,POST,/api/v1/contracts,contracts,create,contracts; create; employee; start_date; auth_required,0.9,Create a new contract for an employee.,

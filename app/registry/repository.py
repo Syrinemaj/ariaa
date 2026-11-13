@@ -17,7 +17,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.json_safety import strip_null_bytes
+from app.db.json_safety import strip_null_bytes, strip_wrapping_quotes
 from app.models.analysis_run import AnalysisRun
 from app.models.endpoint import Endpoint
 from app.models.schema import EndpointSchema
@@ -37,6 +37,7 @@ async def create_analysis_run(
     created_by_user_id: Optional[str] = None,
     status: str = "processing",
     team_id: Optional[str] = None,
+    job_id: Optional[str] = None,
 ) -> AnalysisRun:
     run = AnalysisRun(
         file_name=file_name,
@@ -47,6 +48,7 @@ async def create_analysis_run(
         created_by_user_id=created_by_user_id,
         status=status,
         team_id=team_id,
+        job_id=job_id,
     )
     db.add(run)
     await db.flush()
@@ -72,8 +74,8 @@ async def save_endpoint_schema_result(
         # into a single row and risking a duplicate-key insert.
         canonical_key=f"{org_id}:{result.canonical_key}",
         source_count=result.examples_count,
-        business_domain=result.metadata.get("business_domain"),
-        business_action=result.metadata.get("business_action"),
+        business_domain=strip_wrapping_quotes(result.metadata.get("business_domain")),
+        business_action=strip_wrapping_quotes(result.metadata.get("business_action")),
         path_parameters=[p.model_dump() for p in result.path_parameters],
         metadata_json=strip_null_bytes(result.metadata),
         org_id=org_id,
@@ -133,8 +135,10 @@ async def save_workflow(
     return workflow_model
 
 
-async def get_run_by_id(db: AsyncSession, run_id: str) -> Optional[AnalysisRun]:
-    result = await db.execute(select(AnalysisRun).where(AnalysisRun.id == run_id))
+async def get_run_by_id(db: AsyncSession, run_id: str, org_id: str) -> Optional[AnalysisRun]:
+    result = await db.execute(
+        select(AnalysisRun).where(AnalysisRun.id == run_id, AnalysisRun.org_id == org_id)
+    )
     return result.scalar_one_or_none()
 
 

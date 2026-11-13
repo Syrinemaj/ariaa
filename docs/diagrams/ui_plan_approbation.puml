@@ -1,0 +1,37 @@
+@startuml ui_plan_approbation
+' Maquette structurelle (wireframe), pas une capture d'écran réelle.
+' À remplacer par une véritable capture de l'application exécutée.
+!theme plain
+scale 1
+
+salt
+{
+  {T
+    + Plan d'automatisation | Automatisation > Plan proposé
+  }
+  ==
+  {SI "Créer un nouvel employé et l'affecter à un département." | .}
+  --
+  Confiance de l'intention : 0.88   |   Domaine : ressources humaines
+  ==
+  {#
+    Étape | Opération | Dépendance | Paramètres
+    1 | POST /employees | — | full_name, email, department
+    2 | PATCH /employees/{employee_id}/contract | résultat de l'étape 1 (employee_id) | contract_type
+    3 | POST /notifications | résultat de l'étape 1 (employee_id) | template=welcome
+  }
+  --
+  {
+    Mode simulation (dry-run) : [X] activé par défaut
+  }
+  ==
+  {
+    Statut de gouvernance : REQUIRE_APPROVAL (risque moyen)
+    {
+      [Approuver] | [Rejeter] | [Voir le détail du risque]
+    }
+  }
+  --
+  "Décision réservée au rôle ADMIN — l'opérateur ayant soumis le plan ne peut pas l'auto-approuver."
+}
+@enduml

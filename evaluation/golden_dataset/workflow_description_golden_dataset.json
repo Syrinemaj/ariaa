@@ -1,0 +1,183 @@
+[
+  {
+    "case_id": "wd_001",
+    "category": "high_delete",
+    "difficulty": "easy",
+    "steps": [
+      {"method": "POST", "path": "/api/v1/employees", "summary": "Create a new employee record"},
+      {"method": "DELETE", "path": "/api/v1/employees/{id}", "summary": "Delete an employee record"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["high"],
+      "min_confidence": 0.8,
+      "tag_keywords_any_of": ["employee", "hr"]
+    },
+    "notes": "règle explicite du prompt : contient un DELETE -> high, cas non ambigu"
+  },
+  {
+    "case_id": "wd_002",
+    "category": "high_payment",
+    "difficulty": "medium",
+    "steps": [
+      {"method": "POST", "path": "/api/v1/payments/charge", "summary": "Charge a customer's payment method"},
+      {"method": "GET", "path": "/api/v1/payments/{id}", "summary": "Fetch a payment by id"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["high"],
+      "min_confidence": 0.8,
+      "tag_keywords_any_of": ["payment", "billing", "finance"]
+    },
+    "notes": "mutation financière sans DELETE — doit quand même être high d'après la règle explicite du prompt"
+  },
+  {
+    "case_id": "wd_003",
+    "category": "high_bulk",
+    "difficulty": "hard",
+    "steps": [
+      {"method": "POST", "path": "/api/v1/employees/bulk-archive", "summary": "Archive multiple employee records in bulk, irreversible"},
+      {"method": "GET", "path": "/api/v1/employees", "summary": "List employees"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["high"],
+      "min_confidence": 0.7,
+      "tag_keywords_any_of": ["employee", "bulk", "archive"]
+    },
+    "notes": "PIÈGE — pas de DELETE littéral ni de paiement, mais une opération bulk irréversible ('archive... irreversible' dans le résumé) — troisième cas explicite du prompt pour 'high'"
+  },
+  {
+    "case_id": "wd_004",
+    "category": "medium_create_update",
+    "difficulty": "easy",
+    "steps": [
+      {"method": "POST", "path": "/api/v1/contracts", "summary": "Create a new employment contract"},
+      {"method": "PATCH", "path": "/api/v1/contracts/{id}", "summary": "Update contract details"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["medium"],
+      "min_confidence": 0.8,
+      "tag_keywords_any_of": ["contract", "hr", "employee"]
+    },
+    "notes": "create/update sur ressource métier critique (contrats), aucun delete -> medium"
+  },
+  {
+    "case_id": "wd_005",
+    "category": "medium_create_update",
+    "difficulty": "medium",
+    "steps": [
+      {"method": "PATCH", "path": "/api/v1/employees/{id}/salary", "summary": "Update an employee's salary"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["medium"],
+      "min_confidence": 0.7,
+      "tag_keywords_any_of": ["employee", "salary", "payroll"]
+    },
+    "notes": "une seule étape mais mutation sur ressource critique (salaire) -> medium, ne doit pas être surclassé en high (aucune des 3 conditions high n'est remplie)"
+  },
+  {
+    "case_id": "wd_006",
+    "category": "low_readonly",
+    "difficulty": "easy",
+    "steps": [
+      {"method": "GET", "path": "/api/v1/employees", "summary": "List employees"},
+      {"method": "GET", "path": "/api/v1/departments", "summary": "List departments"},
+      {"method": "GET", "path": "/api/v1/departments/{id}/employees", "summary": "List employees in a department"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["low"],
+      "min_confidence": 0.8,
+      "tag_keywords_any_of": ["employee", "department", "hr"]
+    },
+    "notes": "lecture seule -> low, cas non ambigu"
+  },
+  {
+    "case_id": "wd_007",
+    "category": "low_lowstakes",
+    "difficulty": "medium",
+    "steps": [
+      {"method": "POST", "path": "/api/v1/notifications", "summary": "Send a notification to a user"},
+      {"method": "POST", "path": "/api/v1/logs", "summary": "Write an application log entry"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["low"],
+      "min_confidence": 0.7,
+      "tag_keywords_any_of": ["notification", "log"]
+    },
+    "notes": "des créations, mais explicitement citées comme faible enjeu dans le prompt ('logging, notifications') -> low malgré des méthodes POST"
+  },
+  {
+    "case_id": "wd_008",
+    "category": "ambiguous",
+    "difficulty": "hard",
+    "steps": [
+      {"method": "PATCH", "path": "/api/v2/x/1", "summary": "Update an unspecified record"},
+      {"method": "POST", "path": "/svc/op", "summary": "Perform a generic operation"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["low", "medium"],
+      "max_confidence": 0.8,
+      "tag_keywords_any_of": null
+    },
+    "notes": "PIÈGE CONFIANCE — chemins et résumés opaques, impossible de déterminer avec certitude s'il s'agit d'une ressource critique ; low ET medium sont acceptés comme corrects tant que la confiance reste <0.8 (jugement, pas certitude, selon la règle du prompt)"
+  },
+  {
+    "case_id": "wd_009",
+    "category": "ambiguous",
+    "difficulty": "hard",
+    "steps": [
+      {"method": "GET", "path": "/api/v1/employees", "summary": "List employees"},
+      {"method": "PATCH", "path": "/api/v1/employees/{id}", "summary": "Update an employee's profile fields"},
+      {"method": "POST", "path": "/api/v1/notifications", "summary": "Send a notification to the updated employee"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["medium"],
+      "max_confidence": 1.0,
+      "tag_keywords_any_of": ["employee", "notification"]
+    },
+    "notes": "mélange lecture + mutation critique + notification faible enjeu — la mutation critique (employees) domine, donc medium reste la seule réponse correcte, mais on ne borne pas la confiance en minimum (peut être un jugement clair ou un jugement plus hésitant)"
+  },
+  {
+    "case_id": "wd_010",
+    "category": "high_delete",
+    "difficulty": "medium",
+    "steps": [
+      {"method": "GET", "path": "/api/v1/products", "summary": "List products"},
+      {"method": "POST", "path": "/api/v1/products", "summary": "Create a new product"},
+      {"method": "DELETE", "path": "/api/v1/products/{id}", "summary": "Delete a product"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["high"],
+      "min_confidence": 0.8,
+      "tag_keywords_any_of": ["product", "catalog"]
+    },
+    "notes": "DELETE noyé au milieu d'étapes bénignes (list/create) — un seul DELETE suffit à classer l'ensemble en high"
+  },
+  {
+    "case_id": "wd_011",
+    "category": "low_readonly",
+    "difficulty": "easy",
+    "steps": [
+      {"method": "GET", "path": "/api/v1/orders/{id}", "summary": "Fetch an order by id"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["low"],
+      "min_confidence": 0.8,
+      "tag_keywords_any_of": ["order"]
+    },
+    "notes": "workflow à une seule étape, lecture seule -> low"
+  },
+  {
+    "case_id": "wd_012",
+    "category": "medium_create_update",
+    "difficulty": "hard",
+    "steps": [
+      {"method": "POST", "path": "/api/v1/departments", "summary": "Create a new department"},
+      {"method": "POST", "path": "/api/v1/departments/{id}/employees", "summary": "Assign an employee to the new department"}
+    ],
+    "expected": {
+      "estimated_risk_any_of": ["medium"],
+      "min_confidence": 0.6,
+      "tag_keywords_any_of": ["department", "employee", "hr"]
+    },
+    "notes": "deux créations liées (parent-enfant) sur ressources RH critiques, aucun delete -> medium ; confiance minimale plus basse (0.6) car l'enchaînement est moins canonique que wd_004"
+  }
+]

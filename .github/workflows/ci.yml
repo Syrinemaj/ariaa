@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-tests:
+    name: Backend — tests unitaires (mockés, sans service externe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installer les dépendances
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Lancer les tests
+        run: pytest tests/unit -q
+
+  backend-db-tests:
+    name: Backend — tests d'intégration (PostgreSQL + pgvector + Redis)
+    # tests/integration/ dans son ensemble (pas seulement real_db/) ouvre une
+    # vraie connexion DB dès le TestClient(app) — vérifié en local : erreur
+    # de connexion identique sur les deux sous-dossiers, pas seulement
+    # real_db/. Les deux tournent donc dans ce job, avec les services.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: aria
+          POSTGRES_PASSWORD: aria_ci
+          POSTGRES_DB: aria
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aria"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg2://aria:aria_ci@localhost:5432/aria
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET_KEY: ci-test-secret-key-not-for-production-use-only
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installer les dépendances
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Appliquer les migrations Alembic
+        run: alembic upgrade head
+
+      - name: Lancer les tests d'intégration sur base réelle
+        run: pytest tests/integration -q
+
+  frontend:
+    name: Frontend — lint & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (tsc + vite)
+        run: npm run build
+
+  docker-build:
+    name: Docker — validation des images (build only, pas de push)
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image API
+        run: docker build -f docker/api.Dockerfile -t aria-api:ci .
+
+      - name: Build image Worker
+        run: docker build -f docker/worker.Dockerfile -t aria-worker:ci .
+
+  docker-publish:
+    name: Docker — publication des images (CD)
+    # Déploiement continu minimal : publie les images validées vers un
+    # registre de conteneurs (GitHub Container Registry) une fois la CI
+    # passée, uniquement sur un push réel vers main (jamais sur une pull
+    # request). N'installe rien sur aucune cible : il n'existe pas
+    # d'environnement de production vers lequel déployer automatiquement
+    # (voir chapitre Déploiement, section « Périmètre réel du déploiement »)
+    # — ce job publie des artefacts prêts à être déployés, il ne déploie pas
+    # lui-même.
+    runs-on: ubuntu-latest
+    needs: [docker-build, backend-db-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Connexion à GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construire et publier l'image API
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/api.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/syrinemaj/aria-api:latest
+            ghcr.io/syrinemaj/aria-api:${{ github.sha }}
+
+      - name: Construire et publier l'image Worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/worker.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/syrinemaj/aria-worker:latest
+            ghcr.io/syrinemaj/aria-worker:${{ github.sha }}

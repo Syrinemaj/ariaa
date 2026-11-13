@@ -1,6 +1,7 @@
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.ingestion.models import TrafficEntry
+from app.normalization.action_discriminator import detect_action_discriminator_field
 from app.normalization.canonicalizer import build_canonical_key
 from app.normalization.deduplication import deduplicate_endpoints
 from app.normalization.dynamic_segment_detector import (
@@ -16,26 +17,17 @@ def _raw_segments(path: str) -> List[str]:
     return [s for s in path.split("/") if s]
 
 
-def normalize_entry(
+def _build_normalized_endpoint(
     entry: TrafficEntry,
-    use_ai: bool = True,
-    observed_dynamic_positions: Optional[Set[int]] = None,
-    group_hint: Optional[Dict[int, dict]] = None,
+    normalized_path: str,
+    parameters,
+    discriminator_field: Optional[str] = None,
 ) -> NormalizedEndpoint:
-    normalized_path, parameters = normalize_path(
-        method=entry.method,
-        path_or_url=entry.path,
-        request_body=entry.request_body,
-        response_body=entry.response_body,
-        use_ai=use_ai,
-        observed_dynamic_positions=observed_dynamic_positions,
-        group_hint=group_hint,
-    )
-
     canonical_key = build_canonical_key(
         method=entry.method,
         normalized_path=normalized_path,
         request_body=entry.request_body,
+        discriminator_field=discriminator_field,
     )
 
     return NormalizedEndpoint(
@@ -60,11 +52,44 @@ def normalize_entry(
     )
 
 
-def normalize_entries(
+def normalize_entry(
+    entry: TrafficEntry,
+    use_ai: bool = True,
+    observed_dynamic_positions: Optional[Set[int]] = None,
+    group_hint: Optional[Dict[int, dict]] = None,
+) -> NormalizedEndpoint:
+    """
+    Single-entry normalization — no sibling requests to compare against, so
+    action_discriminator.py's structural detection can't run here (it needs
+    a batch; see normalize_entries below). build_canonical_key() falls back
+    to its fixed known-field list in this path. Kept for callers that only
+    have one entry (tests, ad-hoc scripts); the real pipeline goes through
+    normalize_entries().
+    """
+    normalized_path, parameters = normalize_path(
+        method=entry.method,
+        path_or_url=entry.path,
+        request_body=entry.request_body,
+        response_body=entry.response_body,
+        use_ai=use_ai,
+        observed_dynamic_positions=observed_dynamic_positions,
+        group_hint=group_hint,
+    )
+    return _build_normalized_endpoint(entry, normalized_path, parameters)
+
+
+def _normalize_entries_raw(
     entries: List[TrafficEntry],
     use_ai: bool = True,
-    deduplicate: bool = True,
 ) -> List[NormalizedEndpoint]:
+    """Shared body of normalize_entries()/normalize_entries_with_raw() — one
+    NormalizedEndpoint per input entry, in original capture order, BEFORE
+    deduplicate_endpoints() collapses same-shape calls into one. Extracted
+    so normalize_entries_with_raw() can hand back this pre-dedup list (real
+    per-call request/response bodies, needed for value-level workflow
+    dependency detection — see app/workflows/dependency_detector.py) without
+    duplicating ~90 lines or re-running the batch (and its LLM calls) twice.
+    """
     # Computed once across the whole batch: an ID format regex doesn't
     # recognize (e.g. "emp_1", "emp_79d9baac") still gets templated if the
     # same position varies across other requests of the same shape in this
@@ -115,9 +140,12 @@ def normalize_entries(
         else [None] * len(entries)
     )
 
-    normalized = [
-        normalize_entry(
-            entry,
+    path_results = [
+        normalize_path(
+            method=entry.method,
+            path_or_url=entry.path,
+            request_body=entry.request_body,
+            response_body=entry.response_body,
             use_ai=use_ai,
             observed_dynamic_positions=validated_positions[i],
             group_hint=group_hints[i],
@@ -125,7 +153,51 @@ def normalize_entries(
         for i, entry in enumerate(entries)
     ]
 
+    # App-agnostic detection of endpoints that multiplex several distinct
+    # business actions onto one URL, selected by a body field rather than
+    # the path (see action_discriminator.py) — needs every sibling request
+    # of an endpoint compared together, so it runs once per (method,
+    # normalized_path) group across the whole batch, not per entry.
+    bodies_by_shape: Dict[Tuple[str, str], List[Any]] = {}
+    for entry, (normalized_path, _parameters) in zip(entries, path_results):
+        shape_key = (entry.method.upper(), normalized_path)
+        bodies_by_shape.setdefault(shape_key, []).append(entry.request_body)
+
+    discriminator_by_shape: Dict[Tuple[str, str], Optional[str]] = {
+        shape_key: detect_action_discriminator_field(bodies)
+        for shape_key, bodies in bodies_by_shape.items()
+    }
+
+    return [
+        _build_normalized_endpoint(
+            entry,
+            normalized_path,
+            parameters,
+            discriminator_field=discriminator_by_shape[(entry.method.upper(), normalized_path)],
+        )
+        for entry, (normalized_path, parameters) in zip(entries, path_results)
+    ]
+
+
+def normalize_entries(
+    entries: List[TrafficEntry],
+    use_ai: bool = True,
+    deduplicate: bool = True,
+) -> List[NormalizedEndpoint]:
+    normalized = _normalize_entries_raw(entries, use_ai=use_ai)
     if deduplicate:
         return deduplicate_endpoints(normalized)
-
     return normalized
+
+
+def normalize_entries_with_raw(
+    entries: List[TrafficEntry],
+    use_ai: bool = True,
+) -> Tuple[List[NormalizedEndpoint], List[NormalizedEndpoint]]:
+    """Like normalize_entries(deduplicate=True), but also returns the
+    pre-dedup per-call list (real request/response bodies, original capture
+    order) needed for value-level workflow dependency detection — see
+    app/workflows/dependency_detector.py::detect_dependencies(raw_calls=...).
+    Returns (deduplicated, raw)."""
+    raw = _normalize_entries_raw(entries, use_ai=use_ai)
+    return deduplicate_endpoints(raw), raw

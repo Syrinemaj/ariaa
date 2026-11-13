@@ -225,7 +225,7 @@ const LoginPage: React.FC = () => {
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#febc2e' }} />
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#28c840' }} />
                 </div>
-                <span className="font-mono text-[11px] text-white/28">aria · live capture</span>
+                <span className="font-mono text-[11px] text-white/28">aria </span>
                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#4ade80]">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
                   Live
@@ -277,8 +277,7 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Footer */}
-          <p className="text-[11px] text-white/18 mt-10">© 2026 ARIA · Final Year Project</p>
+          
         </div>
       </div>
 
@@ -470,10 +469,7 @@ const LoginPage: React.FC = () => {
             Request access
           </Link>
 
-          {/* Pied de page mobile */}
-          <p className="lg:hidden text-center text-xs text-[#94a3b8] mt-8">
-            © 2026 ARIA · Final Year Project
-          </p>
+         
         </div>
       </div>
 

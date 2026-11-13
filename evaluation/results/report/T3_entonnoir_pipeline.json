@@ -1,0 +1,62 @@
+{
+  "date_utc": "2026-11-11T23:53:52.853677+00:00",
+  "commit": "52c6a7f42e586271020ce14187956cbd79018712",
+  "modele_llm": "amazon.nova-lite-v1:0 (BEDROCK_MODEL par defaut)",
+  "note": "normalize_entries lance en use_ai=False dans cette passe (gratuit) ; complement use_ai=True a proposer separement si necessaire. IMPORTANT: app/ingestion/semantic_filter.py n'appelle jamais log_llm_call_and_print_terminal_summary -- ce chemin de code n'est PAS journalise dans la table llm_calls. Le champ llm.cout_usd ci-dessous est donc a 0.0 par absence de mesure, PAS parce que le cout reel est nul : 96 appels Bedrock (Nova Lite) ont reellement eu lieu sur le HAR 'gros' (51 kept_by_ai + 45 rejected_by_ai). Cout estime par extrapolation depuis evaluation/results/summary_traffic_classification.json (0.0019 USD / 30 appels Nova Lite sur une tache de classification comparable, soit ~0.0000634 USD/appel) : 96 appels ~= 0.0061 USD. Valeur estimee, non mesuree directement.",
+  "runs": [
+    {
+      "har": "petit",
+      "fichier": "tests\\fixtures\\example_api_traffic.har",
+      "taille_octets": 4573,
+      "entrees_brutes": 7,
+      "apres_filtre_dur": 6,
+      "decisions": {
+        "kept_by_rules": 6
+      },
+      "endpoints_apres_normalisation_dedup": 6,
+      "duree_s": 1.54,
+      "llm": {
+        "appels_llm": 0,
+        "tokens": 0,
+        "cout_usd": 0.0
+      }
+    },
+    {
+      "har": "moyen",
+      "fichier": "tests\\fixtures\\mock_traffic.har",
+      "taille_octets": 19933,
+      "entrees_brutes": 16,
+      "apres_filtre_dur": 16,
+      "decisions": {
+        "kept_by_rules": 16
+      },
+      "endpoints_apres_normalisation_dedup": 15,
+      "duree_s": 0.02,
+      "llm": {
+        "appels_llm": 0,
+        "tokens": 0,
+        "cout_usd": 0.0
+      }
+    },
+    {
+      "har": "gros",
+      "fichier": "data\\uploads\\foryou-hra4u-final.har",
+      "taille_octets": 65171936,
+      "entrees_brutes": 728,
+      "apres_filtre_dur": 279,
+      "decisions": {
+        "kept_by_ai": 51,
+        "rejected_by_ai": 45,
+        "kept_by_rules": 165,
+        "rejected_by_rules": 18
+      },
+      "endpoints_apres_normalisation_dedup": 84,
+      "duree_s": 29.88,
+      "llm": {
+        "appels_llm": 0,
+        "tokens": 0,
+        "cout_usd": 0.0
+      }
+    }
+  ]
+}

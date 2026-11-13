@@ -8,8 +8,10 @@ import {
 import { ApiError } from '../../lib/api'
 import {
   X, FlaskConical, Sparkles, Play, Lock, Unlock,
-  ChevronDown, Plus, TriangleAlert, AlertCircle,
+  ChevronDown, TriangleAlert, AlertCircle,
 } from 'lucide-react'
+import { Connection } from '../../lib/connectionsApi'
+import ConnectionPicker from './ConnectionPicker'
 
 // ── Local helpers (same patterns as AutomationPage) ────────────────────────────
 
@@ -58,41 +60,6 @@ function ToggleBig({ label, hint, checked, onChange, disabled }: {
   )
 }
 
-type HeaderRow = { k: string; v: string }
-function KeyValueEditor({ label, rows, setRows }: { label: string; rows: HeaderRow[]; setRows: (r: HeaderRow[]) => void }) {
-  const SENSITIVE = ['authorization', 'token', 'cookie', 'api-key', 'password', 'secret']
-  return (
-    <div>
-      <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">{label}</p>
-      <div className="space-y-2">
-        {rows.map((h, i) => {
-          const s = SENSITIVE.some(k => h.k.toLowerCase().includes(k))
-          return (
-            <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2">
-              <input value={h.k} className="input !py-1.5 font-mono text-xs"
-                onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, k: e.target.value } : x))} />
-              <div className="relative">
-                <input type={s ? 'password' : 'text'} value={h.v} className="input !py-1.5 font-mono text-xs"
-                  onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, v: e.target.value } : x))} />
-                {s && (
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 pill text-[9px] bg-rose-50 text-rose-700 border-rose-200">
-                    <Lock className="w-2.5 h-2.5" />masked
-                  </span>
-                )}
-              </div>
-              <button className="btn-ghost !p-1.5" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )
-        })}
-        <button onClick={() => setRows([...rows, { k: '', v: '' }])} className="btn-ghost text-xs">
-          <Plus className="w-3.5 h-3.5" /> Add
-        </button>
-      </div>
-    </div>
-  )
-}
 
 function PlanStep({ step }: { step: BackendPlanStep }) {
   const [open, setOpen] = useState(false)
@@ -209,18 +176,15 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
   const [apiError, setApiError]               = useState('')
   const [dryRun, setDryRun]                   = useState(true)
   const [approved, setApproved]               = useState(false)
-  const [baseUrl, setBaseUrl]                 = useState('https://hr-api.northwind.io')
-  const [headers, setHeaders]                 = useState<HeaderRow[]>([
-    { k: 'Authorization', v: 'Bearer eyJhbGciOiJIUzI1NiJ9.payload.sign' },
-    { k: 'X-Tenant', v: 'northwind' },
-  ])
+  const [connectionId, setConnectionId]       = useState('')
+  const [selectedConnection, setSelectedConnection] = useState<Connection | undefined>(undefined)
   const [inputRows, setInputRows] = useState('[\n  { "firstName":"Bob", "lastName":"Hartman", "email":"bob@northwind.io",\n    "department":"Engineering", "contract_type":"CDI", "salary_eur":68000 }\n]')
   const [planError, setPlanError]               = useState('')
   const [planSuggestion, setPlanSuggestion]     = useState('')
   const [instructionFocused, setInstructionFocused] = useState(false)
 
   const topK = searchLevel === 'precise' ? 5 : searchLevel === 'wide' ? 12 : 8
-  const canExecute = !!planResult && (dryRun || approved)
+  const canExecute = !!planResult && !!connectionId && (dryRun || approved)
   const steps = planResult?.plan.steps ?? []
   const instructionError = validateInstruction(instruction)
   const instructionScore = scoreInstruction(instruction)
@@ -273,13 +237,12 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
     setExecuting(true)
     setApiError('')
     try {
-      const headersObj = Object.fromEntries(headers.filter(h => h.k).map(h => [h.k, h.v]))
       let parsedRows: Record<string, unknown>[] = []
       try {
         const parsed = JSON.parse(inputRows) as unknown
         parsedRows = Array.isArray(parsed) ? parsed as Record<string, unknown>[] : [parsed as Record<string, unknown>]
       } catch { parsedRows = [] }
-      const result = await executePlan(planResult.plan, parsedRows, baseUrl, headersObj, dryRun, approved)
+      const result = await executePlan(planResult.plan, parsedRows, connectionId, dryRun, approved)
       setExecutionResult(result)
     } catch (e) {
       setApiError(e instanceof Error ? e.message : "Error during execution")
@@ -444,12 +407,7 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
             </div>
             <p className="text-xs ink-2 mb-4">The instruction will be sent to the target API if you disable the simulation.</p>
             <div className="space-y-3">
-              <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Target API URL</p>
-                <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-                  className="input !py-2 font-mono text-xs" placeholder="https://hr-api.company.com" />
-              </div>
-              <KeyValueEditor label="Authentication headers" rows={headers} setRows={setHeaders} />
+              <ConnectionPicker value={connectionId} onChange={setConnectionId} onSelectConnection={setSelectedConnection} />
               <div>
                 <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Input data (JSON) · optional</p>
                 <textarea value={inputRows} onChange={e => setInputRows(e.target.value)}
@@ -465,7 +423,7 @@ export default function AutomationSimpleDrawer({ open, onClose }: Props) {
                 <div className="p-3 rounded-xl flex items-start gap-2 text-xs"
                   style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
                   <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>Live execution will send requests to <span className="font-mono">{baseUrl}</span>. This cannot be undone.</span>
+                  <span>Live execution will send requests to <span className="font-mono">{selectedConnection?.base_url ?? 'the selected connection'}</span>. This cannot be undone.</span>
                 </div>
               )}
               <div className="flex justify-end">

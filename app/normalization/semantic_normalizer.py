@@ -1,9 +1,8 @@
 """
 SemanticNormalizer — LLM-based URL path parameter naming.
 
-Uses the AI client selected by settings.AI_PROVIDER (create_ai_client()) —
-BedrockClient by default, GroqClient/AzureOpenAIClient as configured
-alternatives. No fallback between providers is attempted here.
+Uses the AI client built by create_ai_client() — BedrockClient, the only
+completion provider.
 
 This is the last-resort, single-segment fallback: normalize_path() only
 calls it when neither regex rules nor group_normalizer.py's group-level
@@ -72,8 +71,8 @@ path=/api/x7q, raw_segment="x7q", previous_segment="api", request_body=null, res
 
 class SemanticNormalizer:
     """
-    LLM-based URL segment naming — provider-agnostic.
-    One shared GroqClient instance per SemanticNormalizer object.
+    LLM-based URL segment naming.
+    One shared BedrockClient instance per SemanticNormalizer object.
     """
 
     def __init__(self) -> None:

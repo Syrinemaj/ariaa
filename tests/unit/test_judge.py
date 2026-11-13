@@ -1,12 +1,11 @@
-"""evaluation/judge.py — judge_plan() now calls groq_client.structured_chat()
-(app/ai/groq_client.py) instead of driving groq_client._sync directly, so it
-gets the primary -> secondary -> tertiary -> Azure key fallback cascade for
-free. These tests mock structured_chat() itself, not the raw OpenAI client.
+"""evaluation/judge.py — judge_plan() calls ai_client.structured_chat(model=JUDGE_MODEL)
+(app/ai/bedrock_client.py) with the model explicitly overridden, so the judge
+always uses JUDGE_MODEL regardless of which model the ai_client instance was
+constructed with. These tests mock structured_chat() itself.
 """
 from unittest.mock import MagicMock
 
-from evaluation.judge import JUDGE_MODEL_PREFERRED, judge_plan
-from app.core.config import settings
+from evaluation.judge import JUDGE_MODEL, judge_plan
 
 
 def _case():
@@ -28,57 +27,42 @@ def _trace():
 
 
 class TestJudgePlan:
-    def test_preferred_model_succeeds_first_try(self):
-        groq_client = MagicMock()
-        groq_client.structured_chat.return_value = {
+    def test_scores_plan_using_judge_model(self):
+        ai_client = MagicMock()
+        ai_client.structured_chat.return_value = {
             "correctness": 5, "faithfulness": 5, "completeness": 4, "mapping": 5,
             "justification": "ok",
         }
 
-        result = judge_plan(_case(), _trace(), groq_client)
+        result = judge_plan(_case(), _trace(), ai_client)
 
         assert result["correctness"] == 5
-        groq_client.structured_chat.assert_called_once()
-        _, kwargs = groq_client.structured_chat.call_args
-        assert kwargs["model"] == JUDGE_MODEL_PREFERRED
+        ai_client.structured_chat.assert_called_once()
+        _, kwargs = ai_client.structured_chat.call_args
+        assert kwargs["model"] == JUDGE_MODEL
         assert kwargs["task_name"] == "judge_evaluation"
 
-    def test_preferred_model_fails_falls_back_to_pipeline_model(self):
-        groq_client = MagicMock()
-        groq_client.structured_chat.side_effect = [
-            Exception("model_decommissioned"),
-            {"correctness": 4, "faithfulness": 5, "completeness": 3, "mapping": 4, "justification": "ok"},
-        ]
+    def test_call_failure_returns_error_dict_not_raise(self):
+        ai_client = MagicMock()
+        ai_client.structured_chat.side_effect = Exception("validation error")
 
-        result = judge_plan(_case(), _trace(), groq_client)
-
-        assert result["correctness"] == 4
-        assert groq_client.structured_chat.call_count == 2
-        first_kwargs = groq_client.structured_chat.call_args_list[0].kwargs
-        second_kwargs = groq_client.structured_chat.call_args_list[1].kwargs
-        assert first_kwargs["model"] == JUDGE_MODEL_PREFERRED
-        assert second_kwargs["model"] == settings.GROQ_MODEL
-
-    def test_both_models_fail_returns_error_dict_not_raise(self):
-        groq_client = MagicMock()
-        groq_client.structured_chat.side_effect = Exception("all keys exhausted")
-
-        result = judge_plan(_case(), _trace(), groq_client)
+        result = judge_plan(_case(), _trace(), ai_client)
 
         assert "error" in result
-        assert "all keys exhausted" in result["error"]
+        assert "validation error" in result["error"]
+        ai_client.structured_chat.assert_called_once()
 
     def test_user_payload_carries_full_formatted_prompt(self):
         # structured_chat() expects a dict user_payload (it gets
         # json.dumps()'d as the user turn) — not a raw string.
-        groq_client = MagicMock()
-        groq_client.structured_chat.return_value = {
+        ai_client = MagicMock()
+        ai_client.structured_chat.return_value = {
             "correctness": 5, "faithfulness": 5, "completeness": 5, "mapping": 5, "justification": "ok",
         }
 
-        judge_plan(_case(), _trace(), groq_client)
+        judge_plan(_case(), _trace(), ai_client)
 
-        _, kwargs = groq_client.structured_chat.call_args
+        _, kwargs = ai_client.structured_chat.call_args
         assert isinstance(kwargs["user_payload"], dict)
         prompt_text = next(iter(kwargs["user_payload"].values()))
         assert "Crée 200 employés depuis ce CSV" in prompt_text

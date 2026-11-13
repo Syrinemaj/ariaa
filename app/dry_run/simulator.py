@@ -11,9 +11,12 @@ def simulate_bulk_execution(
     allow_partial_execution: bool = False,
 ) -> dict:
     total_rows = db.query(DataRow).filter(DataRow.data_file_id == data_file_id).count()
+    # "dry_run_success" counts as valid here too — re-previewing a file that
+    # was already dry-run once shouldn't suddenly show 0 valid / all invalid
+    # (see app/bulk_execution/service.py for the matching real-execution fix).
     valid_rows = (
         db.query(DataRow)
-        .filter(DataRow.data_file_id == data_file_id, DataRow.status == "valid")
+        .filter(DataRow.data_file_id == data_file_id, DataRow.status.in_(["valid", "dry_run_success"]))
         .count()
     )
 

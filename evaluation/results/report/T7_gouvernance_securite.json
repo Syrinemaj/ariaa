@@ -1,0 +1,100 @@
+{
+  "date_utc": "2026-11-11T23:49:31.645960+00:00",
+  "commit": "52c6a7f42e586271020ce14187956cbd79018712",
+  "commande": "python evaluation/report_tests/t7_governance_security_matrix.py",
+  "note": "Cas 5 (bulk sans approbation) et 11 (secret absent des arguments Celery) non couverts ici -- necessitent une orchestration live separee.",
+  "cases": [
+    {
+      "cas": "1. GET en environnement full_access, seuils par defaut",
+      "attendu": "ALLOW",
+      "obtenu": "ALLOW",
+      "ok": true
+    },
+    {
+      "cas": "1. POST en environnement full_access, seuils par defaut",
+      "attendu": "REQUIRE_APPROVAL",
+      "obtenu": "REQUIRE_APPROVAL",
+      "ok": true
+    },
+    {
+      "cas": "1. DELETE en environnement full_access, seuils par defaut",
+      "attendu": "REQUIRE_APPROVAL",
+      "obtenu": "REQUIRE_APPROVAL",
+      "ok": true
+    },
+    {
+      "cas": "2. Endpoint interdit par regle explicite (role ignore par construction)",
+      "attendu": "BLOCK",
+      "obtenu": "BLOCK",
+      "ok": true
+    },
+    {
+      "cas": "3. Environnement sans politique configuree",
+      "attendu": "BLOCK",
+      "obtenu": "BLOCK",
+      "ok": true
+    },
+    {
+      "cas": "4. Execution reelle (dry_run=False) sans approbation accordee",
+      "attendu": "ApprovalRequiredError",
+      "obtenu": "ApprovalRequiredError",
+      "ok": true
+    },
+    {
+      "cas": "6. SSRF -- cible http://127.0.0.1/",
+      "attendu": "blocked",
+      "obtenu": "blocked",
+      "ok": true
+    },
+    {
+      "cas": "6. SSRF -- cible http://10.0.0.5/",
+      "attendu": "blocked",
+      "obtenu": "blocked",
+      "ok": true
+    },
+    {
+      "cas": "6. SSRF -- cible http://169.254.169.254/latest/meta-data/",
+      "attendu": "blocked",
+      "obtenu": "blocked",
+      "ok": true
+    },
+    {
+      "cas": "6. SSRF -- cible https://example.com/",
+      "attendu": "allowed",
+      "obtenu": "allowed",
+      "ok": true
+    },
+    {
+      "cas": "7. Parametre de chemin '../../etc'",
+      "attendu": "PathTraversalError",
+      "obtenu": "PathTraversalError",
+      "ok": true
+    },
+    {
+      "cas": "8. Upload capture.txt comme fichier HAR",
+      "attendu": "HTTPException_400",
+      "obtenu": "HTTPException_400",
+      "ok": true
+    },
+    {
+      "cas": "9a. Limite de taille CSV configuree (BULK_FILE_MAX_SIZE_MB)",
+      "attendu": 20,
+      "obtenu": 20,
+      "ok": true
+    },
+    {
+      "cas": "9b. Limite de lignes CSV configuree (BULK_MAX_ROWS)",
+      "attendu": 10000,
+      "obtenu": 10000,
+      "ok": true
+    },
+    {
+      "cas": "10. 6 tentatives de login en moins d'une minute",
+      "attendu": "429_on_6th",
+      "obtenu": "429_on_6th",
+      "ok": true
+    }
+  ],
+  "reussis": 15,
+  "total": 15
+}

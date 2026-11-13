@@ -1,0 +1,30 @@
+@startuml Diagramme_pipelineIA
+!theme plain
+left to right direction
+
+title Pipeline du module d'intelligence artificielle d'ARIA
+
+rectangle "1. Nettoyage HAR\n(règles + LLM zone grise)" as S1
+rectangle "2. Normalisation\n(motifs + statistique + LLM groupé)" as S2
+rectangle "3. Analyse & enrichissement\n(domaine, action, schéma, auth)" as S3
+rectangle "4. Indexation\n(embeddings pgvector/HNSW)" as S4
+rectangle "5. Recherche sémantique\n+ jugement de pertinence" as S5
+rectangle "6. Compréhension d'intention\n(BusinessIntent)" as S6
+rectangle "7. Génération de plan\n(sélection + dépendances + tri)" as S7
+rectangle "8. Validation & gouvernance\n(ALLOW / REQUIRE_APPROVAL / BLOCK)" as S8
+rectangle "9. Exécution\n(simple ou bulk)" as S9
+
+S1 --> S2 --> S3 --> S4
+S4 --> S5
+S6 --> S5 : requête utilisateur
+S5 --> S7
+S6 --> S7
+S7 --> S8 --> S9
+
+note bottom of S1
+  AWS Bedrock amazon.nova-lite-v1:0 :
+  seul fournisseur de complétion
+  (toutes les étapes IA de ce pipeline).
+end note
+
+@enduml

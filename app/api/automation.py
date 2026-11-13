@@ -8,26 +8,35 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.base_client import StructuredResponseError
+from app.audit.events import AuditEvent
 from app.audit.service import log_audit_event
-from app.auth.dependencies import get_current_user_team_ids, require_admin_or_operator
+from app.auth.dependencies import require_admin_or_operator
+from app.connections import service as connection_service
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.automation.models import AutomationExecutionRequest
+from app.automation.payload_mapper import required_input_fields
 from app.automation.service import execute_automation
 from app.db.session import get_db
+from app.governance import service as governance_service
+from app.governance.policy_engine import REQUIRE_APPROVAL, check_execution_policy
 from app.models.analysis_run import AnalysisRun
+from app.models.approval import AutomationApproval
+from app.models.automation import AutomationRun
 from app.models.user import User, UserRole
 from app.monitoring.service import log_plan_generated, log_plan_validated
-from app.notifications.service import create_approval_required_notification_async
+from app.core.email import send_approval_requested_email
+from app.notifications.service import create_approval_required_notification_async, get_org_admins_async
 from app.core.logging import get_logger
 from app.planner.models import AutomationPlan
+from app.planner.plan_validator import check_action_coherence
 from app.planner.service import create_plan_from_instruction
 from app.planner.step_ordering import DependencyCycleError, topological_sort_steps
 from app.registry.repository import get_run_by_id
 from app.security.execution_guard import ExecutionGuardError
 from app.security.pinned_dns_transport import SSRFError
 from app.security.ssrf_guard import create_safe_client, validate_target_url
-from app.security.tenancy import team_visibility_clause
+from app.security.tenancy import owner_visibility_clause
 from app.teams.service import resolve_single_team_id
 
 router = APIRouter(prefix="/automation", tags=["Automation"])
@@ -43,8 +52,7 @@ class CreatePlanRequest(BaseModel):
 class ExecutePlanRequest(BaseModel):
     plan: AutomationPlan
     input_rows: List[Dict[str, Any]] = Field(default_factory=list)
-    base_url: Optional[str] = None
-    auth_headers: Dict[str, str] = Field(default_factory=dict)
+    connection_id: str
     dry_run: bool = True
     approval_granted: bool = False
 
@@ -196,8 +204,7 @@ async def plan_from_workflow(
     from app.models.workflow import WorkflowModel
     from app.models.endpoint import Endpoint
 
-    # BUG-007 IDOR: verify workflow belongs to the caller's org (+ team scoping)
-    team_ids = await get_current_user_team_ids(current_user, db)
+    # BUG-007 IDOR: verify workflow belongs to the caller's org (+ ownership scoping)
     res = await db.execute(
         select(WorkflowModel)
         .join(AnalysisRun, AnalysisRun.id == WorkflowModel.run_id)
@@ -205,7 +212,7 @@ async def plan_from_workflow(
         .where(
             WorkflowModel.id == body.workflow_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, team_ids),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     wf = res.scalar_one_or_none()
@@ -270,7 +277,11 @@ async def plan_from_workflow(
         "metadata": {"source": "workflow", "workflow_id": wf.id},
     }
 
-    return {"plan": plan, "validation": {"is_valid": True, "issues": []}}
+    return {
+        "plan": plan,
+        "validation": {"is_valid": True, "issues": []},
+        "required_input_fields": required_input_fields(AutomationPlan.model_validate(plan)),
+    }
 
 
 @router.post("/plan")
@@ -280,7 +291,7 @@ async def create_automation_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = await get_run_by_id(db, body.run_id)
+    run = await get_run_by_id(db, body.run_id, current_user.org_id)
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
@@ -335,6 +346,21 @@ async def create_automation_plan(
             },
         )
 
+    coherence_issue = check_action_coherence(plan)
+    if coherence_issue:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "ACTION_NOT_AVAILABLE",
+                "message": (
+                    f"Aucun endpoint du catalogue ne permet l'action demandée "
+                    f"(« {plan.intent.action} »). Le plan proposé réaliserait une autre action."
+                ),
+                "suggestion": "Vérifiez que le trafic analysé contient un appel réalisant cette action.",
+                "confidence": confidence,
+            },
+        )
+
     log_plan_generated(
         run_id=body.run_id,
         instruction=body.instruction,
@@ -354,6 +380,7 @@ async def create_automation_plan(
     return {
         "plan": plan.model_dump(),
         "validation": validation.model_dump(),
+        "required_input_fields": required_input_fields(plan),
     }
 
 
@@ -363,36 +390,180 @@ async def execute_automation_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    if body.base_url:
-        validate_target_url(body.base_url)
+    connection = await connection_service.get_connection(db, current_user.org_id, body.connection_id)
+    if connection is None:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    if not await connection_service.user_can_use_connection(db, connection, current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="You are not assigned to this connection" if connection.status == "active"
+            else "This connection has been revoked",
+        )
 
-    if not body.dry_run and current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only admin can run real execution.")
+    validate_target_url(connection.base_url)
 
-    if not body.dry_run and not body.approval_granted:
+    existing_run: Optional[AutomationRun] = None
+    approval_granted = body.approval_granted
+
+    if not body.dry_run:
+        # Governance check (Feature 1) — runs on EVERY non-dry-run call, both
+        # the operator's first request (serves as "at submission") and any
+        # retry after admin approval (serves as "again just before
+        # execution": policy may have changed in the meantime). A BLOCK is
+        # terminal regardless of role — it is checked before the
+        # admin/operator branch below, so admin approval can never override
+        # it (see app/governance/policy_engine.py docstring).
+        policy = await governance_service.get_or_create_policy(db, current_user.org_id)
+        forbidden_rules = await governance_service.list_forbidden_rules(db, current_user.org_id)
+        policy_result = check_execution_policy(body.plan, policy, forbidden_rules, connection.environment)
+
+        if policy_result.is_blocked:
+            await log_audit_event(
+                db=db,
+                user=current_user,
+                action=AuditEvent.AUTOMATION_GOVERNANCE_BLOCKED,
+                resource_type="analysis_run",
+                resource_id=body.plan.run_id,
+                metadata={"reasons": policy_result.reasons, "risk_score": policy_result.risk_score},
+            )
+            # Commit now — we're about to raise, and get_db() rolls back the
+            # session on exception, which would otherwise drop this entry
+            # (same gotcha as the pending-approval path below).
+            await db.commit()
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "GOVERNANCE_BLOCKED",
+                    "message": "This execution is blocked by governance policy.",
+                    "reasons": policy_result.reasons,
+                },
+            )
+
+        if current_user.role != UserRole.ADMIN and policy_result.decision != REQUIRE_APPROVAL:
+            # ALLOW: risk is below the low threshold and the environment
+            # permits it — the operator executes directly (Feature 1's
+            # whole point). approval_granted=True here satisfies the older,
+            # narrower app/security/execution_guard.py check further down
+            # (which gates on HTTP method alone) — governance has already
+            # made the real decision.
+            approval_granted = True
+
+    if not body.dry_run and current_user.role != UserRole.ADMIN and policy_result.decision == REQUIRE_APPROVAL:
+        # OPERATOR requesting a REAL run that governance says needs admin
+        # sign-off: no self-checked "Approved" box is trusted here — needs
+        # an admin to have actually approved THIS plan via
+        # POST /approvals/{id}/approve first (verified against a real
+        # AutomationApproval row, not the client-sent boolean). First request
+        # for a given plan creates a pending run + approval and notifies
+        # every admin in the org; the operator retries the same call once
+        # approved (or gets a clear rejection message if refused).
         from sqlalchemy import select
 
-        analysis_run_result = await db.execute(
-            select(AnalysisRun).where(AnalysisRun.id == body.plan.run_id)
+        pending = await db.execute(
+            select(AutomationRun, AutomationApproval)
+            .join(AutomationApproval, AutomationApproval.automation_run_id == AutomationRun.id)
+            .where(
+                AutomationRun.analysis_run_id == body.plan.run_id,
+                AutomationRun.created_by_user_id == current_user.id,
+                AutomationRun.status == "pending_approval",
+            )
+            .order_by(AutomationRun.created_at.desc())
         )
-        analysis_run = analysis_run_result.scalar_one_or_none()
-        await create_approval_required_notification_async(
-            db=db,
-            requester=current_user,
-            resource_type="analysis_run",
-            resource_id=body.plan.run_id,
-            har_file_name=analysis_run.file_name if analysis_run else None,
-        )
-        # Commit now — we're about to raise, and get_db() rolls back the
-        # session on exception, which would otherwise drop this notification.
-        await db.commit()
-        raise HTTPException(status_code=403, detail="Real execution requires explicit approval.")
+        row = pending.first()
+
+        if row is None:
+            pending_run = AutomationRun(
+                analysis_run_id=body.plan.run_id,
+                instruction=body.plan.instruction,
+                workflow_name=body.plan.workflow_name,
+                dry_run=False,
+                source="simple",
+                status="pending_approval",
+                total_steps=len(body.plan.steps),
+                plan_json=body.plan.model_dump(),
+                org_id=current_user.org_id,
+                created_by_user_id=current_user.id,
+                team_id=await resolve_single_team_id(db, current_user.id),
+                connection_id=connection.id,
+            )
+            db.add(pending_run)
+            await db.flush()
+            db.add(AutomationApproval(automation_run_id=pending_run.id, status="pending"))
+
+            analysis_run_result = await db.execute(
+                select(AnalysisRun).where(AnalysisRun.id == body.plan.run_id)
+            )
+            analysis_run = analysis_run_result.scalar_one_or_none()
+            await create_approval_required_notification_async(
+                db=db,
+                requester=current_user,
+                resource_type="automation_run",
+                resource_id=pending_run.id,
+                har_file_name=analysis_run.file_name if analysis_run else None,
+            )
+            # Commit now — we're about to raise, and get_db() rolls back the
+            # session on exception, which would otherwise drop all of this.
+            await db.commit()
+
+            resource_label = analysis_run.file_name if analysis_run else body.plan.workflow_name
+            admins = await get_org_admins_async(db, current_user.org_id)
+            for admin in admins:
+                await send_approval_requested_email(
+                    to=admin.email,
+                    admin_name=admin.full_name,
+                    operator_name=current_user.full_name,
+                    resource_label=resource_label,
+                    approvals_link=f"{settings.FRONTEND_URL}/approvals",
+                )
+
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "APPROVAL_PENDING",
+                    "message": "Real execution requires admin approval — a request has been sent.",
+                    "automation_run_id": pending_run.id,
+                },
+            )
+
+        run, approval = row
+        if approval.status == "rejected":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "APPROVAL_REJECTED",
+                    "message": "Your approval request was rejected"
+                    + (f": {approval.comment}" if approval.comment else "."),
+                },
+            )
+        if approval.status != "approved":
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "APPROVAL_PENDING",
+                    "message": "Still waiting on admin approval for this run.",
+                    "automation_run_id": run.id,
+                },
+            )
+
+        # A real admin approved this exact pending run — safe to trust now.
+        existing_run = run
+        approval_granted = True
+
+    # dry_run never calls the target or needs the secret (execute_step
+    # returns before any network I/O — see app/automation/executor.py) but
+    # still needs base_url to resolve+show the preview URL. Only decrypt
+    # for a real run.
+    auth_headers: Dict[str, str] = {}
+    if not body.dry_run:
+        secret = connection_service.get_decrypted_secret_for_execution(connection)
+        auth_headers = connection_service.build_auth_headers(connection.auth_type, secret)
 
     execution_request = AutomationExecutionRequest(
         plan=body.plan,
         input_rows=body.input_rows,
-        base_url=body.base_url,
-        auth_headers=body.auth_headers,
+        base_url=connection.base_url,
+        auth_headers=auth_headers,
+        connection_id=connection.id,
         dry_run=body.dry_run,
     )
 
@@ -400,10 +571,11 @@ async def execute_automation_plan(
         automation_run, result = await execute_automation(
             db=db,
             request=execution_request,
-            approval_granted=body.approval_granted,
+            approval_granted=approval_granted,
             org_id=current_user.org_id,
             created_by_user_id=current_user.id,
             team_id=await resolve_single_team_id(db, current_user.id),
+            existing_run=existing_run,
         )
     except ExecutionGuardError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -414,7 +586,7 @@ async def execute_automation_plan(
         action="AUTOMATION_EXECUTED",
         resource_type="automation_run",
         resource_id=automation_run.id,
-        metadata={"dry_run": body.dry_run, "status": result.status},
+        metadata={"dry_run": body.dry_run, "status": result.status, "connection_id": connection.id},
     )
 
     return {

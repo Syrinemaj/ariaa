@@ -1,0 +1,13 @@
+case_id,category,difficulty,n_steps,predicted_risk,risk_confidence,predicted_tags,summary,error
+wd_001,high_delete,easy,2,high,1,employees; hr; personnel; records,This workflow creates a new employee record and then deletes an existing employee record.,
+wd_002,high_payment,medium,2,high,1,payments; transactions; customer; billing; financial,This workflow charges a customer's payment method and then retrieves the payment details.,
+wd_003,high_bulk,hard,2,high,0.95,employees; hr; data-management; bulk-operations,This workflow archives multiple employee records in bulk and then lists all employees.,
+wd_004,medium_create_update,easy,2,medium,0.9,contracts; employment; hr; legal,This workflow creates and updates employment contracts in the system.,
+wd_005,medium_create_update,medium,1,medium,0.9,employees; salary; compensation; hr,This workflow updates an employee's salary information.,
+wd_006,low_readonly,easy,3,low,1,employees; departments; organizational; directory; reporting,This workflow retrieves employee and department information from the company database.,
+wd_007,low_lowstakes,medium,2,low,0.9,notifications; logging; monitoring,This workflow sends a notification to a user and records an application log entry.,
+wd_008,ambiguous,hard,2,medium,0.75,record_update; generic_operation; api_v2,This workflow updates an existing record and then performs a generic operation.,
+wd_009,ambiguous,hard,3,medium,0.9,employees; profiles; notifications; human_resources,"This workflow retrieves employee information, updates an employee's profile, and sends a notification to that employee about the changes.",
+wd_010,high_delete,medium,3,high,1,products; inventory; catalog; ecommerce,"This workflow lists existing products, creates a new product, and then deletes a product.",
+wd_011,low_readonly,easy,1,low,1,orders; retrieval; read-only,This workflow retrieves a single order from the system.,
+wd_012,medium_create_update,hard,2,medium,0.9,departments; employees; organizational-structure; hr,This workflow creates a new department and then assigns an employee to that department.,

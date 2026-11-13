@@ -54,8 +54,7 @@ def resume_job(
     automation_run_id: str,
     data_file_id: str,
     plan_json: dict,
-    base_url: str,
-    auth_headers: dict,
+    connection_id: str,
     dry_run: bool,
     org_id: str = "",
 ) -> dict:
@@ -101,15 +100,18 @@ def resume_job(
         # OFFSET/LIMIT on "status='valid'", which drifts as sibling batches
         # complete concurrently. Ranges across batches are disjoint by
         # construction, so this can't overlap with another batch's rows.
-        # Only rows still "valid" are retried — already-succeeded rows within
-        # this range (partial batch progress) are left alone.
+        # Rows still "valid" OR "dry_run_success" are retried — a dry run
+        # never attempted the real call, so those rows are exactly as
+        # pending as a plain "valid" one (see app/bulk_execution/service.py
+        # for the same fix in the main execution path). Already-succeeded
+        # rows within this range (partial batch progress) are left alone.
         pending_rows = (
             db.query(DataRow.id)
             .filter(
                 DataRow.data_file_id == data_file_id,
                 DataRow.row_index >= batch.start_row,
                 DataRow.row_index <= batch.end_row,
-                DataRow.status == "valid",
+                DataRow.status.in_(["valid", "dry_run_success"]),
             )
             .all()
         )
@@ -126,8 +128,7 @@ def resume_job(
                 "batch_number": batch.batch_number,
                 "row_ids": row_ids,
                 "plan_json": plan_json,
-                "base_url": base_url,
-                "auth_headers": auth_headers,
+                "connection_id": connection_id,
                 "dry_run": dry_run,
                 "org_id": org_id,
             },

@@ -1,0 +1,33 @@
+{
+  "date_utc": "2026-11-11T23:33:50.236389+00:00",
+  "commit": "52c6a7f42e586271020ce14187956cbd79018712",
+  "commande": "python evaluation/report_tests/t4_rules_only_reeval.py",
+  "modele_llm": null,
+  "modele_embedding": null,
+  "note": "use_ai=False : aucun appel reseau/LLM pour cette mesure",
+  "cas_total": 30,
+  "cas_decides_par_regles": 22,
+  "cas_zone_grise": 8,
+  "tp": 14,
+  "fp": 7,
+  "fn": 0,
+  "tn": 1,
+  "mesure": {
+    "precision": 0.667,
+    "rappel": 1.0,
+    "f1": 0.8,
+    "faux_positifs": 7
+  },
+  "attendu": {
+    "precision": 0.667,
+    "rappel": 1.0,
+    "f1": 0.8,
+    "faux_positifs": 7
+  },
+  "ecarts": {
+    "precision": 0.0,
+    "rappel": 0.0,
+    "f1": 0.0,
+    "faux_positifs": 0
+  }
+}

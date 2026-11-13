@@ -5,18 +5,19 @@ from sqlalchemy.orm import attributes as sa_attributes
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.events import AuditEvent
 from app.audit.service import log_audit_event
-from app.auth.dependencies import get_current_user_team_ids, require_admin_or_operator
+from app.auth.dependencies import require_admin_or_operator
 from app.db.session import get_db
 from app.models.analysis_run import AnalysisRun
+from app.models.embedding import EndpointEmbedding
 from app.models.endpoint import Endpoint
 from app.models.user import User
 from app.models.workflow import WorkflowModel, WorkflowStepModel
-from app.security.tenancy import team_visibility_clause
+from app.security.tenancy import owner_visibility_clause
 
 router = APIRouter(prefix="/registry", tags=["Registry"])
 
@@ -51,6 +52,21 @@ class WorkflowCreateIn(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _default_risk(method: str) -> str:
+    """Fallback when metadata_json has no stored "risk" — HAR analysis never
+    writes one (only an executed automation PLAN computes risk, via
+    app/planner/plan_builder.py::_risk_level), so every discovered endpoint/
+    workflow step used to silently show "low" regardless of method. Mirrors
+    that same function's thresholds so the Endpoints/Workflows catalog view
+    agrees with what Simple Automation and Governance will actually enforce."""
+    m = (method or "").upper()
+    if m == "DELETE":
+        return "high"
+    if m in ("POST", "PUT", "PATCH"):
+        return "medium"
+    return "low"
+
+
 def _serialize_workflow(wf: WorkflowModel) -> dict:
     steps = sorted(wf.steps, key=lambda s: s.step_order)
     return {
@@ -67,7 +83,7 @@ def _serialize_workflow(wf: WorkflowModel) -> dict:
                 "canonical": s.canonical_key,
                 "action":   s.action,
                 "depends":  s.depends_on or [],
-                "risk":     (s.metadata_json or {}).get("risk", "low"),
+                "risk":     (s.metadata_json or {}).get("risk") or _default_risk(s.method),
                 "auth":     (s.metadata_json or {}).get("auth_required", True),
             }
             for s in steps
@@ -135,12 +151,10 @@ async def list_runs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    team_ids = await get_current_user_team_ids(current_user, db)
-
     stmt = (
         select(AnalysisRun)
         .where(AnalysisRun.org_id == current_user.org_id)
-        .where(team_visibility_clause(AnalysisRun, current_user, team_ids))
+        .where(owner_visibility_clause(AnalysisRun, current_user))
         .order_by(AnalysisRun.created_at.desc())
     )
     if status:
@@ -151,7 +165,7 @@ async def list_runs(
         select(func.count())
         .select_from(AnalysisRun)
         .where(AnalysisRun.org_id == current_user.org_id)
-        .where(team_visibility_clause(AnalysisRun, current_user, team_ids))
+        .where(owner_visibility_clause(AnalysisRun, current_user))
     )
     if status:
         count_stmt = count_stmt.where(AnalysisRun.status == status)
@@ -160,6 +174,15 @@ async def list_runs(
 
     result = await db.execute(stmt.offset(offset).limit(limit))
     runs = result.scalars().all()
+
+    # Resolve uploader names for this page of results — listing runs is
+    # team-shared (owner_visibility_clause), but GET /users is admin-only,
+    # so an operator has no other way to see who uploaded a teammate's run.
+    creator_ids = {r.created_by_user_id for r in runs if r.created_by_user_id}
+    creator_names: Dict[str, str] = {}
+    if creator_ids:
+        users_result = await db.execute(select(User.id, User.full_name).where(User.id.in_(creator_ids)))
+        creator_names = {uid: name for uid, name in users_result.all()}
 
     return {
         "total": total,
@@ -173,6 +196,7 @@ async def list_runs(
                 "total_schema_results": r.total_schema_results,
                 "created_at": r.created_at.isoformat(),
                 "created_by_user_id": r.created_by_user_id,
+                "created_by_name": creator_names.get(r.created_by_user_id) if r.created_by_user_id else None,
             }
             for r in runs
         ],
@@ -190,7 +214,7 @@ async def update_run(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     run = result.scalar_one_or_none()
@@ -214,7 +238,7 @@ async def delete_run(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     run = result.scalar_one_or_none()
@@ -222,6 +246,16 @@ async def delete_run(
         raise HTTPException(status_code=404, detail="Analysis run not found")
     if current_user.role != "ADMIN" and run.created_by_user_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete your own analyses")
+
+    # EndpointEmbedding has no relationship/cascade wired from Endpoint (only
+    # a one-way Endpoint FK on the embedding side), so the ORM cascade on
+    # AnalysisRun.endpoints never reaches it — without this, deleting a run
+    # that's been RAG-indexed hits a bare FK IntegrityError.
+    endpoint_ids_result = await db.execute(select(Endpoint.id).where(Endpoint.run_id == run_id))
+    endpoint_ids = [row[0] for row in endpoint_ids_result.all()]
+    if endpoint_ids:
+        await db.execute(delete(EndpointEmbedding).where(EndpointEmbedding.endpoint_id.in_(endpoint_ids)))
+
     await db.delete(run)
     await db.commit()
 
@@ -236,7 +270,7 @@ async def get_run(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     run = result.scalar_one_or_none()
@@ -263,7 +297,7 @@ async def list_endpoints(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     if not run_result.scalar_one_or_none():
@@ -292,7 +326,10 @@ async def list_endpoints(
             "auth_required": schema.auth_required if schema else None,
             "auth_type": schema.auth_type if schema else None,
             "status_codes": schema.status_codes if schema else [],
-            "risk": (e.metadata_json or {}).get("risk", "low"),
+            "path_parameters": e.path_parameters or [],
+            "request_schema": schema.request_schema if schema else None,
+            "response_schema": schema.response_schema if schema else None,
+            "risk": (e.metadata_json or {}).get("risk") or _default_risk(e.method),
             "confidence": (e.metadata_json or {}).get("confidence", 0.0),
             "tags": (e.metadata_json or {}).get("tags", []),
             "ai_summary": (e.metadata_json or {}).get("ai_summary"),
@@ -318,7 +355,7 @@ async def list_workflows(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     if not run_result.scalar_one_or_none():
@@ -361,7 +398,7 @@ async def create_workflow(
         select(AnalysisRun).where(
             AnalysisRun.id == run_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     if not run_res.scalar_one_or_none():
@@ -446,7 +483,7 @@ async def update_workflow(
         .where(
             WorkflowModel.id == workflow_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     wf = res.scalar_one_or_none()
@@ -472,7 +509,7 @@ async def update_workflow(
                     "path":          s.path,
                     "canonical_key": s.canonical_key,
                     "action":        s.action,
-                    "risk":          (s.metadata_json or {}).get("risk", "low"),
+                    "risk":          (s.metadata_json or {}).get("risk") or _default_risk(s.method),
                     "auth":          (s.metadata_json or {}).get("auth_required", True),
                 }
                 for s in sorted(wf.steps, key=lambda x: x.step_order)
@@ -565,7 +602,7 @@ async def restore_workflow(
         .where(
             WorkflowModel.id == workflow_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     wf = res.scalar_one_or_none()
@@ -646,7 +683,7 @@ async def delete_workflow(
         .where(
             WorkflowModel.id == workflow_id,
             AnalysisRun.org_id == current_user.org_id,
-            team_visibility_clause(AnalysisRun, current_user, await get_current_user_team_ids(current_user, db)),
+            owner_visibility_clause(AnalysisRun, current_user),
         )
     )
     wf = res.scalar_one_or_none()

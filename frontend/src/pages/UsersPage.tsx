@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import AppLayout from '../components/layout/AppLayout'
-import { listUsers, activateUser, deactivateUser, updateUserRole, createUser, BackendUser } from '../lib/usersApi'
-import { listTeams, createTeam, renameTeam, deleteTeam, getTeam, addTeamMember, removeTeamMember, Team, TeamDetail } from '../lib/teamsApi'
+import { listUsers, activateUser, deactivateUser, deleteUser, updateUserRole, createUser, BackendUser } from '../lib/usersApi'
+import { listTeams, createTeam, renameTeam, deleteTeam, getTeam, addTeamMember, removeTeamMember, setTeamMemberAdmin, Team, TeamDetail } from '../lib/teamsApi'
 import { ApiError } from '../lib/api'
-import { Search, Plus, X, ArrowRight, Clock, CheckCircle2, XCircle, RefreshCw, Users, Pencil, Trash2, UserPlus } from 'lucide-react'
+import { Search, Plus, X, ArrowRight, Clock, CheckCircle2, XCircle, RefreshCw, Users, Pencil, Trash2, UserPlus, Crown } from 'lucide-react'
 
 // ── Backend roles ─────────────────────────────────────────────────────────────
 
 type BackendRole = 'ADMIN' | 'OPERATOR'
 
 const ROLE_INFO: Record<BackendRole, { label: string; swatch: string; description: string }> = {
-  ADMIN:    { label: 'Admin',    swatch: '#8b5cf6', description: 'Full access, user management' },
+  ADMIN:    { label: 'Admin',    swatch: '#8b5cf6', description: 'Full access, user management, audit log' },
   OPERATOR: { label: 'Operator', swatch: '#6366f1', description: 'Bulk executions and automations' },
 }
 
@@ -144,6 +144,24 @@ export default function UsersPage() {
     }
   }
 
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    const { id: userId } = pendingDelete
+    setDeletingId(userId)
+    try {
+      await deleteUser(userId)
+      setUsers(prev => prev.filter(u => u.id !== userId))
+      setPendingDelete(null)
+    } catch {
+      load()
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   // ── Create user (modal) ─────────────────────────────────────────────────────
 
   const openInvite = () => {
@@ -256,8 +274,18 @@ export default function UsersPage() {
     try {
       await removeTeamMember(manageTeam.id, userId)
       refreshManageTeam(manageTeam.id)
-    } catch {
-      setManageError('Error removing member.')
+    } catch (err: unknown) {
+      setManageError(err instanceof ApiError ? err.message : 'Error removing member.')
+    }
+  }
+
+  const handleToggleTeamAdmin = async (userId: string, makeAdmin: boolean) => {
+    if (!manageTeam) return
+    try {
+      await setTeamMemberAdmin(manageTeam.id, userId, makeAdmin)
+      refreshManageTeam(manageTeam.id)
+    } catch (err: unknown) {
+      setManageError(err instanceof ApiError ? err.message : 'Error updating team admin.')
     }
   }
 
@@ -342,6 +370,18 @@ export default function UsersPage() {
               </div>
             </div>
           ))}
+          <div className="card p-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-amber-700 flex-shrink-0"
+              style={{ background: '#fef3c7' }}>
+              <Clock className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'var(--ink-2)' }}>Pending approval</p>
+              <p className="text-xl font-black" style={{ color: pendingCount > 0 ? '#b45309' : 'var(--ink)' }}>
+                {pendingCount}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Teams */}
@@ -386,6 +426,7 @@ export default function UsersPage() {
                 onChange={e => setQ(e.target.value)}
                 className="input !pl-9"
                 placeholder="Search by name or email…"
+                autoComplete="off"
               />
             </div>
             <span className="text-xs font-mono" style={{ color: 'var(--ink-2)' }}>
@@ -496,7 +537,7 @@ export default function UsersPage() {
                           {assignOpenFor === u.id && (
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setAssignOpenFor(null)} />
-                              <div className="absolute top-full left-0 mt-1 z-20 rounded-xl shadow-lg py-1 min-w-[160px]"
+                              <div className="absolute top-full left-0 mt-1.5 z-20 rounded-2xl shadow-lg py-1.5 min-w-[180px]"
                                 style={{ background: 'var(--card)', border: '1px solid var(--line)' }}>
                                 {teams.filter(t => !t.member_user_ids.includes(u.id)).length === 0 ? (
                                   <p className="px-3 py-2 text-xs" style={{ color: 'var(--ink-2)' }}>No teams to assign</p>
@@ -505,11 +546,15 @@ export default function UsersPage() {
                                     <button
                                       key={t.id}
                                       onClick={() => void handleAssignTeam(u.id, t.id)}
-                                      className="block w-full text-left px-3 py-1.5 text-xs font-medium transition"
+                                      className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs font-medium transition"
                                       style={{ color: 'var(--ink)' }}
                                       onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in oklch, var(--brand) 6%, var(--card))')}
                                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                     >
+                                      <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
+                                        style={{ background: 'color-mix(in oklch, var(--brand) 16%, var(--card))', color: 'var(--brand)' }}>
+                                        {t.name[0]?.toUpperCase()}
+                                      </span>
                                       {t.name}
                                     </button>
                                   ))
@@ -559,16 +604,29 @@ export default function UsersPage() {
                             </button>
                           </div>
                         ) : (
-                          /* rejected / deactivated → réactiver */
-                          <button
-                            onClick={() => void handleActivate(u.id, true)}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-semibold transition"
-                            style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8' }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#dbeafe')}
-                            onMouseLeave={e => (e.currentTarget.style.background = '#eff6ff')}
-                          >
-                            <RefreshCw className="w-3 h-3" /> Reactivate
-                          </button>
+                          /* rejected / deactivated → réactiver ou supprimer */
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={() => void handleActivate(u.id, true)}
+                              disabled={deletingId === u.id}
+                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-semibold transition disabled:opacity-40"
+                              style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#dbeafe')}
+                              onMouseLeave={e => (e.currentTarget.style.background = '#eff6ff')}
+                            >
+                              <RefreshCw className="w-3 h-3" /> Reactivate
+                            </button>
+                            <button
+                              onClick={() => setPendingDelete({ id: u.id, name: u.name })}
+                              disabled={deletingId === u.id}
+                              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-semibold transition disabled:opacity-40"
+                              style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#be123c' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = '#ffe4e6')}
+                              onMouseLeave={e => (e.currentTarget.style.background = '#fff1f2')}
+                            >
+                              <Trash2 className="w-3 h-3" /> {deletingId === u.id ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -709,6 +767,7 @@ export default function UsersPage() {
                 value={newTeamName}
                 onChange={e => setNewTeamName(e.target.value)}
                 disabled={createTeamLoading}
+                autoComplete="off"
               />
             </div>
 
@@ -744,6 +803,7 @@ export default function UsersPage() {
                   onChange={e => setRenameValue(e.target.value)}
                   onBlur={handleRenameTeam}
                   onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  autoComplete="off"
                 />
               </div>
               <button onClick={closeManageTeam} className="btn-ghost !p-1.5">
@@ -783,13 +843,32 @@ export default function UsersPage() {
               {manageTeam.members.map(m => (
                 <div key={m.id} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2"
                   style={{ background: 'color-mix(in oklch, var(--ink) 3%, var(--card))' }}>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--ink)' }}>{m.full_name}</p>
-                    <p className="text-xs truncate" style={{ color: 'var(--ink-2)' }}>{m.email}</p>
+                  <div className="min-w-0 flex items-center gap-1.5">
+                    <div>
+                      <p className="text-sm font-semibold truncate flex items-center gap-1.5" style={{ color: 'var(--ink)' }}>
+                        {m.full_name}
+                        {m.is_team_admin && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            style={{ background: 'color-mix(in oklch, #f59e0b 14%, var(--card))', color: '#b45309' }}>
+                            <Crown className="w-2.5 h-2.5" /> Team admin
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs truncate" style={{ color: 'var(--ink-2)' }}>{m.email}</p>
+                    </div>
                   </div>
-                  <button onClick={() => handleRemoveMember(m.id)} className="btn-ghost !p-1.5 flex-shrink-0">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => handleToggleTeamAdmin(m.id, !m.is_team_admin)}
+                      className="btn-ghost !p-1.5"
+                      title={m.is_team_admin ? 'Revoke team admin' : 'Make team admin'}
+                    >
+                      <Crown className="w-3.5 h-3.5" style={m.is_team_admin ? { color: '#b45309' } : undefined} />
+                    </button>
+                    <button onClick={() => handleRemoveMember(m.id)} className="btn-ghost !p-1.5">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -801,6 +880,42 @@ export default function UsersPage() {
                 style={{ background: '#fff1f2', border: '1px solid #fecdd3', color: '#be123c' }}
               >
                 <Trash2 className="w-3.5 h-3.5" /> Delete team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal confirmation suppression utilisateur ──────────────────────────── */}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => !deletingId && setPendingDelete(null)} />
+          <div className="relative card pad w-full max-w-sm shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                <Trash2 className="w-5 h-5" style={{ color: '#be123c' }} />
+              </div>
+              <div>
+                <p className="font-bold text-sm" style={{ color: 'var(--ink)' }}>Delete this user?</p>
+                <p className="text-xs ink-2 mt-0.5">This permanently deletes the account — it cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="px-3 py-2 rounded-xl font-semibold text-sm truncate"
+              style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)', color: 'var(--ink)' }}>
+              {pendingDelete.name}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setPendingDelete(null)} disabled={!!deletingId} className="btn-secondary">
+                Cancel
+              </button>
+              <button onClick={() => void confirmDelete()} disabled={!!deletingId} className="btn-danger" style={{ minWidth: '7rem' }}>
+                {deletingId === pendingDelete.id
+                  ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Deleting…</>
+                  : <><Trash2 className="w-3.5 h-3.5" /> Delete</>
+                }
               </button>
             </div>
           </div>

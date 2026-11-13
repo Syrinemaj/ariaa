@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react'
 import {
   Home, Upload, Package, Network, FileCode2, Sparkles,
   Layers, Inbox, BarChart2, Users,
-  LogOut, ChevronLeft, ChevronRight, Zap, History, FlaskConical, ClipboardList,
+  LogOut, ChevronLeft, ChevronRight, Zap, History, FlaskConical, ClipboardList, ScrollText,
+  Shield, Plug,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRun } from '../../contexts/RunContext'
@@ -59,7 +60,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Admin',
     items: [
-      { path: '/users',    label: 'Users', icon: Users,     roles: ['ADMIN'] },
+      { path: '/users',       label: 'Users',       icon: Users,      roles: ['ADMIN'] },
+      { path: '/audit-log',   label: 'Audit log',   icon: ScrollText, roles: ['ADMIN'] },
+      { path: '/governance',  label: 'Governance',  icon: Shield,     roles: ['ADMIN'] },
+      { path: '/connections', label: 'Connections', icon: Plug,       roles: ['ADMIN'] },
     ],
   },
 ]

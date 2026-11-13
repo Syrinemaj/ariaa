@@ -22,14 +22,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Restore session from localStorage on mount
+  // Restore session from sessionStorage on mount — sessionStorage, not
+  // localStorage: isolated per tab, so two tabs can be two different
+  // logged-in users at once instead of one shared session that the most
+  // recent login silently overwrites everywhere. A brand-new tab (not a
+  // duplicate of one already logged in) starts logged out — expected
+  // trade-off, not a bug.
   useEffect(() => {
-    const stored = localStorage.getItem('aria_auth_user')
+    const stored = sessionStorage.getItem('aria_auth_user')
     if (stored) {
       try {
         setUser(JSON.parse(stored))
       } catch {
-        localStorage.removeItem('aria_auth_user')
+        sessionStorage.removeItem('aria_auth_user')
       }
     }
     setLoading(false)
@@ -58,8 +63,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const tokens = await tokenRes.json() as { access_token: string; refresh_token: string }
-      localStorage.setItem('access_token', tokens.access_token)
-      localStorage.setItem('refresh_token', tokens.refresh_token)
+      sessionStorage.setItem('access_token', tokens.access_token)
+      sessionStorage.setItem('refresh_token', tokens.refresh_token)
 
       // Step 2 — fetch user profile
       const meRes = await fetch('/auth/me', {
@@ -79,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: me.role,
       }
       setUser(authUser)
-      localStorage.setItem('aria_auth_user', JSON.stringify(authUser))
+      sessionStorage.setItem('aria_auth_user', JSON.stringify(authUser))
       return { success: true }
     } catch {
       return { success: false, error: 'Network error — make sure the backend is running.' }
@@ -88,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      const token = localStorage.getItem('access_token')
+      const token = sessionStorage.getItem('access_token')
       if (token) {
         await fetch('/auth/logout', {
           method: 'POST',
@@ -97,9 +102,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } finally {
       setUser(null)
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('aria_auth_user')
+      sessionStorage.removeItem('access_token')
+      sessionStorage.removeItem('refresh_token')
+      sessionStorage.removeItem('aria_auth_user')
     }
   }
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import { StatusBadge } from '../components/aria/Badges'
+import { useAuth } from '../contexts/AuthContext'
 import {
   listAutomationRuns, updateAutomationRun, deleteAutomationRun, AutomationRun,
 } from '../lib/reportsApi'
@@ -10,6 +11,21 @@ import {
   Layers, Clock, CheckCircle2, XCircle, Pencil, Trash2,
   Check, X, RefreshCw, TriangleAlert,
 } from 'lucide-react'
+
+// ── Uploader chip ─────────────────────────────────────────────────────────────
+
+function UserChip({ name, isCurrentUser }: { name: string; isCurrentUser: boolean }) {
+  const initials = name.split(' ').map(s => s[0] ?? '').slice(0, 2).join('').toUpperCase() || '?'
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+        style={{ background: isCurrentUser ? 'linear-gradient(135deg, var(--brand), var(--accent))' : '#64748b' }}>
+        {initials}
+      </div>
+      <span className="text-xs truncate" style={{ color: 'var(--ink)' }}>{name}</span>
+    </div>
+  )
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +48,7 @@ function formatDate(iso: string) {
 function SkeletonRow() {
   return (
     <tr className="border-t animate-pulse" style={{ borderColor: 'var(--line)' }}>
-      {[160, 180, 80, 90, 90, 90, 120, 100].map((w, i) => (
+      {[160, 70, 180, 80, 90, 90, 90, 120, 100, 80].map((w, i) => (
         <td key={i} className="px-3 py-3">
           <div className="h-4 rounded" style={{ width: w, background: 'color-mix(in oklch, var(--ink) 8%, var(--card))' }} />
         </td>
@@ -98,11 +114,14 @@ function DeleteModal({
 
 export default function AutomationListPage() {
   const nav = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
 
   const [runs, setRuns]         = useState<AutomationRun[]>([])
   const [loading, setLoading]   = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const [modeFilter, setModeFilter]     = useState('all')
+  const [typeFilter, setTypeFilter]     = useState<'all' | 'simple' | 'bulk'>('all')
   const [page, setPage]         = useState(1)
 
   // Inline rename state
@@ -122,12 +141,18 @@ export default function AutomationListPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const uploaderName = (run: AutomationRun): string => {
+    if (!run.created_by_user_id) return '—'
+    return run.created_by_name || run.created_by_user_id.slice(0, 8) + '…'
+  }
+
   const filtered = runs.filter(r => {
     const statusOk = statusFilter === 'all' || r.status === statusFilter
     const modeOk   = modeFilter === 'all'
       || (modeFilter === 'simulation' && r.dry_run)
       || (modeFilter === 'live' && !r.dry_run)
-    return statusOk && modeOk
+    const typeOk   = typeFilter === 'all' || r.source === typeFilter
+    return statusOk && modeOk && typeOk
   })
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -184,48 +209,56 @@ export default function AutomationListPage() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Simple Automation</h2>
-            <p className="text-sm ink-2 mt-1">History of all automation runs — simulations and live executions.</p>
+            <h2 className="text-xl font-black" style={{ color: 'var(--ink)' }}>Automations</h2>
+            <p className="text-sm ink-2 mt-1">History of every automation run — Simple and Bulk, simulations and live executions.</p>
           </div>
-          <button onClick={() => nav('/automation')} className="btn-primary">
-            <Plus className="w-4 h-4" /> New automation
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => nav('/bulk')} className="btn-secondary">
+              <Layers className="w-4 h-4" /> New bulk execution
+            </button>
+            <button onClick={() => nav('/automation')} className="btn-primary">
+              <Plus className="w-4 h-4" /> New automation
+            </button>
+          </div>
         </div>
 
         {/* Info banner */}
-        <div className="card overflow-hidden">
-          <div className="grid lg:grid-cols-[1fr_auto] items-stretch">
-            <div className="p-5 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl grad-bg text-white flex items-center justify-center flex-shrink-0">
-                <FlaskConical className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="font-bold" style={{ color: 'var(--ink)' }}>Simple Automation — one row at a time</p>
-                <p className="text-sm ink-2 mt-1 max-w-xl">
-                  Each run corresponds to a test of an API workflow on one or a few JSON rows.
-                  For large-scale executions, use <span className="font-semibold">Bulk Execution</span>.
-                </p>
-              </div>
-            </div>
-            <div className="p-5 flex items-center"
-              style={{ background: 'color-mix(in oklch, var(--brand) 4%, var(--card))', borderLeft: '1px solid var(--line)' }}>
-              <button onClick={() => nav('/bulk')} className="btn-secondary">
-                <Layers className="w-4 h-4" /> Bulk Execution
-              </button>
-            </div>
+        <div className="card pad flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl grad-bg text-white flex items-center justify-center flex-shrink-0">
+            <FlaskConical className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="font-bold" style={{ color: 'var(--ink)' }}>Simple vs Bulk</p>
+            <p className="text-sm ink-2 mt-1 max-w-xl">
+              <span className="font-semibold">Simple</span> runs test an API workflow on one or a few JSON rows.
+              <span className="font-semibold"> Bulk</span> runs it across an uploaded CSV, row by row. Both show up below — use the Type filter to separate them.
+            </p>
           </div>
         </div>
 
         {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap">
           <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1">Type</p>
+            <select value={typeFilter} onChange={e => handleFilterChange(v => setTypeFilter(v as 'all' | 'simple' | 'bulk'))(e.target.value)}
+              className="input !py-1.5 text-xs">
+              <option value="all">All</option>
+              <option value="simple">Simple</option>
+              <option value="bulk">Bulk</option>
+            </select>
+          </div>
+          <div>
             <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1">Status</p>
             <select value={statusFilter} onChange={e => handleFilterChange(setStatusFilter)(e.target.value)}
               className="input !py-1.5 text-xs">
               <option value="all">All</option>
-              <option value="completed">Completed</option>
-              <option value="running">In progress</option>
+              <option value="success">Success</option>
+              <option value="partial_success">Partial success</option>
+              <option value="partial_failure">Partial failure</option>
               <option value="failed">Failed</option>
+              <option value="running">In progress</option>
+              <option value="pending_approval">Pending approval</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
           <div>
@@ -250,7 +283,7 @@ export default function AutomationListPage() {
             <table className="w-full text-sm">
               <thead className="aria-thead">
                 <tr>
-                  {['Workflow', 'Instruction', 'Mode', 'Status', 'Success / Total', 'Duration', 'Date', 'Actions'].map(h => (
+                  {['Workflow', 'Type', 'Instruction', 'Mode', 'Status', 'Success / Total', 'Duration', 'Date', 'Run by', 'Actions'].map(h => (
                     <th key={h} className="text-left px-3 py-2.5 text-xs">{h}</th>
                   ))}
                 </tr>
@@ -261,7 +294,7 @@ export default function AutomationListPage() {
                   : pageItems.length === 0
                     ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-16 text-center">
+                        <td colSpan={10} className="px-3 py-16 text-center">
                           <div className="flex flex-col items-center gap-3">
                             <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
                               style={{ background: 'color-mix(in oklch, var(--brand) 10%, var(--card))' }}>
@@ -279,6 +312,7 @@ export default function AutomationListPage() {
                     : pageItems.map(run => {
                       const { date, time } = formatDate(run.created_at)
                       const isEditing = editingId === run.id
+                      const isOwner = run.created_by_user_id === user?.id
                       return (
                         <tr key={run.id}
                           className="border-t transition-colors"
@@ -296,6 +330,7 @@ export default function AutomationListPage() {
                                   onChange={e => setEditName(e.target.value)}
                                   onKeyDown={e => { if (e.key === 'Enter') doSaveEdit(); if (e.key === 'Escape') doCancelEdit() }}
                                   className="input !py-1 !px-2 text-xs w-44"
+                                  autoComplete="off"
                                 />
                                 <button onClick={e => { e.stopPropagation(); doSaveEdit() }} disabled={savingEdit}
                                   className="btn-ghost !p-1 text-emerald-600 disabled:opacity-40" title="Save">
@@ -314,6 +349,14 @@ export default function AutomationListPage() {
                                 <p className="text-[10px] font-mono ink-2 mt-0.5">{run.id.slice(0, 8)}…</p>
                               </div>
                             )}
+                          </td>
+
+                          {/* Type */}
+                          <td className="px-3 py-2.5">
+                            {run.source === 'bulk'
+                              ? <span className="pill bg-purple-50 text-purple-700 border-purple-200"><Layers className="w-3 h-3" /> Bulk</span>
+                              : <span className="pill bg-sky-50 text-sky-700 border-sky-200"><FlaskConical className="w-3 h-3" /> Simple</span>
+                            }
                           </td>
 
                           {/* Instruction */}
@@ -368,25 +411,34 @@ export default function AutomationListPage() {
                             <p className="text-[10px] ink-2">{time}</p>
                           </td>
 
+                          {/* Run by */}
+                          <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                            <UserChip name={uploaderName(run)} isCurrentUser={isOwner} />
+                          </td>
+
                           {/* Actions */}
                           <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
-                              {/* Rename */}
-                              <button
-                                onClick={e => startEdit(run, e)}
-                                className="btn-ghost !p-1.5 text-xs"
-                                title="Rename"
-                                disabled={isEditing}>
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
+                              {/* Rename/delete — only the run's own creator or an admin
+                                  can mutate it (matches the backend permission check) */}
+                              {(isOwner || isAdmin) && (
+                                <>
+                                  <button
+                                    onClick={e => startEdit(run, e)}
+                                    className="btn-ghost !p-1.5 text-xs"
+                                    title="Rename"
+                                    disabled={isEditing}>
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
 
-                              {/* Delete */}
-                              <button
-                                onClick={e => handleDelete(run, e)}
-                                className="btn-ghost !p-1.5 text-xs hover:text-rose-600 hover:border-rose-200"
-                                title="Delete">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                                  <button
+                                    onClick={e => handleDelete(run, e)}
+                                    className="btn-ghost !p-1.5 text-xs hover:text-rose-600 hover:border-rose-200"
+                                    title="Delete">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
 
                               {/* View report */}
                               <button

@@ -10,6 +10,7 @@ class AutomationExecutionRequest(BaseModel):
     input_rows: List[Dict[str, Any]] = Field(default_factory=list)
     base_url: Optional[str] = None
     auth_headers: Dict[str, str] = Field(default_factory=dict)
+    connection_id: Optional[str] = None
     dry_run: bool = True
     max_concurrency: int = 1
 

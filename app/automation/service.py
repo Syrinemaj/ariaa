@@ -17,6 +17,12 @@ async def execute_automation(
     org_id: str = "",
     created_by_user_id: Optional[str] = None,
     team_id: Optional[str] = None,
+    # Reuse an existing "pending_approval" AutomationRun (created when an
+    # OPERATOR first requested this real execution — see
+    # app/api/automation.py) instead of creating a fresh one, now that an
+    # admin has approved it. Left None for the ADMIN / dry-run paths, which
+    # still create a new run every call as before.
+    existing_run: Optional[AutomationRun] = None,
 ) -> Tuple[AutomationRun, AutomationExecutionResult]:
     plan = request.plan
 
@@ -26,19 +32,26 @@ async def execute_automation(
         approval_granted=approval_granted,
     )
 
-    automation_run = AutomationRun(
-        analysis_run_id=plan.run_id,
-        instruction=plan.instruction,
-        workflow_name=plan.workflow_name,
-        dry_run=request.dry_run,
-        status="running",
-        total_steps=len(plan.steps),
-        plan_json=plan.model_dump(),
-        org_id=org_id,
-        created_by_user_id=created_by_user_id,
-        team_id=team_id,
-    )
-    db.add(automation_run)
+    if existing_run is not None:
+        automation_run = existing_run
+        automation_run.status = "running"
+        automation_run.total_steps = len(plan.steps)
+    else:
+        automation_run = AutomationRun(
+            analysis_run_id=plan.run_id,
+            instruction=plan.instruction,
+            workflow_name=plan.workflow_name,
+            dry_run=request.dry_run,
+            source="simple",
+            status="running",
+            total_steps=len(plan.steps),
+            plan_json=plan.model_dump(),
+            org_id=org_id,
+            created_by_user_id=created_by_user_id,
+            team_id=team_id,
+            connection_id=request.connection_id,
+        )
+        db.add(automation_run)
     await db.commit()
     await db.refresh(automation_run)
 

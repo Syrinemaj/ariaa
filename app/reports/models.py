@@ -12,6 +12,7 @@ class StepLogReport(BaseModel):
     request_payload: Optional[Dict[str, Any]] = None
     response_payload: Optional[Any] = None
     error_message: Optional[str] = None
+    created_at: Optional[str] = None
 
 
 class AutomationExecutionReport(BaseModel):

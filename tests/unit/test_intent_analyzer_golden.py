@@ -1,20 +1,34 @@
 """Golden-instruction regression tests for intent_analyzer.py's prompt.
 
-These call the REAL Groq API (no mocking) — the whole point is to catch
-silent prompt regressions (e.g. "bonjour" suddenly scoring confidence=0.6)
-that a mocked test can't detect, since a mock just returns whatever we told
-it to. Skipped automatically when no GROQ_API_KEY is configured (CI/local
-envs without a key), and not meant to gate every commit given the external
-dependency + per-call cost — run manually or in a scheduled job.
+These call the REAL LLM (AWS Bedrock — the only completion provider, no
+mocking) — the whole point is to catch silent prompt regressions (e.g.
+"bonjour" suddenly scoring confidence=0.6) that a mocked test can't detect,
+since a mock just returns whatever we told it to. Skipped automatically when
+AWS credentials aren't available (CI/local envs without them), and not meant
+to gate every commit given the external dependency + per-call cost — run
+manually or in a scheduled job.
+
+analyze_business_intent(), called with no explicit client, resolves its
+client via create_ai_client() — always a BedrockClient.
 """
+import os
+
 import pytest
 
 from app.core.config import settings
 from app.planner.intent_analyzer import analyze_business_intent
 
+
+def _has_aws_credentials() -> bool:
+    # boto3 resolves credentials from env vars / ~/.aws/credentials / IAM
+    # role — env vars are the only form cheaply checkable without making a
+    # real AWS call just to decide whether to skip.
+    return bool(os.environ.get("AWS_ACCESS_KEY_ID") or os.environ.get("AWS_PROFILE"))
+
+
 pytestmark = pytest.mark.skipif(
-    not settings.GROQ_API_KEY,
-    reason="requires a real GROQ_API_KEY — not mocked, hits the live Groq API",
+    not _has_aws_credentials(),
+    reason="requires live AWS credentials — not mocked, hits a real Bedrock API",
 )
 
 # Mirrors the BAD/GOOD examples baked into intent_analyzer.SYSTEM_PROMPT_TEMPLATE.

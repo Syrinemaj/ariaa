@@ -19,3 +19,5 @@ from app.models.llm_call import LLMCall
 from app.models.notification import Notification
 from app.models.team import Team
 from app.models.team_member import TeamMember
+from app.models.governance import GovernancePolicy, ForbiddenEndpointRule
+from app.models.connection import Connection, ConnectionOperator

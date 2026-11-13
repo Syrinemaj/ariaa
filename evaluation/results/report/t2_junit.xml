@@ -1,0 +1,591 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="10" failures="0" skipped="0" tests="106" time="41.482" timestamp="2026-11-12T00:59:25.834792" hostname="DESKTOP-EF0F5FA"><testcase classname="tests.integration.real_db.test_auth_integration" name="test_login_admin_success" time="2.919"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:41.814531+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 41, 814531, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:41.814531+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:41.814531+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 41, 814531, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_auth_integration" name="test_login_wrong_password_fails" time="0.182"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:45.077012+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 45, 77012, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:45.077012+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:45.077012+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 45, 77012, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_auth_integration" name="test_me_requires_token" time="0.170" /><testcase classname="tests.integration.real_db.test_auth_integration" name="test_me_with_token" time="0.162"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:47.430235+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 47, 430235, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:47.430235+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:47.430235+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 47, 430235, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_connection_models" name="test_create_and_read_connection" time="0.063" /><testcase classname="tests.integration.real_db.test_connection_models" name="test_connection_name_unique_per_org" time="0.049" /><testcase classname="tests.integration.real_db.test_connection_models" name="test_connection_operator_assignment_and_unique_constraint" time="0.114" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_create_connection_encrypts_secret" time="0.325" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_create_connection_rejects_duplicate_name" time="0.120" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_create_connection_validates_environment_and_auth_type" time="0.072" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_update_connection_partial_fields" time="0.112" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_rotate_secret_changes_value_and_sets_timestamp" time="0.116" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_revoke_and_reactivate_connection" time="0.131" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_admin_sees_all_active_connections_operator_sees_only_assigned" time="0.173" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_revoked_connection_excluded_from_usable_list" time="0.110" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_assign_operator_duplicate_rejected" time="0.173" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_unassign_operator_round_trip" time="0.147" /><testcase classname="tests.integration.real_db.test_connection_service" name="test_assign_operator_nonexistent_user_rejected" time="0.097" /><testcase classname="tests.integration.real_db.test_governance_models" name="test_create_and_read_governance_policy" time="0.041" /><testcase classname="tests.integration.real_db.test_governance_models" name="test_governance_policy_is_singleton_per_org" time="0.046" /><testcase classname="tests.integration.real_db.test_governance_models" name="test_create_and_read_forbidden_endpoint_rule" time="0.039" /><testcase classname="tests.integration.real_db.test_governance_models" name="test_forbidden_endpoint_rule_method_is_optional" time="0.021" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_get_or_create_policy_creates_default_then_is_idempotent" time="0.080" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_update_policy_rejects_low_greater_than_high" time="0.115" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_update_policy_merges_environment_policies_partially" time="0.147" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_update_policy_rejects_unknown_environment" time="0.129" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_update_policy_rejects_invalid_mode" time="0.109" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_forbidden_rule_create_list_delete_round_trip" time="0.119" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_delete_forbidden_rule_wrong_org_returns_false" time="0.074" /><testcase classname="tests.integration.real_db.test_governance_service" name="test_create_forbidden_rule_requires_path_pattern" time="0.049" /><testcase classname="tests.integration.real_db.test_rbac_integration" name="test_admin_can_list_users" time="0.163"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:53.124392+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 53, 124392, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:53.124392+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:53.124392+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 53, 124392, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_rbac_integration" name="test_operator_cannot_list_users" time="0.200"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:55.608197+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 55, 608197, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:55.608197+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:55.608197+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 55, 608197, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_rbac_integration" name="test_reports_requires_auth" time="0.155" /><testcase classname="tests.integration.real_db.test_rbac_integration" name="test_operator_can_view_reports" time="0.138"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:57.401049+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 57, 401049, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:57.401049+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:57.401049+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 57, 401049, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_rbac_integration" name="test_audit_logs_requires_auth" time="0.136" /><testcase classname="tests.integration.real_db.test_rbac_integration" name="test_operator_can_view_audit_logs" time="0.152"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:59.080137+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 59, 80137, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:59.080137+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-11 23:59:59.080137+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 11, 23, 59, 59, 80137, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_reports_pagination_integration" name="test_reports_runs_requires_auth" time="0.147" /><testcase classname="tests.integration.real_db.test_reports_pagination_integration" name="test_reports_runs_pagination" time="0.179"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:00.670764+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 12, 0, 0, 0, 670764, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:00.670764+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:00.670764+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 12, 0, 0, 0, 670764, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_reports_pagination_integration" name="test_reports_page_size_too_large_rejected" time="0.252"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:02.139529+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 12, 0, 0, 2, 139529, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:02.139529+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:02.139529+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 12, 0, 0, 2, 139529, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_reports_pagination_integration" name="test_audit_logs_pagination" time="0.199"><error message="failed on setup with &quot;sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column &quot;id&quot; of relation &quot;organizations&quot; violates not-null constraint&#10;DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:04.192415+00).&#10;&#10;[SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]&#10;[parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 12, 0, 0, 4, 192415, tzinfo=datetime.timezone.utc)}]&#10;(Background on this error at: https://sqlalche.me/e/20/gkpj)&quot;">C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   psycopg2.errors.NotNullViolation: null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:04.192415+00).
+
+The above exception was the direct cause of the following exception:
+tests\integration\real_db\conftest.py:95: in seeded_users
+    org = _get_or_create_default_org_sync(db)
+tests\integration\real_db\conftest.py:70: in _get_or_create_default_org_sync
+    db.commit()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:2017: in commit
+    trans.commit(_to_root=True)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1302: in commit
+    self._prepare_impl()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py:139: in _go
+    ret_value = fn(self, *arg, **kw)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:1277: in _prepare_impl
+    self.session.flush()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4341: in flush
+    self._flush(objects)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4476: in _flush
+    with util.safe_reraise():
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\langhelpers.py:146: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py:4437: in _flush
+    flush_context.execute()
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:466: in execute
+    rec.execute(self)
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\unitofwork.py:642: in execute
+    util.preloaded.orm_persistence.save_obj(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:93: in save_obj
+    _emit_insert_statements(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\persistence.py:1233: in _emit_insert_statements
+    result = connection.execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1418: in execute
+    return meth(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py:515: in _execute_on_connection
+    return connection._execute_clauseelement(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1640: in _execute_clauseelement
+    ret = self._execute_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1846: in _execute_context
+    return self._exec_single_context(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1986: in _exec_single_context
+    self._handle_dbapi_exception(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:2353: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py:1967: in _exec_single_context
+    self.dialect.do_execute(
+C:\Users\MSI\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py:924: in do_execute
+    cursor.execute(statement, parameters)
+E   sqlalchemy.exc.IntegrityError: (psycopg2.errors.NotNullViolation) null value in column "id" of relation "organizations" violates not-null constraint
+E   DETAIL:  Failing row contains (null, ARIA Demo Organization, 2026-11-12 00:00:04.192415+00).
+E   
+E   [SQL: INSERT INTO organizations (name, created_at) VALUES (%(name)s, %(created_at)s)]
+E   [parameters: {'name': 'ARIA Demo Organization', 'created_at': datetime.datetime(2026, 11, 12, 0, 0, 4, 192415, tzinfo=datetime.timezone.utc)}]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj)</error></testcase><testcase classname="tests.integration.real_db.test_ssrf_guard_integration" name="test_ssrf_guard_blocks_dangerous_urls[http://localhost]" time="0.001" /><testcase classname="tests.integration.real_db.test_ssrf_guard_integration" name="test_ssrf_guard_blocks_dangerous_urls[http://127.0.0.1]" time="0.002" /><testcase classname="tests.integration.real_db.test_ssrf_guard_integration" name="test_ssrf_guard_blocks_dangerous_urls[http://169.254.169.254]" time="0.002" /><testcase classname="tests.integration.real_db.test_ssrf_guard_integration" name="test_ssrf_guard_blocks_dangerous_urls[http://10.0.0.1]" time="0.002" /><testcase classname="tests.integration.real_db.test_ssrf_guard_integration" name="test_ssrf_guard_blocks_dangerous_urls[http://192.168.1.1]" time="0.002" /><testcase classname="tests.integration.real_db.test_ssrf_guard_integration" name="test_ssrf_guard_blocks_dangerous_urls[ftp://example.com]" time="0.001" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_empty_token_returns_422" time="0.189" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_empty_base_url_returns_422" time="0.014" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_malformed_bearer_token_returns_token_malformed" time="0.065" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_200_from_target_returns_valid_true" time="0.026" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_401_from_target_returns_token_expired" time="0.027" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_403_from_target_returns_token_invalid" time="0.025" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_500_from_target_returns_unknown_error" time="0.029" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_connect_error_returns_api_unreachable" time="0.037" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_timeout_returns_api_unreachable" time="0.027" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_api_key_type_accepted" time="0.032" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_basic_auth_type_accepted" time="0.024" /><testcase classname="tests.integration.test_automation_api.TestValidateToken" name="test_ssrf_blocked_url_returns_400" time="0.022" /><testcase classname="tests.integration.test_automation_api.TestCreatePlan" name="test_returns_404_for_unknown_run" time="0.020" /><testcase classname="tests.integration.test_automation_api.TestCreatePlan" name="test_creates_plan_for_valid_run" time="0.023" /><testcase classname="tests.integration.test_automation_api.TestExecutePlan" name="test_dry_run_succeeds" time="0.058" /><testcase classname="tests.integration.test_automation_api.TestExecutePlan" name="test_real_execution_without_approval_returns_403" time="0.203" /><testcase classname="tests.integration.test_automation_api.TestExecutePlan" name="test_delete_without_allow_returns_403" time="0.027" /><testcase classname="tests.integration.test_automation_api.TestExecutePlan" name="test_missing_connection_returns_404" time="0.019" /><testcase classname="tests.integration.test_automation_api.TestExecutePlan" name="test_unassigned_connection_returns_403" time="0.027" /><testcase classname="tests.integration.test_automation_api.TestExecutePlan" name="test_operator_allow_decision_skips_approval_flow" time="0.037" /><testcase classname="tests.integration.test_automation_api.TestExecutePlan" name="test_governance_block_returns_403_before_execute_automation_is_called" time="0.033" /><testcase classname="tests.integration.test_connections_api.TestListConnections" name="test_admin_lists_connections_without_secrets" time="0.019" /><testcase classname="tests.integration.test_connections_api.TestCreateConnection" name="test_create_returns_201_without_secret_and_logs_audit" time="0.020" /><testcase classname="tests.integration.test_connections_api.TestCreateConnection" name="test_create_invalid_returns_400" time="0.015" /><testcase classname="tests.integration.test_connections_api.TestGetConnection" name="test_returns_connection_with_operator_ids" time="0.021" /><testcase classname="tests.integration.test_connections_api.TestGetConnection" name="test_returns_404_when_missing" time="0.019" /><testcase classname="tests.integration.test_connections_api.TestUpdateConnection" name="test_update_returns_200" time="0.024" /><testcase classname="tests.integration.test_connections_api.TestUpdateConnection" name="test_update_missing_returns_404" time="0.018" /><testcase classname="tests.integration.test_connections_api.TestUpdateConnection" name="test_update_invalid_returns_400" time="0.020" /><testcase classname="tests.integration.test_connections_api.TestRotateSecret" name="test_rotate_returns_200_without_secret" time="0.023" /><testcase classname="tests.integration.test_connections_api.TestRotateSecret" name="test_rotate_missing_returns_404" time="0.019" /><testcase classname="tests.integration.test_connections_api.TestRevokeReactivate" name="test_revoke_returns_200" time="0.024" /><testcase classname="tests.integration.test_connections_api.TestRevokeReactivate" name="test_revoke_missing_returns_404" time="0.024" /><testcase classname="tests.integration.test_connections_api.TestRevokeReactivate" name="test_reactivate_returns_200" time="0.023" /><testcase classname="tests.integration.test_connections_api.TestConnectionTest" name="test_test_route_returns_probe_result" time="0.025" /><testcase classname="tests.integration.test_connections_api.TestConnectionTest" name="test_test_route_missing_connection_returns_404" time="0.016" /><testcase classname="tests.integration.test_connections_api.TestOperatorAssignment" name="test_assign_returns_201" time="0.028" /><testcase classname="tests.integration.test_connections_api.TestOperatorAssignment" name="test_assign_duplicate_returns_409" time="0.016" /><testcase classname="tests.integration.test_connections_api.TestOperatorAssignment" name="test_assign_unknown_user_returns_404" time="0.019" /><testcase classname="tests.integration.test_connections_api.TestOperatorAssignment" name="test_unassign_returns_204" time="0.030" /><testcase classname="tests.integration.test_connections_api.TestOperatorAssignment" name="test_unassign_missing_returns_404" time="0.016" /><testcase classname="tests.integration.test_governance_api.TestGetPolicy" name="test_returns_policy" time="0.019" /><testcase classname="tests.integration.test_governance_api.TestUpdatePolicy" name="test_valid_update_returns_200_and_logs_audit_event" time="0.045" /><testcase classname="tests.integration.test_governance_api.TestUpdatePolicy" name="test_invalid_thresholds_return_400" time="0.018" /><testcase classname="tests.integration.test_governance_api.TestUpdatePolicy" name="test_unknown_environment_returns_400" time="0.015" /><testcase classname="tests.integration.test_governance_api.TestForbiddenRules" name="test_list_rules" time="0.016" /><testcase classname="tests.integration.test_governance_api.TestForbiddenRules" name="test_create_rule_returns_201_and_logs_audit_event" time="0.019" /><testcase classname="tests.integration.test_governance_api.TestForbiddenRules" name="test_create_rule_blank_path_returns_400" time="0.016" /><testcase classname="tests.integration.test_governance_api.TestForbiddenRules" name="test_delete_rule_returns_204_and_logs_audit_event" time="0.020" /><testcase classname="tests.integration.test_governance_api.TestForbiddenRules" name="test_delete_missing_rule_returns_404" time="0.017" /><testcase classname="tests.integration.test_har_upload" name="test_rejects_non_har_file" time="0.017" /><testcase classname="tests.integration.test_har_upload" name="test_rejects_missing_filename" time="0.017" /><testcase classname="tests.integration.test_har_upload" name="test_upload_har_returns_entries" time="0.033" /><testcase classname="tests.integration.test_har_upload" name="test_upload_har_empty_pipeline" time="0.018" /><testcase classname="tests.integration.test_health" name="test_health_returns_ok" time="0.014" /><testcase classname="tests.integration.test_reports_api.TestGetAutomationReport" name="test_returns_report" time="0.019" /><testcase classname="tests.integration.test_reports_api.TestGetAutomationReport" name="test_returns_404_when_not_found" time="0.018" /><testcase classname="tests.integration.test_reports_api.TestGetAnalysisRunReport" name="test_returns_summary" time="0.021" /><testcase classname="tests.integration.test_reports_api.TestGlobalSummary" name="test_returns_summary" time="0.015" /><testcase classname="tests.integration.test_reports_api.TestGlobalSummary" name="test_empty_db_returns_zeros" time="0.031" /></testsuite></testsuites>

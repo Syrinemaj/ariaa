@@ -50,6 +50,7 @@ from app.db.redis_client import get_redis
 from app.db.session import get_db
 from app.models.audit_log import AuditLog
 from app.models.user import User, UserRole
+from app.notifications.service import create_access_requested_notification_async
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -316,12 +317,17 @@ async def request_access(
     """
     Crée un compte en attente d'approbation (is_active=False).
     Un admin doit approuver via PATCH /users/{id}/activate.
-    Retourne toujours 204 pour éviter l'énumération d'emails.
+
+    Révèle volontairement si l'email est déjà utilisé (409) — choix produit
+    explicite, au prix de l'anti-énumération que ce endpoint appliquait
+    auparavant (204 silencieux dans tous les cas).
     """
-    # Vérifier si l'email existe déjà (silencieux pour anti-énumération)
     existing = await get_user_by_email(db, payload.email)
     if existing:
-        return  # Silencieux — ne pas révéler si l'email existe
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
 
     org = await get_or_create_default_org(db)
 
@@ -338,6 +344,12 @@ async def request_access(
         await db.flush()
     except IntegrityError:
         await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
+
+    await create_access_requested_notification_async(db, requester=user)
 
 
 async def _log_failed_login(db: AsyncSession, user: User | None) -> None:

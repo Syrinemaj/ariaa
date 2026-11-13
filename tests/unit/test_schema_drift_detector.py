@@ -45,10 +45,12 @@ def _make_step(key: str) -> PlanStep:
 
 
 def _make_endpoint(key: str, metadata: dict) -> Endpoint:
-    ep = Endpoint.__new__(Endpoint)
-    ep.canonical_key = key
-    ep.metadata_json = metadata
-    return ep
+    # Use the normal declarative constructor rather than __new__() — bypassing
+    # __init__ skips SQLAlchemy's instance-state setup, so attribute
+    # assignment fails with "NoneType has no attribute 'set'"
+    # (unconfigured mapper) or "no attribute '_sa_instance_state'"
+    # (configured mapper, but no instrumented instance state).
+    return Endpoint(canonical_key=key, metadata_json=metadata)
 
 
 # ── Happy paths ───────────────────────────────────────────────────────────────

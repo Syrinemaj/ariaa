@@ -3,11 +3,39 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import { MethodBadge, SeverityBadge } from '../components/aria/Badges'
 import { Method, Risk } from '../lib/aria-data'
-import { getRunEndpoints, RunEndpoint } from '../lib/analysisApi'
+import { getRunEndpoints, RunEndpoint, JsonSchemaNode } from '../lib/analysisApi'
 import { listRuns, AnalysisRun } from '../lib/registryApi'
 import { useRun } from '../contexts/RunContext'
 import { useToast } from '../contexts/ToastContext'
 import { Search, Download, FileCode2, Lock, Unlock, ChevronRight, Sparkles, Layers, Network } from 'lucide-react'
+
+// canonical_key is stored as "{org_id}:{METHOD} /path[#discriminator]" — the
+// org_id is identical on every row of a run, so showing it in the table
+// just pushes the column (and the whole table) wider for zero information.
+// Full value stays available via the row's title attribute and its
+// expanded detail panel below.
+const shortCanonicalKey = (key: string) => key.replace(/^[0-9a-f-]{36}:/i, '')
+
+// Flattens a JSON-schema "properties" object into a display list — e.g.
+// {name, email} or, one level deep, {infos.status, infos.message} — instead
+// of showing the raw nested schema. Caps at 2 levels so a deeply nested
+// response doesn't produce an unreadable wall of dotted keys.
+interface FlatField { key: string; type: string; required: boolean }
+
+function flattenSchema(node: JsonSchemaNode | null | undefined, prefix = '', depth = 0): FlatField[] {
+  if (!node?.properties || depth > 2) return []
+  const requiredSet = new Set(node.required ?? [])
+  const out: FlatField[] = []
+  for (const [key, child] of Object.entries(node.properties)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key
+    if (child.type === 'object' && child.properties) {
+      out.push(...flattenSchema(child, fullKey, depth + 1))
+    } else {
+      out.push({ key: fullKey, type: child.type ?? 'any', required: requiredSet.has(key) })
+    }
+  }
+  return out
+}
 
 export default function EndpointsPage() {
   const nav = useNavigate()
@@ -120,7 +148,7 @@ export default function EndpointsPage() {
             )}
             <div className="relative flex-1 min-w-[240px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ink-2" />
-              <input value={q} onChange={e => setQ(e.target.value)} className="input !pl-9" placeholder="Search path, canonical key, tag…" />
+              <input value={q} onChange={e => setQ(e.target.value)} className="input !pl-9" placeholder="Search path, canonical key, tag…" autoComplete="off" />
             </div>
             {[
               { label: 'Method', value: method, options: ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'], set: setMethod },
@@ -145,10 +173,22 @@ export default function EndpointsPage() {
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
+              <colgroup>
+                <col className="w-8" />
+                <col className="w-20" />
+                <col className="w-[20%]" />
+                <col className="w-[16%]" />
+                <col className="w-[11%]" />
+                <col className="w-[13%]" />
+                <col className="w-14" />
+                <col className="w-16" />
+                <col className="w-20" />
+                <col className="w-10" />
+              </colgroup>
               <thead className="aria-thead">
                 <tr>
-                  <th className="px-4 py-2.5 w-8" />
+                  <th className="px-4 py-2.5" />
                   {['Method', 'Path', 'Canonical key', 'Domain', 'Action', 'Auth', 'Risk', 'Statuses', 'AI'].map(h => (
                     <th key={h} className="text-left px-2 py-2.5">{h}</th>
                   ))}
@@ -177,10 +217,10 @@ export default function EndpointsPage() {
                       onClick={() => setOpenRow(isOpen ? null : i)}>
                       <td className="px-4 py-3"><ChevronRight className={`w-4 h-4 ink-2 transition-transform ${isOpen ? 'rotate-90' : ''}`} /></td>
                       <td className="px-2 py-3"><MethodBadge m={e.method as Method} /></td>
-                      <td className="px-2 py-3 font-mono text-xs" style={{ color: 'var(--ink)' }}>{e.path}</td>
-                      <td className="px-2 py-3 font-mono text-xs ink-2">{e.canonical_key}</td>
-                      <td className="px-2 py-3"><span className="pill" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', borderColor: 'var(--line)', color: 'var(--ink-2)' }}>{domain}</span></td>
-                      <td className="px-2 py-3 text-xs ink-2">{action}</td>
+                      <td className="px-2 py-3 font-mono text-xs truncate" style={{ color: 'var(--ink)' }} title={e.path}>{e.path}</td>
+                      <td className="px-2 py-3 font-mono text-xs ink-2 truncate" title={e.canonical_key}>{shortCanonicalKey(e.canonical_key)}</td>
+                      <td className="px-2 py-3 truncate"><span className="pill" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', borderColor: 'var(--line)', color: 'var(--ink-2)' }} title={domain}>{domain}</span></td>
+                      <td className="px-2 py-3 text-xs ink-2 truncate" title={action}>{action}</td>
                       <td className="px-2 py-3 text-center">
                         {e.auth_required ? <Lock className="w-3.5 h-3.5 inline text-amber-500" /> : <Unlock className="w-3.5 h-3.5 inline text-emerald-500" />}
                       </td>
@@ -207,7 +247,7 @@ export default function EndpointsPage() {
                                   )}
                                 </>
                               ) : (
-                                <p className="text-xs ink-2 italic">Not enriched — rerun ingestion to get the Groq analysis.</p>
+                                <p className="text-xs ink-2 italic">Not enriched — rerun ingestion to get the AI analysis.</p>
                               )}
                               <div className="flex flex-wrap gap-1 mt-2">
                                 {tags.map(t => (
@@ -215,47 +255,49 @@ export default function EndpointsPage() {
                                 ))}
                               </div>
                             </div>
-                            {/* Details */}
+                            {/* Request parameters */}
                             <div>
-                              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Details</p>
-                              <div className="space-y-1.5">
-                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
-                                  <span className="ink-2">canonical</span>
-                                  <span className="font-mono text-right" style={{ color: 'var(--ink)' }}>{e.canonical_key}</span>
-                                </div>
-                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
-                                  <span className="ink-2 flex items-center gap-1">
-                                    confidence
-                                    {e.ai_confidence != null && <Sparkles className="w-3 h-3 text-violet-400" />}
-                                  </span>
-                                  {(() => {
-                                    const confidence = e.ai_confidence ?? e.confidence
-                                    const pct = Math.round(confidence * 100)
-                                    const color = confidence >= 0.9 ? 'text-emerald-600' : confidence >= 0.7 ? 'text-amber-600' : 'text-rose-600'
-                                    return <span className={`font-mono font-bold ${color}`}>{pct}%</span>
-                                  })()}
-                                </div>
-                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
-                                  <span className="ink-2">statuses</span>
-                                  <span className="font-mono" style={{ color: 'var(--ink)' }}>{(e.status_codes ?? []).join(', ') || '—'}</span>
-                                </div>
-                              </div>
+                              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Request parameters</p>
+                              {(() => {
+                                const fields = flattenSchema(e.request_schema)
+                                if (fields.length === 0) {
+                                  return <p className="text-xs ink-2 italic">No request body for this method.</p>
+                                }
+                                return (
+                                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                    {fields.map(f => (
+                                      <div key={f.key} className="flex justify-between gap-2 p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
+                                        <span className="font-mono truncate" style={{ color: 'var(--ink)' }}>
+                                          {f.key}{f.required && <span className="text-rose-500">*</span>}
+                                        </span>
+                                        <span className="ink-2 shrink-0">{f.type}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              })()}
                             </div>
-                            {/* Auth & Risk */}
+                            {/* Response fields */}
                             <div>
-                              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Auth &amp; Risk</p>
-                              <div className="space-y-1.5">
-                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
-                                  <span className="ink-2">auth required</span>
-                                  {e.auth_required ? <Lock className="w-3.5 h-3.5 text-amber-500" /> : <Unlock className="w-3.5 h-3.5 text-emerald-500" />}
-                                </div>
-                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
-                                  <span className="ink-2">risk</span><SeverityBadge s={(e.risk || 'low') as Risk} />
-                                </div>
-                                <div className="flex justify-between p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
-                                  <span className="ink-2">auth type</span><span className="font-mono" style={{ color: 'var(--ink)' }}>{e.auth_type ?? '—'}</span>
-                                </div>
-                              </div>
+                              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Response fields</p>
+                              {(() => {
+                                const fields = flattenSchema(e.response_schema)
+                                if (fields.length === 0) {
+                                  return <p className="text-xs ink-2 italic">No response schema inferred.</p>
+                                }
+                                return (
+                                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                    {fields.map(f => (
+                                      <div key={f.key} className="flex justify-between gap-2 p-2 rounded-xl text-xs" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', border: '1px solid var(--line)' }}>
+                                        <span className="font-mono truncate" style={{ color: 'var(--ink)' }}>
+                                          {f.key}{f.required && <span className="text-rose-500">*</span>}
+                                        </span>
+                                        <span className="ink-2 shrink-0">{f.type}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              })()}
                             </div>
                           </div>
                         </td>

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   Sun, Moon, Bell, Home, Upload, Package, Network,
   FileCode2, Sparkles, Wand2, Layers, Inbox, BarChart2,
-  Users, ChevronRight,
+  Users, ChevronRight, UserPlus, CheckCircle2, TriangleAlert,
+  XCircle, Trash2, BellOff, ScrollText, Shield, Plug,
 } from 'lucide-react'
 import {
   AriaNotification,
@@ -13,21 +14,44 @@ import {
   getUnreadNotificationCount,
   markAllNotificationsRead,
   markNotificationRead,
+  deleteNotification,
 } from '../../lib/notificationsApi'
 
-const NOTIFICATIONS_POLL_MS = 15000
+const NOTIFICATIONS_POLL_MS = 5000
 
-// BULK_EXECUTION_STARTED / APPROVAL_REQUIRED are team-wide notices (shown
-// with the operator/admin's name); the other three are personal completion
-// notices sent only to whoever launched the run.
-const TEAM_NOTICE_ACTIONS = new Set(['BULK_EXECUTION_STARTED', 'APPROVAL_REQUIRED'])
+// BULK_EXECUTION_STARTED / APPROVAL_REQUIRED / ACCESS_REQUESTED are team-wide
+// notices (shown with the operator/admin's name); the other three are
+// personal completion notices sent only to whoever launched the run.
+const TEAM_NOTICE_ACTIONS = new Set(['BULK_EXECUTION_STARTED', 'APPROVAL_REQUIRED', 'ACCESS_REQUESTED'])
 
-const NOTIFICATION_COPY: Record<string, { verb: string; dotColor: string }> = {
-  BULK_EXECUTION_STARTED:   { verb: 'launched a bulk run',            dotColor: 'var(--brand)' },
-  APPROVAL_REQUIRED:        { verb: 'needs approval to run',          dotColor: '#f59e0b' },
-  BULK_EXECUTION_COMPLETED: { verb: 'Your bulk run finished successfully', dotColor: '#22c55e' },
-  BULK_EXECUTION_PARTIAL:   { verb: 'Your bulk run finished with some errors', dotColor: '#f59e0b' },
-  BULK_EXECUTION_FAILED:    { verb: 'Your bulk run failed',           dotColor: '#ef4444' },
+const NOTIFICATION_COPY: Record<string, { verb: string; color: string; icon: React.ElementType }> = {
+  BULK_EXECUTION_STARTED:   { verb: 'launched a bulk run',                    color: 'var(--brand)', icon: Layers },
+  APPROVAL_REQUIRED:        { verb: 'needs approval to run',                  color: '#f59e0b',      icon: Inbox },
+  ACCESS_REQUESTED:         { verb: 'requested access',                       color: '#6366f1',      icon: UserPlus },
+  BULK_EXECUTION_COMPLETED: { verb: 'Your bulk run finished successfully',    color: '#22c55e',      icon: CheckCircle2 },
+  BULK_EXECUTION_PARTIAL:   { verb: 'Your bulk run finished with some errors', color: '#f59e0b',      icon: TriangleAlert },
+  BULK_EXECUTION_FAILED:    { verb: 'Your bulk run failed',                   color: '#ef4444',      icon: XCircle },
+  EXECUTION_APPROVED:       { verb: 'Your execution request was approved',    color: '#22c55e',      icon: CheckCircle2 },
+  EXECUTION_REJECTED:       { verb: 'Your execution request was rejected',    color: '#ef4444',      icon: XCircle },
+  BULK_EXECUTION_CANCELLED: { verb: 'Your bulk run was cancelled',            color: 'var(--ink-2)', icon: XCircle },
+}
+
+// Where clicking a notification takes you — matches what it's actually about.
+function notificationRoute(n: AriaNotification): string {
+  switch (n.action) {
+    case 'ACCESS_REQUESTED':    return '/users'
+    case 'APPROVAL_REQUIRED':   return '/approvals'
+    case 'BULK_EXECUTION_STARTED': return '/bulk'
+    case 'BULK_EXECUTION_COMPLETED':
+    case 'BULK_EXECUTION_PARTIAL':
+    case 'BULK_EXECUTION_FAILED':
+    case 'BULK_EXECUTION_CANCELLED':
+    case 'EXECUTION_APPROVED':
+    case 'EXECUTION_REJECTED':
+      return n.resource_id ? `/reports?tab=automation&run=${n.resource_id}` : '/reports'
+    default:
+      return '/dashboard'
+  }
 }
 
 function formatRelativeTime(iso: string): string {
@@ -52,10 +76,14 @@ const PAGES: Record<string, { label: string; icon: React.ElementType; section: s
   '/approvals':  { label:'Approvals',       icon:Inbox,     section:'Execution' },
   '/reports':    { label:'Reports',         icon:BarChart2, section:'Analytics' },
   '/users':      { label:'Users',           icon:Users,     section:'Admin' },
+  '/audit-log':  { label:'Audit log',       icon:ScrollText, section:'Admin' },
+  '/governance': { label:'Governance',      icon:Shield,    section:'Admin' },
+  '/connections':{ label:'Connections',     icon:Plug,      section:'Admin' },
 }
 
 export default function Topbar() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
   const { user } = useAuth()
   const isDark = theme === 'dark'
@@ -88,15 +116,25 @@ export default function Topbar() {
   useEffect(() => {
     if (!canSeeNotifications) return
     let cancelled = false
+    let lastCount = -1
     const pollUnread = () => {
       getUnreadNotificationCount()
-        .then(({ count }) => { if (!cancelled) setUnreadCount(count) })
+        .then(({ count }) => {
+          if (cancelled) return
+          setUnreadCount(count)
+          // A new notification arrived while the dropdown is already open —
+          // refresh its contents too, not just the badge count.
+          if (notifPanelOpen && lastCount !== -1 && count > lastCount) {
+            getNotifications().then(setNotifications).catch(() => {})
+          }
+          lastCount = count
+        })
         .catch(() => {})
     }
     pollUnread()
     const id = setInterval(pollUnread, NOTIFICATIONS_POLL_MS)
     return () => { cancelled = true; clearInterval(id) }
-  }, [canSeeNotifications])
+  }, [canSeeNotifications, notifPanelOpen])
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -117,16 +155,29 @@ export default function Topbar() {
   }
 
   const handleNotificationClick = (n: AriaNotification) => {
-    if (n.is_read) return
-    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x))
-    setUnreadCount(prev => Math.max(0, prev - 1))
-    markNotificationRead(n.id).catch(() => {})
+    if (!n.is_read) {
+      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x))
+      setUnreadCount(prev => Math.max(0, prev - 1))
+      markNotificationRead(n.id).catch(() => {})
+    }
+    setNotifPanelOpen(false)
+    navigate(notificationRoute(n))
   }
 
   const handleMarkAllRead = () => {
     setNotifications(prev => prev.map(x => ({ ...x, is_read: true })))
     setUnreadCount(0)
     markAllNotificationsRead().catch(() => {})
+  }
+
+  const handleDeleteNotification = (e: React.MouseEvent, n: AriaNotification) => {
+    e.stopPropagation()
+    setNotifications(prev => prev.filter(x => x.id !== n.id))
+    if (!n.is_read) setUnreadCount(prev => Math.max(0, prev - 1))
+    deleteNotification(n.id).catch(() => {
+      // Out of sync with the server — refetch rather than leave a ghost entry.
+      getNotifications().then(setNotifications).catch(() => {})
+    })
   }
 
   return (
@@ -191,20 +242,20 @@ export default function Topbar() {
 
             {notifPanelOpen && (
               <div
-                className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl shadow-lg z-20"
+                className="absolute right-0 mt-2 w-96 max-h-[26rem] overflow-y-auto rounded-2xl shadow-lg z-20"
                 style={{ ...cardBg, border: '1px solid var(--line)' }}
               >
                 <div
-                  className="flex items-center justify-between px-3 py-2"
-                  style={{ borderBottom: '1px solid var(--line)' }}
+                  className="flex items-center justify-between px-4 py-3 sticky top-0 z-10"
+                  style={{ borderBottom: '1px solid var(--line)', ...cardBg }}
                 >
-                  <span className="text-xs font-semibold" style={{ color: 'var(--ink)' }}>
+                  <span className="text-sm font-bold" style={{ color: 'var(--ink)' }}>
                     Notifications
                   </span>
                   {unreadCount > 0 && (
                     <button
                       onClick={handleMarkAllRead}
-                      className="text-[10px] font-medium hover:underline"
+                      className="text-[11px] font-semibold hover:underline"
                       style={{ color: 'var(--brand)' }}
                     >
                       Mark all as read
@@ -213,40 +264,58 @@ export default function Topbar() {
                 </div>
 
                 {notifications.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-xs" style={{ color: 'var(--ink-2)' }}>
-                    No notifications
-                  </p>
+                  <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+                    <BellOff className="w-5 h-5" style={{ color: 'var(--ink-2)' }} />
+                    <p className="text-xs" style={{ color: 'var(--ink-2)' }}>No notifications</p>
+                  </div>
                 ) : (
                   notifications.map(n => {
                     const copy = NOTIFICATION_COPY[n.action] ?? NOTIFICATION_COPY.BULK_EXECUTION_STARTED
                     const isTeamNotice = TEAM_NOTICE_ACTIONS.has(n.action)
+                    const Icon = copy.icon
                     return (
-                      <button
+                      <div
                         key={n.id}
-                        onClick={() => handleNotificationClick(n)}
-                        className="w-full text-left px-3 py-2.5 transition hover:opacity-80"
+                        className="group relative flex items-stretch transition"
                         style={{
                           borderBottom: '1px solid var(--line)',
-                          background: n.is_read ? 'transparent' : 'color-mix(in oklch, var(--brand) 8%, transparent)',
+                          background: n.is_read ? 'transparent' : 'color-mix(in oklch, var(--brand) 7%, transparent)',
                         }}
                       >
-                        <p className="text-xs flex items-start gap-1.5" style={{ color: 'var(--ink)' }}>
+                        <button
+                          onClick={() => handleNotificationClick(n)}
+                          className="flex items-start gap-3 flex-1 min-w-0 text-left px-4 py-3 transition hover:opacity-80"
+                        >
                           <span
-                            className="mt-1 w-1.5 h-1.5 rounded-full shrink-0"
-                            style={{ background: copy.dotColor }}
-                          />
-                          <span>
-                            {isTeamNotice && <span className="font-semibold">{n.operator_name}</span>}{' '}
-                            {copy.verb}
-                            {n.har_file_name && (
-                              <> {isTeamNotice ? 'on' : '—'} <span className="font-semibold">{n.har_file_name}</span></>
-                            )}
+                            className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                            style={{ background: `color-mix(in oklch, ${copy.color} 16%, var(--card))`, color: copy.color }}
+                          >
+                            <Icon className="w-4 h-4" />
                           </span>
-                        </p>
-                        <p className="text-[10px] mt-0.5 pl-3" style={{ color: 'var(--ink-2)' }}>
-                          {formatRelativeTime(n.created_at)}
-                        </p>
-                      </button>
+                          <span className="min-w-0 flex-1 pr-5">
+                            <p className="text-xs leading-snug" style={{ color: 'var(--ink)' }}>
+                              {isTeamNotice && <span className="font-semibold">{n.operator_name} </span>}
+                              {copy.verb}
+                              {n.har_file_name && (
+                                <> {isTeamNotice ? 'on' : '—'} <span className="font-semibold">{n.har_file_name}</span></>
+                              )}
+                            </p>
+                            <p className="text-[10px] mt-1" style={{ color: 'var(--ink-2)' }}>
+                              {formatRelativeTime(n.created_at)}
+                            </p>
+                          </span>
+                        </button>
+                        <button
+                          onClick={e => handleDeleteNotification(e, n)}
+                          title="Delete notification"
+                          className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition"
+                          style={{ color: 'var(--ink-2)' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'color-mix(in oklch, var(--ink) 8%, transparent)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )
                   })
                 )}
@@ -270,7 +339,9 @@ export default function Topbar() {
             <p className="text-xs font-semibold leading-none" style={{ color: 'var(--ink)' }}>
               {user?.name ?? 'User'}
             </p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--ink-2)' }}>Admin</p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--ink-2)' }}>
+              {user?.role?.toUpperCase() === 'ADMIN' ? 'Admin' : user?.role?.toUpperCase() === 'OPERATOR' ? 'Operator' : user?.role ?? ''}
+            </p>
           </div>
         </div>
       </div>

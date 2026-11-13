@@ -4,6 +4,8 @@ export interface AriaNotification {
   id: string
   operator_name: string
   action: string
+  resource_type: string | null
+  resource_id: string | null
   har_file_name: string | null
   is_read: boolean
   created_at: string
@@ -25,4 +27,8 @@ export function markNotificationRead(id: string): Promise<{ success: boolean }> 
 
 export function markAllNotificationsRead(): Promise<{ marked: number }> {
   return api.post('/notifications/read-all')
+}
+
+export function deleteNotification(id: string): Promise<void> {
+  return api.del(`/notifications/${id}`)
 }

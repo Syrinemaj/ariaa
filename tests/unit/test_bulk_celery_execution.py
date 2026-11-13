@@ -81,7 +81,7 @@ class TestExecuteValidRowsEnqueue:
             run_id="run-1",
             instruction="test",
             intent=BusinessIntent(
-                intent="test", action="list", entities=[],
+                instruction="test", intent="test", action="list", entities=[],
                 requires_bulk_execution=False
             ),
             workflow_name="test_workflow",
@@ -119,8 +119,7 @@ class TestExecuteValidRowsEnqueue:
                 db=db,
                 plan=plan,
                 data_file_id="file-1",
-                base_url="https://api.example.com",
-                auth_headers={},
+                connection_id="conn-1",
                 dry_run=True,
             )
 
@@ -129,3 +128,7 @@ class TestExecuteValidRowsEnqueue:
         assert result["status"] == "queued"
         # Task was enqueued, not awaited synchronously
         mock_task.apply_async.assert_called()
+        # connection_id — not a raw secret — flows into the Celery task args
+        assert mock_task.apply_async.call_args.kwargs["kwargs"]["connection_id"] == "conn-1"
+        assert "auth_headers" not in mock_task.apply_async.call_args.kwargs["kwargs"]
+        assert "base_url" not in mock_task.apply_async.call_args.kwargs["kwargs"]

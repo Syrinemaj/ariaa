@@ -6,7 +6,8 @@ Content-addressed cache:
   is reused without calling the embedding model (cost and latency saving).
   Cache key: sha256(embedding_text).
 
-Embedding provider: LocalEmbeddingClient (BAAI/bge-small-en, 384 dims).
+Embedding provider: settings.EMBEDDING_PROVIDER — see
+app/ai/base_client.py::create_embedding_client().
 """
 from __future__ import annotations
 
@@ -17,8 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.ai.base_client import EmbeddingClientProtocol
 from app.rag.embeddings.builder import build_endpoint_embedding_text
-from app.rag.embeddings.client import LocalEmbeddingClient
 from app.models.embedding import EndpointEmbedding
 from app.models.endpoint import Endpoint
 
@@ -30,7 +31,7 @@ def _content_hash(text: str) -> str:
 async def index_endpoint_embedding(
     db: AsyncSession,
     endpoint: Endpoint,
-    client: LocalEmbeddingClient,
+    client: EmbeddingClientProtocol,
 ) -> EndpointEmbedding:
     """
     Generate or update the embedding for a single endpoint.
@@ -73,7 +74,7 @@ async def index_endpoint_embedding(
 async def index_embeddings_for_run(
     db: AsyncSession,
     run_id: str,
-    client: LocalEmbeddingClient,
+    client: EmbeddingClientProtocol,
 ) -> List[EndpointEmbedding]:
     # selectinload ensures endpoint.schema is loaded before the loop starts,
     # avoiding lazy-load in an async context (MissingGreenlet error).

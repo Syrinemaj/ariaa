@@ -1,0 +1,101 @@
+[
+  {
+    "case_id": "dc_001",
+    "difficulty": "easy",
+    "raw_domains": ["hr", "HR Analytics", "human_resources", "Human Resources", "hr_system"],
+    "expected_groups": [
+      {"keywords_any_of": ["human_resources", "hr"]}
+    ],
+    "notes": "cas de référence du docstring du module — 5 variantes du même domaine RH doivent fusionner en un seul label canonique"
+  },
+  {
+    "case_id": "dc_002",
+    "difficulty": "medium",
+    "raw_domains": ["contracts", "Contract Management", "contract_mgmt", "Contracts"],
+    "expected_groups": [
+      {"keywords_any_of": ["contract"]}
+    ],
+    "notes": "casing + abréviation ('mgmt') du même domaine"
+  },
+  {
+    "case_id": "dc_003",
+    "difficulty": "medium",
+    "raw_domains": ["orders", "Orders", "products", "Products", "Product Catalog"],
+    "expected_groups": [
+      {"keywords_any_of": ["order"]},
+      {"keywords_any_of": ["product", "catalog"]}
+    ],
+    "notes": "deux domaines réellement distincts (commandes / produits), chacun avec ses propres doublons de casing à fusionner séparément — ne doit PAS tout regrouper en un seul label"
+  },
+  {
+    "case_id": "dc_004",
+    "difficulty": "hard",
+    "raw_domains": ["localization", "monitoring", "Localization Service", "Monitoring Service"],
+    "expected_groups": [
+      {"keywords_any_of": ["localization"]},
+      {"keywords_any_of": ["monitoring"]}
+    ],
+    "notes": "PIÈGE — exemple donné littéralement par le prompt système lui-même comme contre-exemple de fusion abusive : deux domaines courts/techniques mais réellement distincts, ne doivent pas être fusionnés juste parce qu'ils se ressemblent structurellement"
+  },
+  {
+    "case_id": "dc_005",
+    "difficulty": "easy",
+    "raw_domains": ["auth", "Authentication", "auth_service", "Auth"],
+    "expected_groups": [
+      {"keywords_any_of": ["auth", "authentication"]}
+    ],
+    "notes": "casing + abréviation + qualificatif ('service') du même domaine"
+  },
+  {
+    "case_id": "dc_006",
+    "difficulty": "easy",
+    "raw_domains": ["notifications", "Notification Service", "notif", "Notifications"],
+    "expected_groups": [
+      {"keywords_any_of": ["notif"]}
+    ],
+    "notes": "abréviation courte ('notif') à reconnaître comme le même domaine que la forme complète"
+  },
+  {
+    "case_id": "dc_007",
+    "difficulty": "hard",
+    "raw_domains": [
+      "hr", "Human Resources", "products", "Product Catalog",
+      "orders", "Orders Management", "auth", "Authentication"
+    ],
+    "expected_groups": [
+      {"keywords_any_of": ["human_resources", "hr"]},
+      {"keywords_any_of": ["product", "catalog"]},
+      {"keywords_any_of": ["order"]},
+      {"keywords_any_of": ["auth", "authentication"]}
+    ],
+    "notes": "test de charge — 4 domaines réellement distincts mélangés simultanément, chacun avec son propre doublon ; ne doit ni sous-fusionner (garder 8 labels) ni sur-fusionner (tout regrouper en 1 ou 2 labels génériques)"
+  },
+  {
+    "case_id": "dc_008",
+    "difficulty": "hard",
+    "raw_domains": ["misc", "other", "unknown"],
+    "expected_groups": [
+      {"keywords_any_of": ["misc", "other", "unknown", "uncategorized", "generic"]}
+    ],
+    "notes": "PIÈGE — trois labels fourre-tout distincts en apparence mais sémantiquement synonymes (aucune catégorie identifiée), doivent fusionner en un seul label générique plutôt que rester 3 entrées séparées"
+  },
+  {
+    "case_id": "dc_009",
+    "difficulty": "easy",
+    "raw_domains": ["employees"],
+    "expected_groups": [
+      {"keywords_any_of": ["employee"]}
+    ],
+    "notes": "PIÈGE anti-sur-traitement — un seul domaine déjà propre, sans doublon à fusionner ; ne doit pas être scindé ou modifié arbitrairement"
+  },
+  {
+    "case_id": "dc_010",
+    "difficulty": "medium",
+    "raw_domains": ["departments", "Departments", "department_management", "projects", "Project Management", "Projects"],
+    "expected_groups": [
+      {"keywords_any_of": ["department"]},
+      {"keywords_any_of": ["project"]}
+    ],
+    "notes": "deux domaines d'entreprise distincts (départements / projets), chacun avec ses propres doublons de casing et de qualificatif ('management') — ne doit pas les fusionner sous prétexte qu'ils sont tous deux 'organisationnels'"
+  }
+]

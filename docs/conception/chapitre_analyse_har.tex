@@ -1,0 +1,183 @@
+% ============================================================================
+% Conception du module d'analyse HAR — ARIA
+% Fichier indépendant, destiné à être inséré (\input{} ou copier-coller)
+% dans le chapitre de conception du rapport. Rédigé au niveau conception :
+% aucun nom de fichier, de classe ou de fonction, aucune valeur de seuil ou
+% de paramètre d'implémentation n'y figure volontairement — ces éléments
+% relèvent du chapitre de Réalisation.
+%
+% Macros supposées déjà définies dans le préambule du rapport (cohérence
+% avec le reste du document) : environnement tabularx avec colonnes L{}/Y,
+% \rowcolor{accentlight} pour l'en-tête des tableaux, \reportimage{} pour
+% l'insertion d'images.
+% ============================================================================
+
+\section{Conception du module d'analyse HAR}
+\label{sec:conception-har}
+
+Toute automatisation produite par ARIA repose, en amont, sur la capacité à transformer une capture brute de trafic HTTP en un catalogue d'API exploitable. C'est le rôle du module d'analyse HAR, premier maillon du pipeline décrit dans ce chapitre : il reçoit en entrée un fichier au format HAR, issu d'une session de navigation, et produit en sortie un ensemble restreint d'endpoints génériques, normalisés et documentés, qui constitueront ensuite le matériau sur lequel s'appuient la recherche sémantique et la génération de plans présentées en section~\ref{sec:conception-ia}.
+
+Cette section présente la conception de ce module : les difficultés qu'il doit résoudre, l'articulation de ses composantes, et les choix qui gouvernent la combinaison de règles déterministes et de recours ciblé à l'intelligence artificielle en son sein. Comme pour les autres sections de ce chapitre, les détails d'implémentation — expressions précises, seuils numériques, structures de données internes — sont réservés au chapitre de Réalisation.
+
+\subsection{Présentation et objectifs du module}
+
+\subsubsection{Rôle du module dans ARIA}
+
+Une capture HAR issue d'une session de navigation réelle contient, à l'état brut, un mélange indifférencié d'appels à valeur métier et de bruit technique : ressources statiques, appels de télémétrie, requêtes annulées, ou encore appels d'infrastructure sans rapport avec la logique métier de l'application observée. Le module d'analyse HAR a pour responsabilité de séparer ces deux catégories, puis de ramener la multitude d'appels individuels ainsi retenus — potentiellement plusieurs centaines dans une capture réelle — à un nombre restreint d'endpoints génériques, en reconnaissant que des appels distincts ne différant que par la valeur d'un identifiant (un numéro d'employé, une référence de commande) représentent en réalité un seul et même endpoint paramétré.
+
+\subsubsection{Difficultés adressées}
+
+La conception du module répond à quatre difficultés qui se posent conjointement :
+
+\begin{itemize}
+    \item \textbf{La distinction entre bruit technique et appel à valeur métier.} Un appel de télémétrie ou un appel vers une ressource statique peut, sur le plan strictement syntaxique, ressembler à un appel métier légitime (même méthode HTTP, même type de contenu structuré). Cette distinction ne peut reposer sur la seule forme de la requête : elle doit tenir compte de ce que l'appel accomplit réellement.
+    \item \textbf{La variabilité des formats d'identifiants.} Les segments variables d'une URL (identifiants d'employé, de commande, de paiement) prennent des formes extrêmement diverses selon les applications et les conventions des équipes qui les ont conçues — numériques, alphanumériques, préfixées, ou propres à un fournisseur donné — sans qu'aucune liste de formats ne puisse prétendre à l'exhaustivité.
+    \item \textbf{Le passage à l'échelle d'une capture réelle.} Une session de navigation ordinaire peut générer plusieurs centaines d'appels HTTP. Traiter chacun individuellement, sans réduction préalable, produirait un catalogue surdimensionné, redondant et inexploitable par les étapes ultérieures du pipeline.
+    \item \textbf{L'absence de connaissance préalable de l'application analysée.} ARIA étant destiné à être appliqué à des systèmes d'information variés, le module ne peut s'appuyer sur aucune convention de nommage, aucun vocabulaire métier ni aucune structure d'URL propres à une application particulière : ses mécanismes doivent être génériques par construction.
+\end{itemize}
+
+\subsubsection{Objectifs fonctionnels et contraintes de conception}
+
+Le module doit satisfaire trois objectifs fonctionnels : écarter le bruit technique de la capture sans perdre d'appel à valeur métier réelle ; normaliser les appels retenus en reconnaissant leurs segments variables, pour les ramener à un nombre restreint d'endpoints génériques ; et constituer, à partir de ces endpoints, un catalogue structuré et documenté, exploitable par les étapes situées en aval.
+
+Cette conception obéit à deux contraintes structurantes. D'une part, la décision d'écarter ou de retenir un appel ne doit jamais reposer uniquement sur sa forme structurelle — méthode HTTP, présence d'un contenu structuré, statut de succès — car cette seule forme ne suffit pas à distinguer un appel métier d'un appel technique qui lui ressemblerait superficiellement ; un signal portant sur le contenu réel de l'appel doit toujours pouvoir peser dans la décision. D'autre part, le recours à l'intelligence artificielle, nécessaire pour traiter les cas que des règles fixes ne peuvent trancher avec une confiance suffisante, doit rester circonscrit à ces seuls cas : l'appliquer systématiquement à l'ensemble d'une capture, potentiellement volumineuse, introduirait un coût et une latence disproportionnés au regard du nombre de cas réellement ambigus.
+
+\subsection{Architecture conceptuelle du module}
+
+\subsubsection{Vue d'ensemble}
+
+Le module d'analyse HAR s'organise conceptuellement en quatre étapes successives :
+
+\begin{enumerate}
+    \item une étape d'\textbf{ingestion et de parsing}, qui transforme le fichier HAR en une collection structurée d'appels HTTP individuels ;
+    \item une étape de \textbf{filtrage hybride}, qui détermine, pour chaque appel, s'il doit être retenu comme pertinent sur le plan métier, en combinant des règles déterministes et un recours ciblé à l'intelligence artificielle ;
+    \item une étape de \textbf{normalisation et d'extraction d'informations}, qui identifie les segments variables des appels retenus, en déduit un nom de paramètre, et détecte les endpoints qui multiplexent plusieurs actions métier derrière une même URL ;
+    \item une étape de \textbf{constitution du catalogue}, qui fusionne les appels de même forme et en déduit l'ensemble final des endpoints documentés.
+\end{enumerate}
+
+\subsubsection{Composantes et responsabilités}
+
+\begin{itemize}
+    \item \textbf{Ingestion et parsing} — lit le fichier HAR fourni et en extrait, pour chaque requête capturée, les éléments nécessaires à son traitement ultérieur : méthode, chemin, en-têtes, corps de requête et de réponse, statut, type de contenu. C'est la seule composante du module à manipuler directement le format de capture.
+    \item \textbf{Filtrage dur} — élimine, par des règles fixes et peu coûteuses, les catégories de bruit reconnaissables sans ambiguïté : ressources statiques, domaines connus de télémétrie ou d'analyse d'audience, méthodes sans portée métier, chemins d'infrastructure, requêtes annulées avant réception d'une réponse. Cette étape précède toute évaluation plus coûteuse, pour ne soumettre à celle-ci que les appels qui le justifient réellement.
+    \item \textbf{Score combiné} — attribue, à chaque appel ayant franchi le filtrage dur, un score tenant compte à la fois de signaux structurels (méthode HTTP, présence d'un contenu structuré, convention d'URL, statut de succès) et d'un signal de contenu, fondé sur la présence de vocabulaire métier dans le corps de la requête ou de la réponse.
+    \item \textbf{Arbitrage par intelligence artificielle} — n'intervient que sur les appels dont le score combiné se situe dans une zone intermédiaire, ni suffisamment élevé pour une décision de rétention directe, ni suffisamment bas pour un rejet direct. Cette composante tranche ces cas ambigus en évaluant le contenu réel de l'appel, là où le score seul ne permet pas de conclure avec une confiance suffisante.
+    \item \textbf{Normalisation des URL} — identifie, parmi les segments d'un chemin, ceux qui représentent une valeur variable plutôt qu'un littéral fixe, et leur attribue un nom de paramètre représentatif.
+    \item \textbf{Détection d'endpoints multiplexés} — identifie les cas où une même URL recouvre, selon un champ du corps de la requête, plusieurs actions métier structurellement distinctes.
+    \item \textbf{Déduplication et constitution du catalogue} — regroupe les appels de forme identique (même méthode, même chemin normalisé) en un unique endpoint documenté, en conservant l'exemplaire le plus informatif rencontré.
+\end{itemize}
+
+% [FIGURE À PRODUIRE]
+% Titre proposé : « Architecture conceptuelle du module d'analyse HAR »
+% Objectif : donner une vue d'ensemble des quatre étapes du module (ingestion, filtrage hybride,
+%   normalisation/extraction, constitution du catalogue) et montrer où et comment l'intelligence
+%   artificielle intervient, de façon circonscrite, au sein d'un pipeline par ailleurs déterministe.
+% Éléments à représenter : un flux linéaire « Fichier HAR » → « Ingestion et parsing » → « Filtrage
+%   dur » → « Score combiné » ; à ce point, une bifurcation conditionnelle en trois issues : score
+%   bas → « Rejeté » ; score élevé → « Conservé » ; score intermédiaire → « Arbitrage IA » → lui-même
+%   bifurquant vers « Conservé » ou « Rejeté ». Les appels conservés convergent ensuite vers
+%   « Normalisation des URL », puis « Détection d'endpoints multiplexés », puis « Déduplication »,
+%   puis « Catalogue d'endpoints ».
+% Flux à représenter : mettre en évidence, par un contraste visuel (couleur ou pointillés), que
+%   seule la bifurcation « score intermédiaire » emprunte le chemin impliquant l'intelligence
+%   artificielle, les deux autres issues du score combiné étant immédiates.
+% Légende proposée : « Architecture conceptuelle du module d'analyse HAR : un pipeline
+%   essentiellement déterministe, dans lequel l'intelligence artificielle n'intervient que pour
+%   arbitrer les appels dont le score combiné ne permet pas une décision directe. »
+% \label{fig:archi-conceptuelle-har}
+
+\subsection{Conception de l'ingestion et du parsing}
+
+\subsubsection{Le format HAR comme point d'entrée}
+
+Le format HAR constitue un standard d'export du trafic HTTP observé par un navigateur, produit sans intervention particulière de l'utilisateur au moment de la capture. Le choix de s'appuyer sur ce format comme point d'entrée du pipeline découle directement du contexte d'usage d'ARIA : il permet de reconstituer un catalogue d'API à partir d'une simple navigation dans l'application cible, sans exiger un accès à sa documentation technique ni à son code source — une hypothèse réaliste y compris lorsque cette documentation n'existe pas ou n'est plus à jour, ce qui constitue précisément la problématique à laquelle répond ARIA.
+
+\subsubsection{Extraction d'une représentation exploitable}
+
+L'étape de parsing transforme le contenu du fichier HAR, organisé selon la structure de ce format d'échange, en une collection d'appels HTTP individuels portant chacun les éléments nécessaires aux étapes suivantes : la méthode employée, le chemin appelé, les en-têtes de requête et de réponse, le corps éventuel de l'une et de l'autre, le statut retourné, et le type de contenu échangé. Cette représentation intermédiaire est ce sur quoi opèrent toutes les composantes suivantes du module ; aucune d'entre elles ne revient au fichier HAR d'origine.
+
+\subsection{Conception du filtrage hybride}
+\label{ssec:filtrage-hybride}
+
+\subsubsection{Nécessité d'une approche en plusieurs temps}
+
+Une capture réelle contient une proportion substantielle d'appels sans valeur métier. Soumettre l'ensemble de ces appels à une évaluation coûteuse — qu'il s'agisse d'un calcul complexe ou, a fortiori, d'un recours à un modèle de langage — représenterait un gaspillage de ressources pour des cas dont le rejet ou la rétention peut, dans la majorité des situations, être déterminé par des règles simples et peu coûteuses. La conception du filtrage répond à cette observation par une approche en plusieurs temps, où chaque étape n'est sollicitée que pour les cas que l'étape précédente n'a pas su trancher.
+
+\subsubsection{Filtrage dur}
+
+La première étape élimine, par des règles fixes, les catégories de bruit reconnaissables sans ambiguïté et sans qu'aucune analyse de contenu ne soit nécessaire : ressources statiques identifiables par leur nature, domaines dont la seule fonction connue est la télémétrie ou l'analyse d'audience, méthodes HTTP sans portée métier, chemins relevant de l'infrastructure plutôt que de la logique applicative, et requêtes dont la capture indique qu'elles ont été annulées avant toute réponse. Cette étape, volontairement peu coûteuse, réduit le volume d'appels à examiner avant que n'intervienne la moindre évaluation plus fine.
+
+\subsubsection{Score combiné}
+
+Les appels ayant franchi le filtrage dur sont ensuite évalués au moyen d'un score combiné, qui tient compte de deux familles de signaux de nature différente. La première famille rassemble des signaux structurels : la méthode HTTP employée (une opération de création, de modification ou de suppression étant a priori plus susceptible de porter une valeur métier qu'une simple consultation), la présence d'un contenu structuré dans la requête ou la réponse, une convention d'URL habituellement associée à une interface applicative, et un statut de réponse indiquant un succès. La seconde famille rassemble un signal de contenu, fondé sur la présence effective de vocabulaire métier dans le corps échangé.
+
+Un principe de conception central gouverne la pondération de ces deux familles : aucun sous-ensemble de signaux purement structurels ne doit, à lui seul, pouvoir atteindre le niveau de confiance requis pour une rétention directe, sans qu'une contribution minimale du signal de contenu n'y participe. À défaut, un appel techniquement bien formé — une opération d'écriture réussie, accompagnée d'un contenu structuré, sur un chemin d'allure applicative — serait retenu comme pertinent sur le seul fondement de sa forme, y compris lorsqu'il s'agit en réalité d'un événement de télémétrie, d'un journal d'erreur ou d'un signal de présence de session dépourvu de toute valeur métier. Ce principe conditionne directement la conception de la zone d'incertitude décrite ci-après.
+
+\subsubsection{Zone intermédiaire et arbitrage par intelligence artificielle}
+
+Le score combiné ne permet pas toujours de trancher avec une confiance suffisante : au-delà d'un certain niveau, un appel est retenu directement ; en deçà d'un autre, il est rejeté directement ; entre les deux, il se situe dans une zone intermédiaire où ni la rétention ni le rejet ne peuvent être affirmés avec une confiance suffisante sur la seule base des règles. C'est uniquement pour cette zone intermédiaire que le module recourt à un arbitrage par intelligence artificielle, qui évalue le contenu réel de l'appel pour trancher les cas que le score seul ne peut résoudre.
+
+Cette conception répond à un double objectif : un objectif de performance, puisque la grande majorité du trafic d'une capture réelle se situe en dehors de cette zone intermédiaire et peut donc être traitée sans aucun appel au modèle de langage ; et un objectif de fiabilité, puisque les cas réellement ambigus — ceux pour lesquels une règle fixe risquerait le plus de se tromper — sont précisément ceux pour lesquels un jugement plus fin, capable d'évaluer le contenu plutôt que la seule forme, est mobilisé.
+
+\subsection{Conception de la normalisation des URL}
+
+\subsubsection{Distinguer segment fixe et identifiant variable}
+
+Un chemin d'URL est composé de segments dont certains sont fixes — ils désignent une ressource ou une action, identique d'un appel à l'autre — et d'autres sont variables, car ils portent la valeur d'un identifiant propre à chaque appel. La normalisation a pour objet de reconnaître ces segments variables et de les remplacer par une représentation générique, afin que des appels portant sur des instances différentes d'une même ressource (des employés différents, des commandes différentes) soient reconnus comme relevant d'un seul et même endpoint.
+
+\subsubsection{Une cascade de mécanismes complémentaires}
+
+Reconnaître un segment variable ne peut reposer sur un unique mécanisme, car les formats d'identifiants rencontrés en pratique sont trop divers pour être anticipés exhaustivement. La conception retenue combine, en cascade, trois mécanismes complémentaires, chacun n'étant sollicité que lorsque le précédent n'a pas permis de conclure avec une confiance suffisante :
+
+\begin{itemize}
+    \item \textbf{Reconnaissance par motif.} Un premier mécanisme reconnaît les formats d'identifiants les plus courants — valeurs numériques, identifiants structurés selon des conventions répandues, dates, références préfixées propres à certains fournisseurs — à partir de leur seule apparence. Des segments statiques connus, tels que des indicateurs de version d'API, sont explicitement exclus de cette reconnaissance, afin qu'un tel indicateur ne soit jamais confondu avec un identifiant.
+    \item \textbf{Détection statistique inter-requêtes.} Lorsqu'aucun motif connu ne permet de conclure, un second mécanisme compare, au sein d'un même lot d'appels, des chemins de même forme (même méthode, même nombre de segments) : si une position donnée varie d'un appel à l'autre alors que le reste du chemin demeure identique, cette position est traitée comme un identifiant, quelle que soit sa forme apparente. Ce mécanisme permet de reconnaître des formats d'identifiants qu'aucun motif prédéfini n'aurait anticipés, à la condition que le lot analysé contienne plusieurs appels vers le même endpoint.
+    \item \textbf{Arbitrage par intelligence artificielle, groupé par endpoint.} Pour les positions que les deux mécanismes précédents ne résolvent pas avec une confiance suffisante, l'ensemble des chemins apparentés à un même endpoint présumé est soumis conjointement à une évaluation par un modèle de langage, plutôt que chaque chemin pris isolément. Ce choix de conception est déterminant : comparés les uns aux autres, ces chemins apparentés révèlent un signal — la variation d'une position d'un appel à l'autre — qu'un segment examiné hors de ce contexte ne pourrait pas livrer à lui seul.
+\end{itemize}
+
+\subsubsection{Attribution d'un nom au paramètre identifié}
+
+Une fois un segment reconnu comme variable, encore faut-il lui attribuer un nom représentatif de sa signification métier, plutôt que de le désigner par sa seule position. Cette attribution suit elle aussi une logique de confiance décroissante : un nom explicitement présent dans le corps de la requête ou de la réponse associée est préféré lorsqu'il est disponible ; à défaut, une convention de préfixe reconnue peut être mobilisée ; à défaut encore, le segment précédent du chemin, dont le nom désigne généralement la ressource concernée, peut être repris sous une forme adaptée ; en dernier recours, un nom générique est retenu, le cas échéant affiné par le même mécanisme d'arbitrage que celui décrit au paragraphe précédent.
+
+\subsection{Conception de l'extraction d'informations et de la constitution du catalogue}
+
+\subsubsection{Détection des endpoints multiplexant plusieurs actions}
+
+Certaines interfaces applicatives, plutôt que d'exposer une URL distincte par action métier, acheminent plusieurs actions distinctes à travers une unique URL, le choix de l'action étant porté par un champ du corps de la requête plutôt que par le chemin lui-même. La conception du module prévoit la détection de ce motif de façon structurelle plutôt que par la recherche d'un nom de champ particulier : un champ n'est retenu comme discriminant d'action que si le regroupement des appels selon sa valeur fait apparaître des corps de requête de forme réellement différente les uns des autres — et non simplement des corps identiques ne différant que par la valeur de ce champ, ce qui ne traduirait qu'une variation de donnée et non une action distincte. Cette approche structurelle, indépendante de tout nom de champ prédéterminé, permet au mécanisme de s'appliquer à des applications dont les conventions de nommage ne sont connues qu'au moment de l'analyse.
+
+\subsubsection{Déduplication et paramètres de requête}
+
+Les appels de même forme — même méthode, même chemin normalisé — sont fusionnés en un unique endpoint, l'exemplaire retenu étant celui jugé le plus informatif parmi les occurrences rencontrées. Une attention particulière est portée aux paramètres de requête, c'est-à-dire aux éléments adjoints à l'URL plutôt qu'à son chemin : ils sont classifiés séparément, selon qu'ils prennent une valeur constante, une valeur variable, ou un caractère booléen, afin d'éviter qu'une fusion trop agressive ne confonde à tort deux endpoints réellement distincts qui ne se différencieraient que par la valeur de l'un de ces paramètres.
+
+\subsubsection{Constitution du catalogue final}
+
+Le résultat de ces étapes est un catalogue d'endpoints génériques et documentés, chacun représentatif d'un ensemble d'appels observés dans la capture d'origine. C'est ce catalogue, et non la capture brute, qui constitue désormais le matériau sur lequel s'appuient les étapes ultérieures du pipeline, notamment la recherche sémantique décrite en section~\ref{sec:conception-ia}.
+
+\subsection{Choix techniques et justification de conception}
+
+Le tableau~\ref{tab:choix-techno-har} compare les approches envisageables pour articuler règles déterministes et intelligence artificielle au sein du module, et justifie l'approche hybride retenue.
+
+\begin{table}[H]
+\centering
+\caption{Approches envisagées pour le filtrage et la normalisation, et justification du choix retenu}
+\label{tab:choix-techno-har}
+\begin{tabularx}{\textwidth}{L{4cm}Y}
+\hline
+\rowcolor{accentlight}
+\textbf{Approche} & \textbf{Appréciation} \\
+\hline
+Règles déterministes seules & Rapide et sans coût d'appel externe, mais structurellement limitée aux motifs anticipés à la conception ; incapable de traiter un format d'identifiant imprévu ou un cas dont la pertinence métier ne peut se déduire de la seule forme de l'appel. \\
+\hline
+Intelligence artificielle systématique & Capable de traiter n'importe quel cas, y compris les plus atypiques, mais à un coût et une latence proportionnels au volume total de la capture, alors que la grande majorité des appels d'une capture réelle ne présente aucune ambiguïté réelle. \\
+\hline
+\textbf{Approche retenue : règles d'abord, intelligence artificielle en recours ciblé} & Conserve la rapidité et le déterminisme des règles pour l'essentiel du trafic, tout en réservant le recours à l'intelligence artificielle aux seuls cas que les règles ne peuvent trancher avec une confiance suffisante — zone intermédiaire du score combiné, formats d'identifiants non anticipés, actions multiplexées. Ce choix est privilégié car il aligne le coût du traitement sur la difficulté réelle de chaque cas, plutôt que de l'uniformiser sur l'ensemble de la capture. \\
+\hline
+\end{tabularx}
+\end{table}
+
+Un second choix de conception mérite d'être relevé : lorsque l'intelligence artificielle intervient dans la normalisation des URL, elle est sollicitée de façon groupée, sur l'ensemble des chemins apparentés à un même endpoint présumé, plutôt que sur chaque segment pris isolément. Ce choix découle d'une observation déjà formulée en section précédente : la variation d'une position d'un appel à l'autre, au sein d'un ensemble de chemins par ailleurs identiques, constitue le signal le plus fiable pour reconnaître un identifiant d'un format non standard — un signal qu'une évaluation menée segment par segment, sans visibilité sur les requêtes apparentées, ne peut par construction pas exploiter.
+
+\subsection*{Synthèse}
+\addcontentsline{toc}{subsection}{Synthèse}
+
+La conception du module d'analyse HAR repose sur un même principe directeur que celui retenu pour le module d'intelligence artificielle présenté en section~\ref{sec:conception-ia} : faire reposer l'essentiel du traitement sur des règles déterministes, rapides et vérifiables, et ne réserver le recours à l'intelligence artificielle qu'aux cas dont la résolution l'exige réellement — une zone de score intermédiaire pour le filtrage, un format d'identifiant non anticipé ou une ambiguïté persistante pour la normalisation. Cette articulation permet au module de traiter des captures de trafic volumineuses avec un coût maîtrisé, tout en conservant, pour les cas les plus difficiles, la capacité de jugement qu'une règle fixe ne pourrait fournir. Le catalogue d'endpoints ainsi constitué, générique et indépendant de toute convention propre à une application particulière, forme le socle sur lequel s'appuie l'ensemble du reste du pipeline d'ARIA.

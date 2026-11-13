@@ -1,0 +1,38 @@
+{
+  "petit": {
+    "upload_s": 0.2,
+    "pipeline_s": 8.65,
+    "result": {
+      "run_id": "44c7eae5-ae31-424b-a32e-10e9fbf733a7",
+      "cleaned_api_calls": 6,
+      "normalized_endpoints": 6,
+      "schema_results": 6,
+      "saved_endpoints": 6,
+      "saved_workflows": 2,
+      "workflow_names": [
+        "user_management",
+        "order_management"
+      ],
+      "enriched_endpoints": 6
+    }
+  },
+  "moyen": {
+    "upload_s": 0.17,
+    "pipeline_s": 8.38,
+    "result": {
+      "run_id": "337ef672-76c9-483b-b606-9dfddecbba08",
+      "cleaned_api_calls": 16,
+      "normalized_endpoints": 15,
+      "schema_results": 15,
+      "saved_endpoints": 15,
+      "saved_workflows": 4,
+      "workflow_names": [
+        "authentication_session",
+        "user_management",
+        "product_management",
+        "order_processing"
+      ],
+      "enriched_endpoints": 15
+    }
+  }
+}

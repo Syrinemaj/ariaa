@@ -1,0 +1,39 @@
+@startuml Diagramme_etatsPlan
+!theme plain
+
+title Cycle de vie d'une AutomationRun (états réels, app/automation/service.py, app/bulk_execution/service.py, app/workers/tasks/reporting.py)
+
+[*] --> created : POST /automation/plan ou /bulk/execute\n(AutomationRun créée)
+
+created --> pending_approval : check_execution_policy()\n== REQUIRE_APPROVAL\nou (bulk et rôle != ADMIN)
+created --> running : check_execution_policy() == ALLOW
+
+pending_approval --> running : AutomationApproval.status = approved\n(re-vérification de la politique\njuste avant l'exécution réelle)
+pending_approval --> failed : AutomationApproval.status = rejected
+
+running --> success : toutes les étapes réussissent
+running --> partial_success : succès et échecs mélangés\n(bulk — failed_count > 0)
+running --> failed : échec total ou erreur bloquante
+running --> cancelled : annulation explicite\n(ex. verrou distribué, BUG-001)
+
+success --> [*]
+partial_success --> [*]
+failed --> [*]
+cancelled --> [*]
+
+note right of pending_approval
+  BLOCK (check_execution_policy) ne mène
+  jamais à cet état : un plan BLOQUÉ est
+  refusé avant toute création d'AutomationRun
+  exécutable — voir app/governance/policy_engine.py.
+end note
+
+note left of running
+  dry_run=true par défaut (AutomationPlan.dry_run_default) :
+  la simulation (app/dry_run/simulator.py) précède
+  toujours l'exécution réelle, sans transition d'état
+  propre dans AutomationRun.status (vérifiée au niveau
+  applicatif par assert_approval_for_real_execution).
+end note
+
+@enduml

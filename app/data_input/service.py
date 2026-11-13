@@ -92,6 +92,9 @@ def get_data_rows(
     query = db.query(DataRow).filter(DataRow.data_file_id == data_file_id)
 
     if only_valid:
-        query = query.filter(DataRow.status == "valid")
+        # "dry_run_success" counts as valid here too — see
+        # app/bulk_execution/service.py for why a prior dry run must not
+        # make a row disappear from the "valid rows" view.
+        query = query.filter(DataRow.status.in_(["valid", "dry_run_success"]))
 
     return query.order_by(DataRow.row_index.asc()).all()

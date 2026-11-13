@@ -4,7 +4,8 @@ Configuration Celery — topologie des queues ARIA.
 5 queues séparées avec des workers aux concurrences adaptées :
 
   ingestion  → 4 workers, concurrency=2  (lent : LLM + IO + CPU)
-  embedding  → 2 workers, concurrency=1  (limité Azure OpenAI quotas)
+  embedding  → 2 workers, concurrency=1  (CPU-bound : modèle local sentence-transformers,
+                                          singleton partagé — voir app/rag/embeddings/client.py)
   execution  → 8 workers, concurrency=10 (IO-bound : httpx + PostgreSQL)
   reporting  → 2 workers, concurrency=2  (léger : agrégation SQL)
   maintenance→ 1 worker,  concurrency=1  (basse priorité : cron)

@@ -9,10 +9,10 @@ app/llm_observability/ in production either.
 
 Rather than adding record_*() calls inside app/normalization/ (an app/
 change, out of scope per project rule 5), this tracer is a CLIENT WRAPPER:
-TracingClient decorates a real AI client (GroqClient, or the new
-app.ai.bedrock_client.BedrockClient) and is substituted in place of the
-real client via monkeypatch at the two known instantiation sites — see
-run_scripts/run_normalization_eval.py for where the patch is applied.
+TracingClient decorates a real AI client (app.ai.bedrock_client.BedrockClient)
+and is substituted in place of the real client via monkeypatch at the two
+known instantiation sites — see run_scripts/run_normalization_eval.py for
+where the patch is applied.
 
 Every .structured_chat() call the app makes during a case IS the
 confidence-gate firing — no separate "did it trigger" bookkeeping needed;
@@ -103,8 +103,8 @@ class BudgetGuard:
 
 
 class TracingClient:
-    """Drop-in replacement for GroqClient/BedrockClient — same
-    .structured_chat() signature and return value. Records latency/
+    """Drop-in replacement for BedrockClient — same .structured_chat()
+    signature and return value. Records latency/
     estimated tokens/estimated cost into the module-level trace (EVAL_MODE
     only; pure passthrough otherwise, zero overhead outside eval runs).
 

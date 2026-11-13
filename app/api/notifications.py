@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.notifications.service import (
     count_unread,
+    delete_notification,
     list_notifications,
     mark_all_notifications_read,
     mark_notification_read,
@@ -50,3 +51,14 @@ async def read_all_notifications(
     current_user: User = Depends(require_admin_or_operator),
 ):
     return {"marked": await mark_all_notifications_read(db=db, user=current_user)}
+
+
+@router.delete("/{notification_id}", status_code=204)
+async def delete_notification_route(
+    notification_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin_or_operator),
+):
+    ok = await delete_notification(db=db, user=current_user, notification_id=notification_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Notification not found")

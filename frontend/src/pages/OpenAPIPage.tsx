@@ -1,24 +1,33 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import AppLayout from '../components/layout/AppLayout'
 import { OPENAPI_DOC } from '../lib/aria-data'
 import { api } from '../lib/api'
 import { listRuns, AnalysisRun } from '../lib/registryApi'
-import { RefreshCw, Copy, Download } from 'lucide-react'
+import { RefreshCw, Copy, Download, Maximize2, Minimize2 } from 'lucide-react'
 
-function JsonNode({ data, depth = 0 }: { data: unknown; depth?: number }) {
-  const [open, setOpen] = useState(true)
+// Specs at or below this many paths render fully expanded by default — for
+// a normal analysis run (tens of endpoints) nothing is hidden behind a
+// click. Above it, default back to the lazy 2-level behavior: a 100+-
+// endpoint doc has tens of thousands of JSON nodes, and mounting every one
+// open (each with its own useState) is what actually made this page slow,
+// not spec generation itself (~0.3s). Either way, Expand all/Collapse all
+// below overrides this for a one-off look at a large doc.
+const AUTO_EXPAND_PATH_THRESHOLD = 30
+
+function JsonNode({ data, depth = 0, maxOpenDepth }: { data: unknown; depth?: number; maxOpenDepth: number }) {
+  const [open, setOpen] = useState(depth < maxOpenDepth)
   if (data === null) return <span className="text-rose-500">null</span>
   if (typeof data === 'boolean') return <span className="text-amber-500">{String(data)}</span>
   if (typeof data === 'number') return <span className="text-sky-500">{data}</span>
   if (typeof data === 'string') return <span className="text-emerald-500">&quot;{data}&quot;</span>
   if (Array.isArray(data)) {
     if (!data.length) return <span className="ink-2">[]</span>
-    return <span><button onClick={() => setOpen(o => !o)} className="ink-2">[{!open && `…${data.length}]`}</button>{open && <><div style={{ marginLeft: (depth + 1) * 14 }}>{data.map((item, i) => <div key={i}><JsonNode data={item} depth={depth + 1} />{i < data.length - 1 && <span className="ink-2">,</span>}</div>)}</div><span className="ink-2">]</span></>}</span>
+    return <span><button onClick={() => setOpen(o => !o)} className="ink-2">[{!open && `…${data.length}]`}</button>{open && <><div style={{ marginLeft: (depth + 1) * 14 }}>{data.map((item, i) => <div key={i}><JsonNode data={item} depth={depth + 1} maxOpenDepth={maxOpenDepth} />{i < data.length - 1 && <span className="ink-2">,</span>}</div>)}</div><span className="ink-2">]</span></>}</span>
   }
   if (typeof data === 'object') {
     const entries = Object.entries(data as Record<string, unknown>)
     if (!entries.length) return <span className="ink-2">{'{}'}</span>
-    return <span><button onClick={() => setOpen(o => !o)} className="ink-2">{'{'}{!open && `…${entries.length}}`}</button>{open && <><div style={{ marginLeft: (depth + 1) * 14 }}>{entries.map(([k, v], i) => <div key={k}><span style={{ color: 'var(--brand)' }}>&quot;{k}&quot;</span><span className="ink-2">: </span><JsonNode data={v} depth={depth + 1} />{i < entries.length - 1 && <span className="ink-2">,</span>}</div>)}</div><span className="ink-2">{'}'}</span></>}</span>
+    return <span><button onClick={() => setOpen(o => !o)} className="ink-2">{'{'}{!open && `…${entries.length}}`}</button>{open && <><div style={{ marginLeft: (depth + 1) * 14 }}>{entries.map(([k, v], i) => <div key={k}><span style={{ color: 'var(--brand)' }}>&quot;{k}&quot;</span><span className="ink-2">: </span><JsonNode data={v} depth={depth + 1} maxOpenDepth={maxOpenDepth} />{i < entries.length - 1 && <span className="ink-2">,</span>}</div>)}</div><span className="ink-2">{'}'}</span></>}</span>
   }
   return <span style={{ color: 'var(--ink)' }}>{String(data)}</span>
 }
@@ -29,6 +38,9 @@ export default function OpenAPIPage() {
   const [doc, setDoc]       = useState<unknown>(OPENAPI_DOC)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  // 'auto' = size-based default (see AUTO_EXPAND_PATH_THRESHOLD); 'all'/'none'
+  // = explicit override from the Expand all/Collapse all button below.
+  const [expandMode, setExpandMode] = useState<'auto' | 'all' | 'none'>('auto')
 
   const fetchDoc = useCallback(async (id: string) => {
     if (!id) return
@@ -36,6 +48,7 @@ export default function OpenAPIPage() {
     try {
       const data = await api.get<unknown>(`/openapi/spec/${id}`)
       setDoc(data)
+      setExpandMode('auto')
     } catch {
       // Keep existing doc on error
     } finally {
@@ -53,6 +66,16 @@ export default function OpenAPIPage() {
       }
     }).catch(() => {})
   }, [fetchDoc])
+
+  const pathCount = useMemo(() => {
+    if (typeof doc !== 'object' || !doc || !('paths' in (doc as Record<string, unknown>))) return 0
+    return Object.keys((doc as Record<string, unknown>).paths as object).length
+  }, [doc])
+
+  const maxOpenDepth =
+    expandMode === 'all'  ? Infinity :
+    expandMode === 'none' ? 0 :
+    pathCount <= AUTO_EXPAND_PATH_THRESHOLD ? Infinity : 2
 
   const docStr = JSON.stringify(doc, null, 2)
 
@@ -78,7 +101,7 @@ export default function OpenAPIPage() {
 
         <div className="card overflow-hidden">
           <div className="p-4 flex flex-wrap items-center gap-3" style={{ borderBottom: '1px solid var(--line)' }}>
-            <span className="text-[10px] font-bold tracking-widest uppercase ink-2">run_id</span>
+            
             {/* Run selector — dropdown if runs loaded, manual input as fallback */}
             {runs.length > 0 ? (
               <select value={runId} onChange={e => { setRunId(e.target.value); void fetchDoc(e.target.value) }}
@@ -87,14 +110,17 @@ export default function OpenAPIPage() {
               </select>
             ) : (
               <input value={runId} onChange={e => setRunId(e.target.value)}
-                className="input !py-1.5 max-w-[280px] font-mono text-xs" placeholder="run_id…" />
+                className="input !py-1.5 max-w-[280px] font-mono text-xs" placeholder="run…" autoComplete="off" />
             )}
             <span className="pill bg-emerald-50 text-emerald-700 border-emerald-200">openapi 3.1.0</span>
             <span className="pill" style={{ background: 'color-mix(in oklch, var(--ink) 4%, var(--card))', borderColor: 'var(--line)', color: 'var(--ink-2)' }}>
-              {typeof doc === 'object' && doc && 'paths' in (doc as Record<string, unknown>)
-                ? `${Object.keys((doc as Record<string, unknown>).paths as object).length} paths`
-                : '—'}
+              {pathCount > 0 ? `${pathCount} paths` : '—'}
             </span>
+            <button onClick={() => setExpandMode(m => m === 'all' ? 'none' : 'all')} className="btn-secondary !py-1.5">
+              {expandMode === 'all'
+                ? <><Minimize2 className="w-3.5 h-3.5" /> Collapse all</>
+                : <><Maximize2 className="w-3.5 h-3.5" /> Expand all</>}
+            </button>
             <span className="ml-auto text-xs font-mono ink-2">~{(docStr.length / 1024).toFixed(1)} KB</span>
           </div>
           <div className="p-4 overflow-x-auto max-h-[600px] overflow-y-auto"
@@ -103,7 +129,7 @@ export default function OpenAPIPage() {
               <p className="text-sm ink-2 text-center py-8">Loading OpenAPI spec…</p>
             ) : (
               <pre className="font-mono text-sm leading-relaxed" style={{ color: 'var(--ink)' }}>
-                <JsonNode data={doc} />
+                <JsonNode key={`${runId}-${maxOpenDepth}`} data={doc} maxOpenDepth={maxOpenDepth} />
               </pre>
             )}
           </div>

@@ -1,0 +1,26 @@
+[
+  {
+    "model": "deepseek.v3.2",
+    "skipped": false,
+    "cases_completed": 30,
+    "completion_rate": 1.0,
+    "accuracy": 0.8666666666666667,
+    "precision": 0.8260869565217391,
+    "recall": 1.0,
+    "f1": 0.9047619047619047,
+    "domain_action_match": 0.2631578947368421,
+    "cost_usd": 0.074312
+  },
+  {
+    "model": "amazon.nova-lite-v1:0",
+    "skipped": false,
+    "cases_completed": 30,
+    "completion_rate": 1.0,
+    "accuracy": 0.8333333333333334,
+    "precision": 0.7916666666666666,
+    "recall": 1.0,
+    "f1": 0.8837209302325582,
+    "domain_action_match": 0.42105263157894735,
+    "cost_usd": 0.0019029999999999048
+  }
+]

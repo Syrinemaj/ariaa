@@ -1,5 +1,6 @@
 import re
 
+from cryptography.fernet import Fernet
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
@@ -35,16 +36,26 @@ class Settings(BaseSettings):
             self.REDIS_APP_URL = f"{base}/2"
         return self
 
-    # ── Azure OpenAI ────────────────────────────────────────────────────────
-    AZURE_OPENAI_ENDPOINT: str | None = None
-    AZURE_OPENAI_API_KEY: str | None = None
-    AZURE_OPENAI_MODEL: str = "gpt-4o-mini"
-    AZURE_OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
-    AZURE_OPENAI_API_VERSION: str = "2024-08-01-preview"
-
-    # Dimensions produced by LOCAL_EMBEDDING_MODEL (BAAI/bge-small-en → 384).
-    # Must match the vector(N) column in endpoint_embeddings (migration 011).
-    EMBEDDING_DIMENSIONS: int = 384
+    # ── Embedding provider ──────────────────────────────────────────────────
+    # "bedrock" (default): Cohere Embed Multilingual v3 via AWS Bedrock —
+    # replaced "local" (BAAI/bge-small-en) because bge-small-en is
+    # English-only and ARIA's endpoint corpus / user queries are frequently
+    # French; French content previously reached the index only by accident,
+    # when an LLM summarization step happened to translate it.
+    # "local": sentence-transformers, no network call, English-only, 384 dims.
+    # See create_embedding_client() in app/ai/base_client.py.
+    EMBEDDING_PROVIDER: str = "bedrock"
+    # Fallback to "amazon.titan-embed-text-v2:0" is a one-line change here if
+    # Cohere model access isn't enabled on the target AWS account/region —
+    # both output 1024 dims by default, so no migration is needed to switch.
+    BEDROCK_EMBEDDING_MODEL: str = "cohere.embed-multilingual-v3"
+    # Dimensions produced by the active embedding provider. 1024 for both
+    # Cohere Embed Multilingual v3 and Titan Text Embeddings V2 (Bedrock
+    # defaults); 384 for LOCAL_EMBEDDING_MODEL (BAAI/bge-small-en). Must
+    # match the vector(N) column in endpoint_embeddings — switching
+    # EMBEDDING_PROVIDER requires re-running the matching Alembic migration
+    # (011 for 384, 024 for 1024) and reindexing every run.
+    EMBEDDING_DIMENSIONS: int = 1024
     LOCAL_EMBEDDING_MODEL: str = "BAAI/bge-small-en"
 
     # ── Auth ────────────────────────────────────────────────────────────────
@@ -63,6 +74,23 @@ class Settings(BaseSettings):
             )
         return v
 
+    # Fernet key for Connection.encrypted_secret (app/connections/crypto.py).
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    CONNECTION_ENCRYPTION_KEY: str
+
+    @field_validator("CONNECTION_ENCRYPTION_KEY")
+    @classmethod
+    def validate_connection_encryption_key(cls, v: str) -> str:
+        try:
+            Fernet(v.encode("utf-8"))
+        except Exception as exc:
+            raise ValueError(
+                "CONNECTION_ENCRYPTION_KEY doit être une clé Fernet valide "
+                "(32 octets url-safe base64). Générer avec : "
+                'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            ) from exc
+        return v
+
     CORS_ORIGINS: str = "http://localhost:5173"
 
     DEFAULT_ORG_NAME: str = "ARIA Demo Organization"
@@ -71,6 +99,12 @@ class Settings(BaseSettings):
     BULK_MAX_ROWS: int = 10000
     # Rows per Celery batch task — small enough for one task to finish in seconds
     BULK_BATCH_SIZE: int = 50
+    # Outbound calls/second against the TARGET API, shared across every Celery
+    # worker processing batches of the same job (Redis-backed — a per-worker
+    # limiter can't coordinate: BULK_BATCH_SIZE batches for one job run on up
+    # to `concurrency` workers at once, each blind to the others' traffic).
+    BULK_RATE_LIMIT_PER_SECOND: float = 10.0
+    BULK_STEP_RETRIES: int = 3
 
     ALLOWED_TARGET_DOMAINS: str = ""
     # Set to true in development to allow HTTP URLs and skip private-IP checks.
@@ -104,52 +138,59 @@ class Settings(BaseSettings):
     # endpoint to be included in a generated plan. Without this, top_k
     # endpoints are always returned regardless of relevance.
     #
-    # LIMITATION (measured empirically, not guessed): with the BGE-small
-    # embedding model on short business-action text, a genuine cross-domain
-    # match (e.g. a "payment" endpoint correctly retrieved for a payment
-    # instruction, in a multi-domain run) can score as low as ~0.74 — nearly
-    # identical to a true mismatch (~0.75) in a single-domain run. This floor
-    # only catches pathological cases (near-empty semantic signal); it is NOT
-    # a reliable cross-domain relevance filter. The primary defense against
-    # bad plans is PLAN_MIN_INTENT_CONFIDENCE above — ranking is correct
-    # (the true best match is always first) even when the absolute score
-    # isn't a clean separator.
-    PLAN_MIN_RAG_SCORE: float = 0.4
+    # LIMITATION (measured empirically, not guessed): re-measured after the
+    # BGE -> Cohere Embed Multilingual v3 migration (see EMBEDDING_PROVIDER
+    # above) — Cohere's cosine scores run markedly lower than BGE's even for
+    # confident, correct matches: a clean single-candidate-domain match
+    # ("se connecter" -> POST /auth/login, only 3 close candidates) scored
+    # ~0.37; a well-separated unambiguous match ("create a new employee" ->
+    # POST /api/employees) scored ~0.70. Garbage/off-topic queries ("bake a
+    # chocolate cake") topped out ~0.28. 0.4 (the BGE-era value) sits inside
+    # the real-match range and would have silently dropped the 0.37 case from
+    # a generated plan. 0.3 sits in the gap between the measured garbage
+    # ceiling (~0.28) and the lowest measured genuine match (~0.37), same
+    # spirit as the search endpoint's own floor (app/rag/models.py::
+    # SemanticSearchRequest.score_threshold = 0.35). Still not a reliable
+    # cross-domain relevance filter — the primary defense against bad plans
+    # is PLAN_MIN_INTENT_CONFIDENCE above — ranking is correct (the true best
+    # match is always first) even when the absolute score isn't a clean
+    # separator.
+    PLAN_MIN_RAG_SCORE: float = 0.3
 
     UPLOAD_DIR: str = "data/uploads"
     UPLOAD_FILE_TTL_DAYS: int = 7
     UPLOAD_FAILED_FILE_TTL_HOURS: int = 24
     CLEANUP_DRY_RUN: bool = False
 
-    # ── AI provider selection ────────────────────────────────────────────────
-    # "bedrock" (default) → BedrockClient (Converse API, model = BEDROCK_MODEL)
-    # "groq"              → GroqClient (no embeddings, json_object fallback)
-    # "azure"             → AzureOpenAIClient (embeddings + structured outputs)
+    # ── AI provider ─────────────────────────────────────────────────────────
+    # AWS Bedrock is the only completion provider — GroqClient and
+    # AzureOpenAIClient (and the AI_PROVIDER switch that selected between
+    # the three) were removed after the model-selection evaluation in
+    # evaluation/aggregate.py made Bedrock's cost/latency/reliability case
+    # decisive (see BEDROCK_MODEL below). create_ai_client() now always
+    # returns a BedrockClient; this setting is kept only so log lines /
+    # Prometheus labels that already carry a "provider" field stay meaningful.
     AI_PROVIDER: str = "bedrock"
-    GROQ_API_KEY: str | None = None
-    # Second Groq account/key, tried before Azure when GROQ_API_KEY hits its
-    # per-key rate limit (Groq's free tier caps tokens-per-day per key) —
-    # see GroqClient._secondary_groq_fallback().
-    GROQ_API_KEY_2: str | None = None
-    # Third Groq account/key, tried after GROQ_API_KEY_2 also hits its daily
-    # limit, before falling back to Azure — see
-    # GroqClient._tertiary_groq_fallback(). Same rationale as GROQ_API_KEY_2:
-    # each free-tier key has its own separate 100k-tokens-per-day cap.
-    GROQ_API_KEY_3: str | None = None
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
     # ── AWS Bedrock ─────────────────────────────────────────────────────────
     AWS_REGION: str = "eu-west-2"
-    # Chosen over moonshotai.kimi-k2.5 after a 140-case comparison on the
-    # param-detection golden dataset (evaluation/golden_dataset/
-    # param_detection_golden_dataset.jsonl) — kimi scored slightly higher on
-    # accuracy/recall/trap-accuracy, deepseek scored slightly higher on
-    # naming accuracy; deepseek.v3.2 selected as the production default per
-    # explicit choice. Needs max_tokens >= ~1200 in practice: it spends
-    # tokens on internal reasoning before emitting the tool call, and gets
-    # truncated (no toolUse block at all) below that — see
-    # BedrockClient.structured_chat's retry-once-then-raise handling.
-    BEDROCK_MODEL: str = "deepseek.v3.2"
+    # Chosen over deepseek.v3.2 (the prior default) after a full 8-task
+    # comparison covering every real LLM call site in the app (see
+    # evaluation/aggregate.py + evaluation/results/full_comparison.csv):
+    # statistically tied on weighted quality (84.9% vs 85.1%, within noise),
+    # but ~37x cheaper ($0.0199 vs $0.7501 total across the 8 tasks) and
+    # ~2.4x faster with far more consistent latency (P50 1.7s/P95 2.1s vs
+    # P50 4.1s/P95 63s — deepseek.v3.2 is a reasoning model that spends a
+    # variable amount of time/tokens on internal reasoning before emitting
+    # the tool call, which is also why it needed max_tokens >= ~1200 to
+    # reliably avoid truncation; amazon.nova-lite-v1:0 has no such
+    # requirement). moonshotai.kimi-k2.5/k3 were ruled out separately
+    # (unresolved timeout / explicit IAM policy deny on this account) and
+    # mistral.mistral-large-2402-v1:0 is structurally incompatible with
+    # BedrockClient.structured_chat's forced toolChoice.tool on the Converse
+    # API (ValidationException) — excluded from every task, not a quality
+    # finding.
+    BEDROCK_MODEL: str = "amazon.nova-lite-v1:0"
 
     OTEL_ENABLED: bool = True
     OTEL_SERVICE_NAME: str = "aria-api"

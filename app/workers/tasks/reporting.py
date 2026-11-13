@@ -25,13 +25,19 @@ logger = logging.getLogger(__name__)
     default_retry_delay=30,
 )
 @deduplicated_task(key_fn=report_key, timeout_seconds=300)
-def generate_bulk_report(self, run_id: str, job_id: str, org_id: str) -> dict:
+def generate_bulk_report(self, run_id: str, job_id: str, org_id: str, final_status: str | None = None) -> dict:
     """
     Génère et persiste le rapport de synthèse d'une exécution bulk.
     Peut être appelé manuellement ou automatiquement après la fin des batches.
+
+    final_status is the job status _update_job_progress (execution.py) already
+    computed from Redis counters ("done"/"partial"/"failed"/"cancelled") —
+    passed through so this task doesn't have to re-derive it. Optional only
+    for a manual/ad-hoc call with no job context; the automatic enqueue
+    always provides it.
     """
     try:
-        result = asyncio.run(_run_report_async(run_id=run_id, job_id=job_id, org_id=org_id))
+        result = asyncio.run(_run_report_async(run_id=run_id, job_id=job_id, org_id=org_id, final_status=final_status))
         logger.info("Report generated for run=%s job=%s", run_id, job_id)
         return result
     except Exception as exc:
@@ -39,7 +45,15 @@ def generate_bulk_report(self, run_id: str, job_id: str, org_id: str) -> dict:
         raise self.retry(exc=exc) if self.request.retries < self.max_retries else exc
 
 
-async def _run_report_async(run_id: str, job_id: str, org_id: str) -> dict:
+_RUN_STATUS_BY_JOB_STATUS = {
+    "done": "success",
+    "partial": "partial_success",
+    "failed": "failed",
+    "cancelled": "cancelled",
+}
+
+
+async def _run_report_async(run_id: str, job_id: str, org_id: str, final_status: str | None = None) -> dict:
     from datetime import datetime, timezone
 
     from app.db.session import AsyncSessionLocal
@@ -69,7 +83,16 @@ async def _run_report_async(run_id: str, job_id: str, org_id: str) -> dict:
         now = datetime.now(timezone.utc)
         automation_run.success_count = stats.total_success or 0
         automation_run.failed_count = stats.total_failed or 0
-        automation_run.status = "success" if (stats.total_failed or 0) == 0 else "partial_success"
+        # Previously this only ever picked between "success"/"partial_success"
+        # (total_failed == 0 or not) — a cancelled or fully-failed run could
+        # never be reported as such, and the frontend had no way to tell
+        # those apart from an ordinary partial success. Prefer the real
+        # job-level status when available.
+        automation_run.status = (
+            _RUN_STATUS_BY_JOB_STATUS.get(final_status)
+            if final_status in _RUN_STATUS_BY_JOB_STATUS
+            else ("success" if (stats.total_failed or 0) == 0 else "partial_success")
+        )
         # created_at is stamped when the run starts (execute_valid_rows_in_batches),
         # right before batches are enqueued — this is otherwise left at its 0.0
         # default for every bulk run, which silently breaks "Durée"/"Débit" in Reports.

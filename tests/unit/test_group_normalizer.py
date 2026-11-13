@@ -43,7 +43,7 @@ def _dynamic_by_shape(entries: list[tuple[str, str]]) -> list[set]:
     ]
 
 
-class _StubGroqClient:
+class _StubAiClient:
     """Records calls and returns a preset response — never hits the network."""
 
     def __init__(self, response: dict | None = None):
@@ -66,7 +66,7 @@ class TestNumericIdGroup:
             ("GET", "/api/orders/456"),
             ("GET", "/api/orders/789"),
         ]
-        client = _StubGroqClient()
+        client = _StubAiClient()
 
         hints = build_group_hints(entries, _dynamic_by_shape(entries), ai_client=client)
 
@@ -95,7 +95,7 @@ class TestBusinessCodeGroup:
                 {"value": "wgt_alpha_009", "position": 3, "is_id": True, "confidence": "high", "reason": "business code, variable across requests"},
             ],
         }
-        client = _StubGroqClient(llm_response)
+        client = _StubAiClient(llm_response)
 
         hints = build_group_hints(entries, _dynamic_by_shape(entries), ai_client=client)
 
@@ -128,7 +128,7 @@ class TestSingleExampleFallback:
     def test_single_example_returns_low_confidence_without_llm_call(self):
         reset_stats()
         entries = [("GET", "/api/widgets/wgt_alpha_009")]
-        client = _StubGroqClient()
+        client = _StubAiClient()
 
         hints = build_group_hints(entries, _dynamic_by_shape(entries), ai_client=client)
 
@@ -152,7 +152,7 @@ class TestInvalidResponseFallback:
             ("GET", "/api/widgets/wgt_alpha_009"),
             ("GET", "/api/widgets/wgt_beta_014"),
         ]
-        client = _StubGroqClient({"unexpected": "shape"})
+        client = _StubAiClient({"unexpected": "shape"})
 
         hints = build_group_hints(entries, _dynamic_by_shape(entries), ai_client=client)
 
@@ -179,7 +179,7 @@ class TestLowConfidenceSegmentIgnored:
                 {"value": "wgt_alpha_009", "position": 3, "is_id": True, "confidence": "low", "reason": "unsure"},
             ],
         }
-        client = _StubGroqClient(llm_response)
+        client = _StubAiClient(llm_response)
 
         hints = build_group_hints(entries, _dynamic_by_shape(entries), ai_client=client)
 

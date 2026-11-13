@@ -1,0 +1,349 @@
+% ============================================================================
+% Conception du module d'intelligence artificielle — ARIA
+% Fichier indépendant, destiné à être inséré (\input{} ou copier-coller)
+% dans le chapitre de conception du rapport. Rédigé au niveau conception :
+% aucun nom de fichier, de classe ou de fonction, aucune valeur de seuil ou
+% de paramètre d'implémentation n'y figure volontairement — ces éléments
+% relèvent du chapitre de Réalisation.
+%
+% Macros supposées déjà définies dans le préambule du rapport (cohérence
+% avec le reste du document) : environnement tabularx avec colonnes L{}/Y,
+% \rowcolor{accentlight} pour l'en-tête des tableaux, \reportimage{} pour
+% l'insertion d'images. Aucun squelette LaTeX du rapport n'a été localisé
+% dans ce dépôt pour vérifier ces macros ; à adapter si leur définition
+% diffère dans ton fichier de style.
+% ============================================================================
+
+\section{Conception du module d'intelligence artificielle}
+\label{sec:conception-ia}
+
+Les sections précédentes de ce chapitre ont posé l'architecture générale d'ARIA et le découpage de son backend en modules métier. La présente section approfondit la conception de l'un de ces modules : celui qui porte la capacité d'ARIA à transformer une instruction exprimée en langage naturel en un plan d'automatisation exécutable sur un système cible. Ce module n'est pas un service distinct déployé séparément ; il constitue une couche logique intégrée au backend applicatif, au même titre que les modules de gestion des connexions ou de gouvernance, avec lesquels il interagit directement.
+
+L'objectif de cette section est de présenter la conception théorique et architecturale de ce module : le rôle qu'il joue, la manière dont ses composantes s'articulent, et les principes qui gouvernent le recours à l'intelligence artificielle en son sein. Les détails d'implémentation — bibliothèques précises, structures de données internes, valeurs de seuils numériques — sont volontairement laissés au chapitre de Réalisation ; ils ne conditionnent pas la compréhension des choix de conception présentés ici.
+
+\subsection{Présentation et objectifs du module d'intelligence artificielle}
+
+\subsubsection{Rôle du module dans ARIA}
+
+Le module d'intelligence artificielle intervient à la jonction entre l'utilisateur et le catalogue d'endpoints constitué par les étapes d'analyse du trafic décrites précédemment dans ce chapitre. Il reçoit en entrée une instruction métier, potentiellement imprécise ou incomplète, et doit produire en sortie une proposition de plan d'automatisation structuré, composé d'une ou plusieurs opérations concrètes, chacune reliée à un endpoint réellement présent dans le catalogue de l'application cible. Ce plan n'est qu'une proposition : il n'acquiert le droit d'être exécuté qu'après avoir franchi les contrôles décrits en section~\ref{ssec:validation-gouvernance}, qui ne relèvent pas de l'intelligence artificielle.
+
+\subsubsection{Difficultés adressées}
+
+La conception du module répond à cinq difficultés qui se posent simultanément dans ce contexte :
+
+\begin{itemize}
+    \item \textbf{La compréhension d'instructions en langage naturel.} Une même intention métier peut être formulée de dizaines de façons différentes, en français ou en anglais, avec un niveau de précision variable. Le module doit en extraire une représentation exploitable sans imposer à l'utilisateur un vocabulaire ou une syntaxe rigide.
+    \item \textbf{La correspondance entre une intention métier et des endpoints techniques.} Le vocabulaire employé par un utilisateur métier ne coïncide pas nécessairement avec le nommage technique des endpoints de l'API cible. Établir cette correspondance exige un mécanisme de rapprochement sémantique, et non une simple recherche textuelle.
+    \item \textbf{L'exploitation d'un catalogue d'API dont le contenu n'est pas connu à la conception.} ARIA est destiné à être appliqué à des systèmes d'information variés, dont le catalogue d'endpoints n'est découvert qu'au moment de l'analyse d'une capture de trafic. Le module ne peut donc s'appuyer sur aucune connaissance figée des endpoints disponibles : toute référence à un endpoint dans un plan doit être ancrée dans le catalogue réellement constitué pour le système en cours de traitement.
+    \item \textbf{La génération de scénarios d'automatisation cohérents.} Une instruction métier correspond rarement à une seule opération technique isolée ; elle peut impliquer plusieurs opérations complémentaires, dont certaines ne sont pas explicitement nommées par l'utilisateur mais sont néanmoins nécessaires à la cohérence du résultat.
+    \item \textbf{La gestion des dépendances entre opérations.} Lorsqu'un plan comporte plusieurs étapes, l'ordre dans lequel elles doivent être exécutées, et la manière dont le résultat d'une étape alimente la suivante, ne découlent pas automatiquement de leur seule pertinence individuelle : ils doivent être déterminés explicitement.
+\end{itemize}
+
+\subsubsection{Objectifs fonctionnels et contraintes de conception}
+
+Le module doit satisfaire quatre objectifs fonctionnels : comprendre une instruction et en extraire une représentation structurée ; retrouver, dans le catalogue d'endpoints disponible, les éléments pertinents vis-à-vis de cette intention ; organiser ces éléments en un plan d'exécution cohérent et ordonné ; et transmettre ce plan, accompagné de son contexte, aux mécanismes de contrôle chargés d'en autoriser ou non l'exécution.
+
+Ces objectifs s'accompagnent de contraintes de conception structurantes. D'abord, aucune étape du module ne doit pouvoir faire référence à un endpoint qui n'existe pas réellement dans le catalogue du système analysé : le risque d'invention (hallucination) d'un endpoint plausible mais inexistant doit être neutralisé par construction, et non laissé à la seule discipline du modèle de langage. Ensuite, la décision d'autoriser l'exécution réelle d'un plan ne doit jamais dépendre du jugement du modèle de langage lui-même : cette séparation, développée en section~\ref{ssec:validation-gouvernance}, est au cœur de la conception retenue. Enfin, le module devant traiter des catalogues de taille et de nature très variables selon le système analysé, sa conception ne peut reposer sur aucune liste figée de domaines métier, d'actions ou d'endpoints : tout doit être déterminé dynamiquement à partir de ce qui a réellement été découvert pour le système en cours de traitement.
+
+\subsection{Architecture conceptuelle du module}
+
+\subsubsection{Vue d'ensemble}
+
+Le module d'intelligence artificielle s'organise conceptuellement en trois couches successives, dont la séparation est le principe directeur de sa conception :
+
+\begin{enumerate}
+    \item une couche de \textbf{compréhension et de récupération}, qui transforme l'instruction utilisateur en une représentation structurée puis retrouve, dans le catalogue, les endpoints pertinents vis-à-vis de cette représentation ;
+    \item une couche de \textbf{génération et de structuration}, qui organise les endpoints retrouvés en un plan d'exécution cohérent, en identifiant les étapes nécessaires, leur ordre et leurs dépendances ;
+    \item une couche de \textbf{contrôle}, entièrement déterministe et indépendante du modèle de langage, qui valide la structure du plan proposé et décide, selon des règles de gouvernance, s'il peut être exécuté, s'il doit être soumis à approbation, ou s'il doit être bloqué.
+\end{enumerate}
+
+Les deux premières couches font appel à l'intelligence artificielle ; la troisième n'y fait jamais appel. Cette asymétrie volontaire est développée en section~\ref{ssec:validation-gouvernance}.
+
+\subsubsection{Composantes et responsabilités}
+
+\begin{itemize}
+    \item \textbf{Analyse et compréhension de l'intention utilisateur} — reçoit l'instruction brute et produit une représentation structurée de l'intention métier (voir section~\ref{ssec:comprehension-intention}). C'est la seule composante du module qui lit directement le texte libre fourni par l'utilisateur.
+    \item \textbf{Recherche sémantique des endpoints} — à partir de la représentation structurée, interroge le catalogue vectorisé des endpoints du système cible et en retourne les candidats les plus pertinents (voir section~\ref{ssec:rag}).
+    \item \textbf{Mécanisme de génération augmentée par récupération (RAG)} — assemble les candidats retrouvés, ainsi que leurs éléments descriptifs, en un contexte borné qui sera transmis au modèle de langage chargé de la génération du plan. Cette composante est le point d'articulation entre la recherche sémantique et la génération : elle garantit que la génération ne s'appuie que sur des éléments réellement retrouvés, jamais sur la seule connaissance générale du modèle.
+    \item \textbf{Génération du plan d'exécution} — à partir de l'intention structurée et du contexte assemblé, propose la liste des opérations nécessaires, en identifiant celles qui ne sont pas explicitement nommées par l'utilisateur mais sont néanmoins requises (voir section~\ref{ssec:generation-plan}).
+    \item \textbf{Analyse des dépendances entre étapes} — détermine, parmi les opérations proposées, celles dont l'exécution dépend du résultat d'une autre, et en déduit un ordre d'exécution valide.
+    \item \textbf{Validation et contrôle du plan} — vérifie que le plan proposé ne fait référence qu'à des endpoints réellement présents dans le catalogue retrouvé, qu'il est structurellement complet, et que les informations nécessaires à l'exécution de chaque étape sont disponibles.
+    \item \textbf{Gouvernance et gestion des approbations} — évalue le risque associé aux opérations du plan et détermine, selon des règles indépendantes du modèle de langage, si le plan peut être exécuté directement, s'il doit être soumis à l'approbation d'un responsable, ou s'il doit être refusé.
+\end{itemize}
+
+\subsubsection{Flux général}
+
+L'instruction utilisateur traverse ces composantes de façon essentiellement séquentielle : la compréhension de l'intention précède la recherche, qui précède elle-même la génération du plan ; l'analyse des dépendances et la validation s'appliquent au plan une fois celui-ci proposé ; la gouvernance intervient en dernier lieu, avant toute exécution réelle, et intervient de nouveau juste avant l'exécution elle-même, pour tenir compte d'une éventuelle évolution des règles entre la soumission du plan et son exécution effective. Un rejet peut survenir à plusieurs points de ce parcours — notamment dès l'étape de compréhension, lorsque l'intention extraite est jugée trop incertaine pour justifier la poursuite du traitement — sans qu'il soit nécessaire d'engager les étapes suivantes, plus coûteuses.
+
+% [FIGURE À PRODUIRE]
+% Titre proposé : « Architecture conceptuelle du module d'intelligence artificielle d'ARIA »
+% Objectif : donner une vue d'ensemble des trois couches (compréhension et récupération,
+%   génération et structuration, contrôle) et de leurs composantes, en distinguant visuellement
+%   ce qui relève de l'intelligence artificielle de ce qui relève de règles déterministes.
+% Éléments à représenter : un bloc englobant unique figurant le backend applicatif (pour rappeler
+%   que le module n'est pas un service séparé) ; à l'intérieur, trois bandes horizontales ou
+%   verticales correspondant aux trois couches ; dans la première bande, les blocs « Compréhension
+%   de l'intention » et « Recherche sémantique » ; dans la deuxième, les blocs « Contexte RAG »,
+%   « Génération du plan » et « Analyse des dépendances » ; dans la troisième, les blocs
+%   « Validation du plan » et « Gouvernance et approbation ». Une frontière visuelle nette
+%   (par exemple une ligne pointillée) doit séparer les deux premières bandes, où le modèle de
+%   langage intervient, de la troisième, qui n'y fait jamais appel.
+% Flux à représenter : une flèche continue de « Instruction utilisateur » vers « Compréhension de
+%   l'intention », puis vers « Recherche sémantique », puis vers « Contexte RAG », puis vers
+%   « Génération du plan », puis vers « Analyse des dépendances », puis vers « Validation du plan »,
+%   puis vers « Gouvernance et approbation », puis vers « Plan autorisé / en attente / refusé ».
+%   Une flèche séparée doit relier le « Catalogue d'endpoints » (issu des modules d'analyse décrits
+%   plus haut dans ce chapitre) vers « Recherche sémantique », pour montrer que ce catalogue est une
+%   entrée externe au module, pas une donnée qu'il produit lui-même.
+% Légende proposée : « Architecture conceptuelle du module d'intelligence artificielle d'ARIA :
+%   les composantes de compréhension et de génération font appel à un modèle de langage ancré sur
+%   le catalogue d'endpoints réel ; la validation et la gouvernance, strictement déterministes,
+%   conditionnent seules l'exécution effective du plan proposé. »
+% \label{fig:archi-conceptuelle-ia}
+
+\subsection{Conception du mécanisme de compréhension de l'intention}
+\label{ssec:comprehension-intention}
+
+\subsubsection{Nécessité d'une représentation structurée}
+
+Une instruction formulée en langage naturel ne peut être exploitée telle quelle par les composantes situées en aval : la recherche sémantique a besoin d'une formulation stable de l'intention pour construire une requête de recherche pertinente, et la génération du plan a besoin de savoir précisément quelle action est demandée, sur quelle entité, et avec quel degré de certitude l'instruction a été comprise. La première responsabilité du module consiste donc à traduire une instruction libre en une représentation structurée, intermédiaire entre le texte de l'utilisateur et le plan final.
+
+\subsubsection{Informations extraites}
+
+Cette représentation structurée rassemble les informations suivantes, confirmées dans la conception retenue :
+
+\begin{itemize}
+    \item une \textbf{synthèse de l'intention}, reformulation concise de ce que l'utilisateur cherche à accomplir ;
+    \item le \textbf{domaine métier concerné}, déterminé non pas à partir d'une liste figée de domaines prédéfinis, mais à partir des domaines effectivement présents dans le catalogue du système en cours de traitement — ce choix découle directement de la contrainte identifiée en section~3.1.3 : ARIA devant s'appliquer à des systèmes dont le vocabulaire métier n'est pas connu à l'avance, une énumération fermée de domaines produirait inévitablement des correspondances forcées sur des systèmes qui ne s'y prêtent pas ;
+    \item les \textbf{entités métier} concernées par l'instruction ;
+    \item le \textbf{type d'action} demandée (par exemple une création, une mise à jour, une suppression, ou une consultation) ;
+    \item une éventuelle \textbf{quantité}, lorsque l'instruction porte sur un volume d'opérations plutôt que sur une occurrence unique ;
+    \item une \textbf{indication d'exécution en masse}, qui distingue une demande portant sur une opération isolée d'une demande destinée à être appliquée à un ensemble de données, et qui oriente en conséquence la suite du traitement ;
+    \item un \textbf{niveau de confiance}, exprimant dans quelle mesure l'instruction a pu être comprise de façon suffisamment claire et actionnable pour justifier la poursuite du traitement.
+\end{itemize}
+
+\subsubsection{Rôle du niveau de confiance}
+
+Le niveau de confiance occupe une place particulière dans la conception du module : il conditionne la poursuite ou l'interruption du traitement avant même que la recherche d'endpoints ne soit engagée. Une instruction jugée incompréhensible, hors sujet, ou manifestement dépourvue de contenu actionnable, est écartée à ce stade, sans qu'il soit nécessaire d'interroger le catalogue ni de solliciter davantage le modèle de langage. Ce choix de conception répond à un objectif à la fois de robustesse — éviter de construire un plan à partir d'une intention mal comprise — et d'efficacité — éviter d'engager le reste du pipeline, plus coûteux, sur une instruction qui ne le justifie pas.
+
+\subsubsection{Exemple conceptuel}
+
+Le tableau~\ref{tab:exemple-intention} illustre, à titre d'exemple générique, la transformation d'une instruction métier en représentation structurée. Les valeurs présentées sont illustratives : elles ne correspondent à aucun endpoint ni système précis, et visent uniquement à montrer la nature de la transformation opérée.
+
+\begin{table}[H]
+\centering
+\caption{Exemple conceptuel de transformation d'une instruction en intention structurée}
+\label{tab:exemple-intention}
+\begin{tabularx}{\textwidth}{L{4.5cm}Y}
+\hline
+\rowcolor{accentlight}
+\textbf{Instruction utilisateur (exemple)} & \textbf{« Créer un nouvel employé et l'affecter à un département. »} \\
+\hline
+Intention & Création d'un employé avec affectation à un département \\
+\hline
+Domaine métier & Déterminé à partir des domaines présents dans le catalogue analysé (par exemple « ressources humaines » si ce domaine y figure) \\
+\hline
+Entités concernées & Employé, département \\
+\hline
+Type d'action & Création \\
+\hline
+Quantité & Non renseignée (opération unitaire) \\
+\hline
+Exécution en masse & Non \\
+\hline
+Niveau de confiance & Élevé (instruction claire et actionnable) \\
+\hline
+\end{tabularx}
+\end{table}
+
+\subsection{Conception de la recherche sémantique et du mécanisme RAG}
+\label{ssec:rag}
+
+Cette section détaille la composante la plus structurante du module : celle qui permet de retrouver, dans un catalogue d'endpoints dont le contenu n'est pas connu à l'avance, les éléments pertinents vis-à-vis d'une intention métier, puis d'ancrer la génération du plan dans ces éléments réellement existants.
+
+\subsubsection{Limites d'une recherche par mots-clés}
+
+Une recherche fondée uniquement sur la correspondance de mots-clés suppose que le vocabulaire employé par l'utilisateur coïncide, au moins partiellement, avec le nommage technique des endpoints recherchés. Cette hypothèse ne tient pas dans le contexte d'ARIA : un utilisateur métier formule sa demande dans ses propres termes, en français ou en anglais, avec des synonymes, des paraphrases, ou un niveau de détail variable, alors que les endpoints d'une API sont nommés selon des conventions techniques propres à chaque système. Une recherche lexicale échouerait ainsi à rapprocher une instruction telle que « inscrire un nouveau salarié » d'un endpoint technique nommé de façon très différente, alors que les deux expressions désignent la même réalité métier.
+
+\subsubsection{Principe des embeddings}
+
+Le rapprochement sémantique repose sur la notion d'embedding : une représentation numérique, sous forme de vecteur, du sens porté par un texte. Deux textes dont le sens est proche — même s'ils n'ont aucun mot en commun — se voient associés des vecteurs proches dans cet espace de représentation, alors que deux textes de sens éloigné produisent des vecteurs éloignés. Cette propriété permet de comparer des textes sur la base de leur signification plutôt que de leur formulation littérale.
+
+\subsubsection{Représentation vectorielle des endpoints}
+
+Chaque endpoint du catalogue est associé à une description textuelle qui en synthétise le sens métier — son domaine, l'action qu'il réalise, un résumé de sa fonction — plutôt que sa seule signature technique. C'est cette description, porteuse de sens métier, qui est transformée en vecteur, de sorte que la comparaison ultérieure s'effectue sur ce que l'endpoint fait réellement, et non sur son nommage technique.
+
+\subsubsection{Indexation dans une base vectorielle}
+
+Les vecteurs ainsi obtenus pour l'ensemble des endpoints d'un catalogue sont conservés dans une base de données dotée de capacités de recherche vectorielle, aux côtés des autres informations relatives à ces endpoints. Cette indexation permet, lors d'une recherche, de comparer un vecteur de requête à l'ensemble des vecteurs indexés directement au niveau de la base de données, sans devoir recharger ni recalculer ces représentations à chaque interrogation.
+
+\subsubsection{Transformation de la demande utilisateur en représentation vectorielle}
+
+Lorsqu'une recherche est déclenchée, ce n'est pas l'instruction brute de l'utilisateur qui est directement vectorisée, mais la représentation structurée produite par la composante de compréhension de l'intention décrite en section~\ref{ssec:comprehension-intention}. Cette représentation est transformée en vecteur par le même modèle d'embedding que celui utilisé pour indexer les endpoints, mais selon un rôle distinct : un vecteur de requête n'est pas construit de la même façon qu'un vecteur de document indexé, car une question et la réponse qui lui correspond, bien que sémantiquement liées, ne sont pas formulées de manière identique. Traiter ces deux rôles de façon asymétrique améliore la qualité du rapprochement effectué.
+
+\subsubsection{Comparaison vectorielle et récupération}
+
+La requête vectorisée est comparée à l'ensemble des vecteurs indexés au moyen d'une mesure de similarité calculée dans l'espace vectoriel. Cette comparaison est exécutée directement par la base de données, qui retourne les endpoints dont la représentation vectorielle est la plus proche de celle de la requête. Le résultat n'est pas nécessairement réduit à un unique endpoint : une instruction métier peut légitimement nécessiter la combinaison de plusieurs endpoints, et la recherche est conçue pour retourner un ensemble de candidats plausibles plutôt qu'une réponse unique prématurément figée.
+
+Un point de conception mérite d'être souligné : une recherche par similarité vectorielle retourne, par construction, les éléments les plus proches de la requête parmi ceux disponibles, même lorsque aucun d'entre eux ne répond véritablement à la demande formulée. La conception du module en tient compte en soumettant les candidats retrouvés à une étape de vérification de pertinence, distincte de la recherche elle-même, avant de les transmettre à la génération du plan. Cette étape permet de distinguer un candidat réellement pertinent d'un candidat simplement proche au sens vectoriel, et de signaler honnêtement les cas où aucun endpoint du catalogue ne couvre effectivement l'instruction demandée, plutôt que de proposer malgré tout le candidat le plus proche.
+
+\subsubsection{Utilisation du contexte récupéré par le modèle de langage}
+
+Les endpoints retenus à l'issue de la recherche et de la vérification de pertinence sont assemblés, avec leurs éléments descriptifs, en un contexte borné qui constitue le seul matériau à partir duquel la génération du plan, décrite en section~\ref{ssec:generation-plan}, est autorisée à opérer. C'est ce mécanisme de génération augmentée par récupération (RAG) qui relie la recherche sémantique à la génération : en limitant strictement ce dont dispose le modèle de langage à ce qui a été réellement retrouvé dans le catalogue, il devient structurellement impossible pour la génération de faire référence à un endpoint qui n'existe pas, puisque ce qui n'a pas été retrouvé ne figure tout simplement pas dans le contexte qui lui est fourni.
+
+\subsubsection{Séparation des responsabilités entre recherche sémantique et modèle de langage}
+
+La conception du module repose sur une séparation nette des rôles entre la recherche sémantique et le modèle de langage, qu'il convient de ne jamais confondre : la recherche sémantique a pour seule responsabilité de retrouver, parmi les endpoints existants, ceux qui sont plausiblement pertinents vis-à-vis de l'intention exprimée — elle ne décide d'aucune organisation, d'aucun ordonnancement, d'aucune complétion. Le modèle de langage, à l'inverse, n'intervient qu'à partir de ce résultat de recherche déjà circonscrit : son rôle est d'exploiter ce contexte pour composer un plan cohérent — décider quels candidats combiner, identifier ce qui manque, proposer une organisation plausible — sans jamais pouvoir, par construction, introduire un élément absent de ce contexte.
+
+% [FIGURE À PRODUIRE]
+% Titre proposé : « Pipeline de recherche sémantique et de génération augmentée par récupération (RAG) »
+% Objectif : détailler, étape par étape, le parcours d'une requête depuis l'intention structurée
+%   jusqu'au contexte transmis au modèle de langage, en distinguant le chemin d'indexation
+%   (préalable, sur le catalogue) du chemin de requête (déclenché par chaque instruction).
+% Éléments à représenter : un chemin « indexation » partant du bloc « Catalogue d'endpoints »,
+%   passant par « Description textuelle de l'endpoint » puis « Modèle d'embedding » puis
+%   « Index vectoriel » ; un chemin « requête », partant du bloc « Intention structurée », passant
+%   par « Modèle d'embedding (rôle requête) » puis rejoignant « Comparaison vectorielle » avec
+%   l'index vectoriel du premier chemin ; puis « Candidats retrouvés » ; puis « Vérification de
+%   pertinence » ; puis « Contexte RAG assemblé » ; puis une flèche finale vers « Génération du
+%   plan (modèle de langage) ».
+% Flux à représenter : deux flèches distinctes convergeant vers le bloc « Comparaison vectorielle »
+%   (l'une issue de l'index construit hors ligne sur le catalogue, l'autre issue de la requête
+%   construite à la volée pour l'instruction en cours) ; une flèche de sortie unique vers la
+%   génération du plan, pour marquer que celle-ci ne reçoit que le résultat de ce pipeline, jamais
+%   le catalogue complet ni l'instruction brute.
+% Légende proposée : « Pipeline de recherche sémantique et de RAG dans ARIA : les endpoints sont
+%   indexés hors ligne à partir de leur description métier ; chaque instruction est comparée à cet
+%   index, et seuls les candidats retrouvés et jugés pertinents sont transmis, sous forme de
+%   contexte borné, à la génération du plan. »
+% \label{fig:pipeline-rag}
+
+\subsection{Conception de la génération du plan d'exécution}
+\label{ssec:generation-plan}
+
+\subsubsection{De l'intention et du contexte retrouvé au plan}
+
+La génération du plan constitue la seconde étape où le modèle de langage intervient. Elle reçoit en entrée l'intention structurée produite en section~\ref{ssec:comprehension-intention} et le contexte d'endpoints assemblé en section~\ref{ssec:rag}, et produit en sortie une proposition de plan : une suite d'opérations concrètes, chacune rattachée à un endpoint du contexte retrouvé.
+
+\subsubsection{Sélection des opérations nécessaires}
+
+Cette étape ne se limite pas à retenir les endpoints explicitement désignés par l'instruction utilisateur. Une instruction métier sous-entend fréquemment des opérations complémentaires qui ne sont pas nommées mais que leur absence rendrait le résultat incomplet — par exemple une étape de notification faisant suite à une création, ou une vérification préalable à une mise à jour. La génération du plan a pour responsabilité d'identifier ces opérations implicites, dans la limite de ce qui est effectivement disponible dans le contexte retrouvé.
+
+\subsubsection{Organisation des étapes et identification des dépendances}
+
+Les opérations sélectionnées ne constituent pas en elles-mêmes un plan exécutable : il faut encore déterminer l'ordre dans lequel elles doivent être réalisées, et identifier les dépendances qui lient certaines d'entre elles. Une dépendance existe lorsqu'une étape a besoin, pour s'exécuter correctement, d'une information produite par une étape antérieure — typiquement un identifiant créé par une opération précédente et nécessaire à l'opération suivante. La pertinence sémantique d'un endpoint, telle qu'elle résulte de la recherche décrite en section~\ref{ssec:rag}, ne préjuge en rien de sa place dans cet ordre : une étape de création peut être sémantiquement moins proche de l'instruction qu'une étape qui la référence, alors qu'elle doit pourtant être exécutée en premier. La conception du module distingue ainsi explicitement la pertinence d'une opération de sa position dans le plan, et traite la détermination de l'ordre comme une étape à part entière, fondée sur l'analyse de ces dépendances réelles plutôt que sur le score de pertinence qui a permis de retrouver chaque endpoint.
+
+\subsubsection{Transmission des résultats entre étapes}
+
+Lorsqu'une étape dépend du résultat d'une étape antérieure, le plan doit représenter explicitement cette transmission : la valeur produite par la première opération doit être désignée comme la source d'un paramètre requis par la seconde, plutôt que supposée implicitement disponible. Cette exigence découle directement de la nécessité, rappelée en section~3.1.3, qu'un plan soit exécutable tel quel contre le système cible : une dépendance non représentée explicitement ne pourrait pas être résolue au moment de l'exécution.
+
+\subsubsection{Prise en compte des paramètres de chaque opération}
+
+Chaque opération retenue dans le plan doit disposer des valeurs nécessaires à son exécution. Ces valeurs peuvent provenir de trois sources : l'instruction utilisateur elle-même, lorsqu'elle les mentionne directement ; le résultat d'une étape antérieure, selon le mécanisme décrit au paragraphe précédent ; ou une source de données externe, lorsque l'instruction porte sur une exécution en masse appliquée à un ensemble structuré de données fourni par l'utilisateur. La génération du plan a la responsabilité d'identifier, pour chaque opération, laquelle de ces sources doit alimenter chacun de ses paramètres.
+
+\subsubsection{Structuration du plan}
+
+Le résultat de cette étape est un plan structuré : une séquence explicite d'opérations concrètes, chacune reliée à un endpoint réel du catalogue retrouvé, assortie de son ordre d'exécution, de ses dépendances déclarées et des sources de ses paramètres. Cette structuration est ce qui permet au plan d'être ensuite soumis, tel quel, aux mécanismes de validation et de gouvernance décrits en section~\ref{ssec:validation-gouvernance}, sans ambiguïté sur ce qu'il propose de réaliser.
+
+\subsubsection{Exemple métier illustratif}
+
+À titre d'illustration générique, une instruction telle que « créer un nouvel employé et l'affecter à un département » pourrait donner lieu à un plan comportant, selon ce qui est réellement disponible dans le catalogue retrouvé : une étape de création de l'employé, suivie d'une étape d'affectation au département, cette seconde étape dépendant de l'identifiant produit par la première. Aucun endpoint précis n'est ici désigné : la nature exacte des opérations retenues dépend entièrement du catalogue du système analysé, ce qui constitue précisément la raison pour laquelle cette génération doit s'ancrer dans ce catalogue plutôt que dans une connaissance générale et désincarnée du domaine des ressources humaines.
+
+\subsubsection{Nécessité de s'appuyer sur le catalogue plutôt que sur la connaissance générale du modèle}
+
+Un modèle de langage dispose, indépendamment de tout contexte qui lui est fourni, d'une connaissance générale de ce à quoi ressemble typiquement une API de gestion des ressources humaines. S'appuyer sur cette seule connaissance produirait un plan plausible en apparence, mais sans garantie qu'il corresponde à un seul endpoint réellement exposé par le système cible : un tel plan serait, par construction, inexécutable ou erroné dès qu'il s'écarterait, même légèrement, du catalogue réel. C'est pour cette raison que la génération du plan n'opère jamais sur l'instruction seule, mais toujours au travers du contexte retrouvé décrit en section~\ref{ssec:rag} : ce contexte est ce qui garantit que chaque opération proposée correspond à une capacité réellement disponible sur le système analysé.
+
+\subsection{Conception de la validation et de la gouvernance du plan}
+\label{ssec:validation-gouvernance}
+
+\subsubsection{Séparation entre génération et autorisation}
+
+Le principe directeur de cette section est la séparation stricte entre la proposition d'un plan, qui relève de l'intelligence artificielle, et l'autorisation de son exécution, qui n'en relève jamais. Un plan produit par les composantes décrites dans les sections précédentes n'est, à ce stade, qu'une proposition : il ne confère aucun droit d'exécution réelle sur le système cible. Cette séparation n'est pas une précaution accessoire ; elle constitue un choix de conception central, dont l'objectif est de garantir que la décision d'agir sur un système réel repose toujours sur des règles explicites, vérifiables et indépendantes de la manière dont le modèle de langage a raisonné pour construire sa proposition.
+
+\subsubsection{Objectifs de la validation}
+
+Avant même toute évaluation de risque, le plan proposé est soumis à une validation structurelle, qui vise à vérifier : la cohérence de sa structure, c'est-à-dire que chaque opération qu'il contient fait bien référence à un endpoint présent dans le contexte retrouvé et non à un élément introduit de façon non fondée ; la disponibilité des informations nécessaires à l'exécution de chacune de ses étapes, telles qu'identifiées en section~\ref{ssec:generation-plan} ; et l'absence d'incohérence dans l'organisation des dépendances entre étapes.
+
+\subsubsection{Objectifs de la gouvernance}
+
+Une fois le plan validé sur le plan structurel, il est soumis à l'évaluation de la gouvernance, dont les objectifs sont distincts de ceux de la validation : évaluer le risque associé aux opérations qu'il contient, et déterminer, sur cette base ainsi que sur d'éventuelles règles complémentaires propres à l'organisation, si son exécution peut être autorisée.
+
+\subsubsection{Les trois décisions de gouvernance}
+
+La conception retenue prévoit exactement trois décisions possibles, résumées dans le tableau~\ref{tab:decisions-gouvernance} :
+
+\begin{table}[H]
+\centering
+\caption{Les trois décisions possibles de la gouvernance}
+\label{tab:decisions-gouvernance}
+\begin{tabularx}{\textwidth}{L{3.2cm}Y}
+\hline
+\rowcolor{accentlight}
+\textbf{Décision} & \textbf{Signification} \\
+\hline
+ALLOW & Le plan est autorisé à s'exécuter directement, sans intervention humaine supplémentaire. \\
+\hline
+REQUIRE\_APPROVAL & Le plan ne peut s'exécuter qu'après qu'un responsable habilité a explicitement approuvé son exécution. \\
+\hline
+BLOCK & Le plan ne peut en aucun cas être exécuté, quelle que soit l'approbation qui pourrait être accordée par ailleurs. \\
+\hline
+\end{tabularx}
+\end{table}
+
+La décision BLOCK occupe une place particulière dans cette conception : elle représente une limite organisationnelle explicite, et son caractère non contournable par une approbation est délibéré — admettre qu'une approbation puisse lever un blocage viderait la notion même de blocage de son effet.
+
+\subsubsection{Le modèle de langage ne décide jamais de l'autorisation}
+
+Il importe de souligner que cette décision de gouvernance ne mobilise, à aucun moment, le modèle de langage ayant servi à la compréhension de l'intention ou à la génération du plan. Elle repose uniquement sur des règles déterministes, définies indépendamment de tout plan particulier, et appliquées de façon identique à tout plan qui leur est soumis. Ce choix de conception découle directement de la nature probabiliste d'un modèle de langage : une telle nature le rend précieux pour comprendre une intention ou composer un plan plausible, mais structurellement inadapté à porter, seul, une décision de sécurité dont la cohérence et la prévisibilité doivent pouvoir être garanties indépendamment de la formulation de chaque instruction.
+
+\subsubsection{Rôle du mode simulé (dry-run)}
+
+En complément de ces mécanismes, la conception d'ARIA prévoit qu'un plan puisse être simulé avant toute exécution réelle : les étapes du plan sont alors parcourues sans qu'aucun effet ne soit produit sur le système cible. Ce mode simulé joue un rôle de réduction du risque en amont de l'exécution : il permet de révéler une incohérence structurelle ou une donnée manquante avant que la première exécution réelle n'ait lieu, et transforme ainsi cette première exécution d'un moment à risque en un moment normalement déjà vérifié.
+
+% [FIGURE À PRODUIRE]
+% Titre proposé : « Arbre de décision de la gouvernance d'un plan d'automatisation »
+% Objectif : représenter la façon dont un plan validé aboutit à l'une des trois décisions de
+%   gouvernance (table 2), en montrant que ce cheminement est indépendant du modèle de langage.
+% Éléments à représenter : point d'entrée « Plan structurellement validé » ; un premier losange de
+%   décision portant sur l'existence de règles d'interdiction explicites applicables au plan,
+%   menant directement à BLOCK en cas de correspondance ; un second losange portant sur le niveau
+%   de risque évalué du plan, menant à ALLOW en deçà d'un seuil bas, à BLOCK au-delà d'un seuil
+%   haut, et à REQUIRE_APPROVAL entre les deux ; un bloc « Décision d'un responsable habilité »
+%   recevant les plans orientés vers REQUIRE_APPROVAL, et menant soit à « Exécution autorisée »,
+%   soit à BLOCK en cas de refus.
+% Flux à représenter : un flux unique et linéaire depuis l'entrée jusqu'à l'une des trois issues
+%   possibles, sans retour en arrière ni intervention d'un bloc lié au modèle de langage à aucune
+%   étape de ce cheminement.
+% Légende proposée : « Cheminement des décisions de gouvernance appliquées à un plan déjà validé
+%   sur le plan structurel : un cheminement entièrement déterministe, indépendant du modèle de
+%   langage ayant servi à la génération du plan. »
+% \label{fig:arbre-gouvernance}
+
+\subsection{Choix technologiques et justification de conception}
+
+Le tableau~\ref{tab:choix-techno-ia} synthétise les grandes catégories de technologies mobilisées par le module d'intelligence artificielle et la justification de leur rôle dans l'architecture retenue. Conformément à l'objet de ce chapitre, seuls les éléments nécessaires à la compréhension des choix architecturaux y figurent ; les versions précises et les paramètres de configuration relèvent du chapitre de Réalisation.
+
+\begin{table}[H]
+\centering
+\caption{Choix technologiques du module d'intelligence artificielle et justification}
+\label{tab:choix-techno-ia}
+\begin{tabularx}{\textwidth}{L{3.6cm}Y}
+\hline
+\rowcolor{accentlight}
+\textbf{Catégorie de technologie} & \textbf{Rôle et justification} \\
+\hline
+Modèle de langage accédé via un fournisseur infonuagique managé (Amazon Bedrock) & Fournit l'accès à un modèle de langage sans que l'équipe projet n'ait à héberger ni exploiter elle-même l'infrastructure d'inférence correspondante. L'accès via une interface de fournisseur plutôt que par intégration directe à un modèle particulier laisse la possibilité de faire évoluer le modèle sollicité sans remettre en cause l'architecture du module. \\
+\hline
+Recherche sémantique fondée sur des embeddings & Répond directement à la difficulté, identifiée en section 3.1.2, du rapprochement entre un vocabulaire métier libre et le nommage technique des endpoints : une comparaison fondée sur le sens, plutôt que sur la correspondance littérale de termes, est nécessaire dans un contexte multilingue et à vocabulaire non maîtrisé à l'avance. \\
+\hline
+Base de données vectorielle intégrée à PostgreSQL (pgvector) & Permet de conserver les vecteurs d'embedding des endpoints au sein du même système de gestion de base de données que le reste des informations d'ARIA (catalogue, exécutions, données de gouvernance), plutôt que d'opérer une base de données spécialisée distincte uniquement dédiée à la recherche vectorielle. Ce choix réduit le nombre de technologies de stockage à exploiter et facilite la cohérence entre les données relationnelles et vectorielles d'un même catalogue. \\
+\hline
+Intégration au backend applicatif (FastAPI) & Le module d'intelligence artificielle est conçu comme une couche du backend existant, et non comme un service indépendant. Ce choix découle du constat que ses sorties — intentions structurées, candidats retrouvés, plans proposés — doivent interagir étroitement et de façon cohérente avec les données de catalogue, de gouvernance et d'exécution déjà gérées par ce backend ; séparer le module en un service distinct introduirait une frontière réseau et des questions de cohérence supplémentaires, sans bénéfice déterminant à ce stade du projet. \\
+\hline
+\end{tabularx}
+\end{table}
+
+\subsection*{Synthèse}
+\addcontentsline{toc}{subsection}{Synthèse}
+
+La conception du module d'intelligence artificielle d'ARIA repose sur un principe unique, décliné à chacune de ses étapes : l'intelligence artificielle n'intervient jamais sans ancrage dans une réalité vérifiable — le catalogue d'endpoints réellement découvert pour la compréhension et la génération — et ne décide jamais seule de ce qui peut être exécuté sur un système réel, cette dernière responsabilité étant confiée exclusivement à des mécanismes déterministes de validation et de gouvernance. Cette architecture en couches, où chaque composante a une responsabilité unique et clairement délimitée, est ce qui permet à ARIA de transformer une instruction en langage naturel en une automatisation fiable, sans sacrifier ni la souplesse qu'apporte le recours à un modèle de langage, ni la rigueur qu'exige toute action sur un système d'information réel.

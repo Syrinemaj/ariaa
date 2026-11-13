@@ -26,7 +26,7 @@ async def index_run_embeddings(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = await get_run_by_id(db, run_id)
+    run = await get_run_by_id(db, run_id, current_user.org_id)
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 
@@ -51,6 +51,7 @@ async def semantic_search(
         org_id=current_user.org_id,
         top_k=body.top_k,
         score_threshold=body.score_threshold,
+        ai_client=request.app.state.ai_client,
     )
     return {
         "query": body.query,
@@ -66,7 +67,7 @@ async def enrich_run_endpoints(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = await get_run_by_id(db, run_id)
+    run = await get_run_by_id(db, run_id, current_user.org_id)
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 

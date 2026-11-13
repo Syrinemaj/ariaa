@@ -1,6 +1,7 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from app.planner.models import PlanStep
+from app.bulk_execution.batch_state import ENTITY_ID_ALIASES, normalize_action
+from app.planner.models import AutomationPlan, PlanStep
 
 
 def _to_snake_case(value: str) -> str:
@@ -134,3 +135,54 @@ def map_payload_for_step(
                 break
 
     return payload, field_sources
+
+
+def required_input_fields(plan: AutomationPlan) -> List[Dict[str, Any]]:
+    """
+    Static analysis, no execution: which fields must actually come from the
+    caller's input row/CSV for this plan to run, as opposed to being
+    resolvable from an explicit field_mapping rule or a prior step's
+    response. Lets the UI tell the operator up front what their JSON/CSV
+    needs to contain, instead of them finding out one missing field at a
+    time via a failed execution (see app/automation/state_manager.py for
+    the bug this would have caught: Simple Automation's state propagation
+    didn't know "Create Employee" -> state["employee_id"], so a 2-step plan
+    always failed step 2 with "employee_id is a required property").
+
+    Mirrors map_payload_for_step()'s resolution order (field_mapping, then
+    name-matching against state) and update_state_from_response()'s state
+    heuristic (ENTITY_ID_ALIASES) — but on schemas, never on real values, so
+    this can run immediately after plan generation with zero API calls.
+    """
+    virtual_state: set[str] = set()
+    seen: set[str] = set()
+    needed: List[Dict[str, Any]] = []
+
+    for step in plan.steps:
+        if step.request_schema:
+            properties = step.request_schema.get("properties", {})
+            required = step.request_schema.get("required", [])
+            mapping_targets = set(_invert_field_mapping(step.field_mapping).keys())
+
+            for field_name in required:
+                if field_name in mapping_targets:
+                    continue  # resolved by an explicit instruction-derived rule
+                if any(c in virtual_state for c in _candidate_keys(field_name)):
+                    continue  # resolved by a prior step's response
+                if field_name not in seen:
+                    seen.add(field_name)
+                    needed.append({
+                        "field": field_name,
+                        "type": properties.get(field_name, {}).get("type", "string"),
+                        "first_needed_at_step": step.order,
+                    })
+
+        # Simulate what running this step would add to state, for the
+        # NEXT step's resolution — same shape update_state_from_response()
+        # builds from a real response, just keyed by schema field name
+        # instead of a real value (we don't have one yet).
+        if step.response_schema:
+            virtual_state.update(step.response_schema.get("properties", {}).keys())
+        virtual_state.update(ENTITY_ID_ALIASES.get(normalize_action(step.action), ()))
+
+    return needed

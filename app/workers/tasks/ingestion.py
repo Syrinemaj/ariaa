@@ -24,7 +24,7 @@ _JOB_TTL = 86_400
 _AI_ENRICHMENT_CONCURRENCY = 8
 
 
-def _set_job_status(job_id: str, status: str, **extra) -> None:
+def _set_job_status(job_id: str, status: str, org_id: str | None = None, **extra) -> None:
     redis = get_redis()
     redis.setex(
         f"job:{job_id}",
@@ -32,6 +32,7 @@ def _set_job_status(job_id: str, status: str, **extra) -> None:
         json.dumps({
             "job_id": job_id,
             "status": status,
+            "org_id": org_id,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             **extra,
         }),
@@ -62,7 +63,7 @@ def process_har_pipeline(
     Pipeline complet : parse HAR → normalise → schémas → workflows → BDD.
     Enfile automatiquement index_run_embeddings à la fin.
     """
-    _set_job_status(job_id, "processing")
+    _set_job_status(job_id, "processing", org_id=org_id)
 
     try:
         result = asyncio.run(_run_ingestion_async(
@@ -83,12 +84,12 @@ def process_har_pipeline(
             queue="embedding",
         )
 
-        _set_job_status(job_id, "completed", result=result)
+        _set_job_status(job_id, "completed", org_id=org_id, result=result)
         return result
 
     except Exception as exc:
         _set_job_status(
-            job_id, "failed",
+            job_id, "failed", org_id=org_id,
             error=str(exc),
             traceback=traceback.format_exc(limit=10),
         )
@@ -121,7 +122,7 @@ async def _run_ingestion_async(
 
     from app.ai.base_client import create_ai_client
     from app.ingestion.service import process_har_file
-    from app.normalization.service import normalize_entries
+    from app.normalization.service import normalize_entries, normalize_entries_with_raw
     from app.registry.repository import (
         create_analysis_run,
         get_run_by_id,
@@ -147,6 +148,7 @@ async def _run_ingestion_async(
             created_by_user_id=user_id,
             status="processing",
             team_id=team_id,
+            job_id=job_id,
         )
         run_id = run.id
         await db.commit()
@@ -159,11 +161,21 @@ async def _run_ingestion_async(
             only_candidates=True,
         )
 
-        normalized_endpoints = normalize_entries(
-            entries=cleaned_entries,
-            use_ai=use_norm_ai,
-            deduplicate=deduplicate,
-        )
+        if deduplicate:
+            # raw_calls (pre-dedup, real per-call bodies) feeds the workflow
+            # dependency detector's value-correlation pass — see
+            # app/workflows/dependency_detector.py — so an "id" one call's
+            # response actually produced can be matched against the same
+            # value consumed by a later call's path/body, instead of only
+            # guessing from step order or field names.
+            normalized_endpoints, raw_calls = normalize_entries_with_raw(
+                entries=cleaned_entries, use_ai=use_norm_ai,
+            )
+        else:
+            normalized_endpoints = normalize_entries(
+                entries=cleaned_entries, use_ai=use_norm_ai, deduplicate=False,
+            )
+            raw_calls = normalized_endpoints
 
         schema_results = infer_schemas_for_endpoints(normalized_endpoints)
         # ai_client/redis enable step reordering (sequence_builder) and rich
@@ -173,7 +185,9 @@ async def _run_ingestion_async(
         # naming itself stays keyword-based at this stage regardless (see
         # clustering.py docstring) — the LLM-refined name/domain/confidence
         # is set once, authoritatively, in Step 5 below.
-        workflows = discover_workflows(normalized_endpoints, ai_client=create_ai_client(), redis=get_redis())
+        workflows = discover_workflows(
+            normalized_endpoints, ai_client=create_ai_client(), redis=get_redis(), raw_calls=raw_calls,
+        )
 
         # ── Step 3 : persist results ────────────────────────────────────────────
         # status stays "processing" here — Steps 4/5 below (AI enrichment) still
@@ -181,7 +195,7 @@ async def _run_ingestion_async(
         # run as done while its business_domain/tags/workflow names were still
         # being written for another 1-2 minutes.
         async with AsyncSessionLocal() as db:
-            run = await get_run_by_id(db, run_id)
+            run = await get_run_by_id(db, run_id, org_id)
             run.total_cleaned_api_calls = len(cleaned_entries)
             run.total_normalized_endpoints = len(normalized_endpoints)
             run.total_schema_results = len(schema_results)
@@ -205,7 +219,7 @@ async def _run_ingestion_async(
     except Exception:
         # ── Step 4 : mark failed if processing crashed ────────────────────────
         async with AsyncSessionLocal() as db:
-            run = await get_run_by_id(db, run_id)
+            run = await get_run_by_id(db, run_id, org_id)
             if run:
                 run.status = "failed"
                 await db.commit()
@@ -257,91 +271,20 @@ async def _run_ingestion_async(
     except Exception as enrich_exc:
         logger.warning("endpoint_enrichment.step_failed run=%s error=%s", run_id, enrich_exc)
 
-    # ── Step 5 : AI workflow naming (runs after endpoint enrichment so       ──
-    # ──          business_domain / action from enriched endpoints are used)  ──
-    # This is the SOLE authority for wf.name / wf.business_domain / wf.confidence
-    # (enrich_workflow_with_ai, workflow_understanding.py) — it overwrites the
-    # keyword-based provisional values discover_workflows() set above. Only
-    # metadata_json keys it doesn't touch (business_tags, estimated_risk,
-    # description) survive from the Step 2 clustering pass. See
-    # app/workflows/clustering.py's module docstring for the full ownership
-    # rationale (prompt-engineering audit finding: 3 prompts used to compete
-    # for these fields with no coordination).
-    try:
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
-        from app.models.workflow import WorkflowModel, WorkflowStepModel
-        from app.models.endpoint import Endpoint
-        from app.ai.base_client import create_ai_client
-        from app.ai.workflow_understanding import enrich_workflow_with_ai
+    # Workflow naming used to be a separate Step 5 here (enrich_workflow_with_ai,
+    # workflow_understanding.py) that overwrote discover_workflows()'s
+    # provisional names after the run was already saved — two LLM calls, two
+    # sources of truth, and the cause of a real bug (this task's returned
+    # result reported stale pre-rename names, since it held references to the
+    # Step 3 objects a later, separate DB session mutated). A workflow is now
+    # fully named at creation time in Step 2 — see clustering.py's module
+    # docstring ("Naming ownership") — so there is nothing left to do here.
 
-        async with AsyncSessionLocal() as db:
-            wf_res = await db.execute(
-                select(WorkflowModel)
-                .options(selectinload(WorkflowModel.steps))
-                .where(WorkflowModel.run_id == run_id)
-            )
-            db_workflows = wf_res.scalars().all()
-
-            # Build canonical_key → enriched endpoint map for this run
-            ep_res = await db.execute(
-                select(Endpoint).where(Endpoint.run_id == run_id)
-            )
-            ep_by_canonical: dict[str, Endpoint] = {
-                ep.canonical_key: ep for ep in ep_res.scalars().all()
-            }
-
-            ai_client = create_ai_client()
-            wf_enriched = 0
-
-            def _steps_payload(wf):
-                payload = []
-                for s in sorted(wf.steps, key=lambda x: x.step_order):
-                    ep = ep_by_canonical.get(s.canonical_key)
-                    payload.append({
-                        "order":           s.step_order,
-                        "method":          s.method,
-                        "path":            s.path,
-                        "action":          s.action or (ep.business_action if ep else ""),
-                        "business_domain": ep.business_domain if ep else "",
-                    })
-                return payload
-
-            # Concurrent AI calls, applied sequentially afterward — keeps
-            # ORM attribute mutation off the concurrent section entirely.
-            wf_sem = asyncio.Semaphore(_AI_ENRICHMENT_CONCURRENCY)
-
-            async def _enrich_wf(wf):
-                async with wf_sem:
-                    return await asyncio.to_thread(
-                        enrich_workflow_with_ai, wf.id, _steps_payload(wf), ai_client
-                    )
-
-            enriched_list = await asyncio.gather(*[_enrich_wf(wf) for wf in db_workflows])
-
-            for wf, enriched in zip(db_workflows, enriched_list):
-                if enriched:
-                    wf.name            = enriched["name"]
-                    wf.business_domain = enriched["business_domain"]
-                    wf.confidence      = enriched["confidence"]
-                    wf.metadata_json   = {
-                        **(wf.metadata_json or {}),
-                        "ai_summary": enriched["summary"],
-                    }
-                    wf_enriched += 1
-
-            if wf_enriched:
-                await db.commit()
-                logger.info("workflow_enrichment.done run=%s enriched=%d", run_id, wf_enriched)
-
-    except Exception as wf_exc:
-        logger.warning("workflow_enrichment.step_failed run=%s error=%s", run_id, wf_exc)
-
-    # ── Step 6 : mark completed — only now that enrichment (Steps 4/5) has
-    # actually finished, best-effort or not (their own try/except above
+    # ── Step 5 : mark completed — only now that endpoint enrichment (Step 4)
+    # has actually finished, best-effort or not (its own try/except above
     # already swallows and logs enrichment failures without failing the run).
     async with AsyncSessionLocal() as db:
-        run = await get_run_by_id(db, run_id)
+        run = await get_run_by_id(db, run_id, org_id)
         if run:
             run.status = "completed"
             await db.commit()

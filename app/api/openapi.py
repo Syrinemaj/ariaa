@@ -16,7 +16,7 @@ async def get_openapi_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    run = await get_run_by_id(db, run_id)
+    run = await get_run_by_id(db, run_id, current_user.org_id)
     if not run:
         raise HTTPException(status_code=404, detail="Analysis run not found")
 

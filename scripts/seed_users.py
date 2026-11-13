@@ -51,8 +51,6 @@ async def seed_users() -> None:
         await db.commit()
 
     print("\nSeed completed")
-    print(f"Admin    : {ADMIN_EMAIL}    / {ADMIN_PASSWORD}")
-    print(f"Operator : {OPERATOR_EMAIL} / {OPERATOR_PASSWORD}")
 
 
 if __name__ == "__main__":

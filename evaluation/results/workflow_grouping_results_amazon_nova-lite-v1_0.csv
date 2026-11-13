@@ -1,0 +1,11 @@
+case_id,scenario,difficulty,n_endpoints,expected_groups,predicted_groups,group_count_match,predicted_names,error
+wg_001,HR — employés vs départements,easy,6,2,2,True,employee_record_management; department_employee_relations,
+wg_002,Facturation — cycle de vie cohérent,medium,5,1,2,False,invoice_management; invoice_pdf_generation,
+wg_003,RH + facturation mélangées,easy,5,2,2,True,employee_management; invoice_management,
+wg_004,Authentification isolée + catalogue produit,hard,5,2,2,True,product_management; authentication,
+wg_005,Panier / commande — flux cohérent,medium,4,1,2,False,cart_management; cart_item_management,
+wg_006,Employés vs notifications,easy,4,2,2,True,employee_management; notification_management,
+wg_007,Trois domaines simultanés,medium,6,3,3,True,employee_management; product_management; order_management,
+wg_008,"RH étendu — 12 endpoints, 5 groupes",hard,12,5,5,True,employee_management; contract_management; department_management; payroll_processing; authentication,
+wg_009,Catalogue produit cohérent (variante e-commerce),easy,4,1,1,True,product_management,
+wg_010,Deux singletons réellement indépendants,hard,2,2,2,True,feedback_management; report_export,

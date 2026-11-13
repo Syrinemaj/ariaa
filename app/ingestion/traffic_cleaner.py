@@ -65,5 +65,13 @@ def clean_traffic(entries: List[TrafficEntry]) -> List[TrafficEntry]:
             continue
         if entry.path.rstrip("/") in NOISE_PATHS:
             continue
+        # HAR convention: status 0 means the browser never got a response
+        # (cancelled/aborted/blocked request) — not a real 4xx/5xx from the
+        # server. No headers, no body, no status code worth recording; if
+        # the same call also succeeded elsewhere in the capture (the usual
+        # case — a duplicate fired by the page, then cancelled), dropping
+        # this one avoids it contaminating that endpoint's merged status_codes.
+        if entry.status == 0:
+            continue
         cleaned.append(entry)
     return cleaned

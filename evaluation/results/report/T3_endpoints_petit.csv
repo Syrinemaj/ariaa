@@ -1,0 +1,7 @@
+method,path,canonical_key,correct (o/n),commentaire
+POST,/v1/users,POST /v1/users,,
+GET,/v1/users,GET /v1/users,,
+GET,/v1/users/{user_id},GET /v1/users/{user_id},,
+PUT,/v1/users/{user_id},PUT /v1/users/{user_id},,
+POST,/v1/orders,POST /v1/orders,,
+GET,/v1/orders/{order_id},GET /v1/orders/{order_id},,

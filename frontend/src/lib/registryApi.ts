@@ -13,6 +13,7 @@ export interface AnalysisRun {
   updated_at: string
   org_id: string
   created_by_user_id: string
+  created_by_name?: string | null
 }
 
 export interface BackendWorkflow {

@@ -16,6 +16,9 @@ class AutomationRun(TimestampMixin, OrgScopedMixin, UserOwnedMixin, TeamScopedMi
     instruction: Mapped[str] = mapped_column(String, nullable=False)
     workflow_name: Mapped[str] = mapped_column(String, nullable=False)
     dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
+    # 'simple' (app/automation/service.py) | 'bulk' (app/bulk_execution/service.py)
+    # — both write to this same table; nothing else distinguishes them.
+    source: Mapped[str] = mapped_column(String, default="simple")
     status: Mapped[str] = mapped_column(String, default="created")
     total_steps: Mapped[int] = mapped_column(Integer, default=0)
     success_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -23,6 +26,11 @@ class AutomationRun(TimestampMixin, OrgScopedMixin, UserOwnedMixin, TeamScopedMi
     duration_seconds: Mapped[float] = mapped_column(Float, default=0.0)
     plan_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     result_json: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # Nullable: historical rows predate Connections. Which Connection a run
+    # used — never the secret, see app/connections/service.py.
+    connection_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("connections.id"), nullable=True, index=True
+    )
 
     logs = relationship("AutomationStepLog", back_populates="automation_run", cascade="all, delete-orphan")
 

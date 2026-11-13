@@ -2,24 +2,19 @@
 Per-model token pricing table.
 
 Used for two things:
-  1. Accurate cost estimation for whichever model is actually configured
-     (see cost_estimator.py) — previously every provider was billed at a
-     single hardcoded rate (settings.LLM_PROMPT_COST_PER_1K /
-     LLM_COMPLETION_COST_PER_1K), which happened to match Azure's
-     gpt-4o-mini pricing and was silently wrong for Groq.
+  1. Accurate cost estimation for whichever Bedrock model is actually
+     configured (see cost_estimator.py).
   2. Projecting what real historical usage would cost under a different
-     model (compare_models / get_model_cost_comparison in service.py) —
-     the decision tool for "is switching provider worth it".
+     Bedrock model (compare_models / get_model_cost_comparison in
+     service.py) — the decision tool behind the switch documented in
+     app/core/config.py::BEDROCK_MODEL (deepseek.v3.2 → amazon.nova-lite-v1:0).
 
-Only Groq (current provider) and Amazon Bedrock Claude models are priced
-here — Azure is intentionally excluded from the comparison (it's not a
-migration candidate, even though AzureOpenAIClient remains available as
-a standalone provider option elsewhere in the app).
+Only Amazon Bedrock models are priced here — Bedrock is the only
+completion provider (see app/ai/base_client.py::create_ai_client()).
 
 Prices are USD per 1,000 tokens (input, output). They are a cached
 snapshot, not a live lookup — provider pricing pages change. Re-verify
 before using this for a high-stakes migration decision:
-  - Groq:    https://console.groq.com/docs/pricing (cached, verify)
   - Bedrock: https://aws.amazon.com/bedrock/pricing/ (cached 2026-06-24;
     Anthropic model pricing on Bedrock has historically matched Anthropic's
     first-party rates, but confirm for your region before committing)
@@ -39,13 +34,7 @@ class ModelPrice:
 
 
 PRICING: dict[str, ModelPrice] = {
-    # ── Current production provider ────────────────────────────────────────
-    "llama-3.3-70b-versatile": ModelPrice(
-        provider="groq", model="llama-3.3-70b-versatile",
-        input_per_1k=0.00059, output_per_1k=0.00079,
-        note="Groq public pricing snapshot — verify at console.groq.com/docs/pricing",
-    ),
-    # ── Amazon Bedrock candidates for the Groq → AWS migration ─────────────
+    # ── Amazon Bedrock models ───────────────────────────────────────────────
     # Bedrock model IDs take the "anthropic." prefix (vs. bare "claude-..."
     # on the first-party Anthropic API) — use these exact strings when
     # calling bedrock-runtime.converse(). Keys here are the PRICING lookup

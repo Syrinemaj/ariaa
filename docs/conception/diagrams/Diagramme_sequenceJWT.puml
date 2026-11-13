@@ -1,0 +1,46 @@
+@startuml Diagramme_sequenceJWT
+!theme plain
+
+actor Utilisateur
+participant "Frontend\n(AuthContext.tsx)" as FE
+participant "POST /auth/login\n(app/api/auth.py)" as API
+participant "get_current_user\n(app/auth/dependencies.py)" as Dep
+database "Redis" as Redis
+database "PostgreSQL" as PG
+
+Utilisateur -> FE : saisit email/mot de passe
+FE -> API : POST /auth/login
+API -> PG : SELECT User WHERE email=...
+API -> API : passlib.verify(password, hashed_password)
+alt échec
+  API --> FE : 401 Unauthorized
+else succès
+  API -> API : encode_access_token (HS256, 30 min)\nencode_refresh_token (30 jours)
+  API -> PG : INSERT RefreshToken
+  API --> FE : {access_token, refresh_token}
+  FE -> FE : sessionStorage.setItem(...)
+end
+
+FE -> API : GET /auth/me\nAuthorization: Bearer <access_token>
+API -> Dep : get_current_user(credentials)
+Dep -> Dep : decode_access_token(token)
+Dep -> Redis : is_jti_blocklisted(jti) ?
+Dep -> Redis : GET token_version:{user_id}
+alt token révoqué ou version obsolète
+  Dep --> API : 401 Unauthorized
+else token valide
+  Dep -> Redis : GET user:{id} (cache 60s)
+  alt cache miss
+    Dep -> PG : SELECT User WHERE id=...
+    Dep -> Redis : SET user:{id} (TTL 60s)
+  end
+  Dep --> API : User
+  API --> FE : profil utilisateur
+end
+
+Utilisateur -> FE : déconnexion
+FE -> API : POST /auth/logout
+API -> Redis : ajoute jti à la liste de révocation
+FE -> FE : sessionStorage.clear()
+
+@enduml

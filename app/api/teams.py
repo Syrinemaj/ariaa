@@ -15,6 +15,7 @@ from app.teams.service import (
     list_teams,
     remove_member,
     rename_team,
+    set_team_member_admin,
 )
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
@@ -32,6 +33,10 @@ class TeamMemberRequest(BaseModel):
     user_id: str
 
 
+class TeamMemberRoleRequest(BaseModel):
+    is_team_admin: bool
+
+
 @router.get("", response_model=dict)
 async def list_teams_route(
     db: AsyncSession = Depends(get_db),
@@ -47,7 +52,7 @@ async def create_team_route(
     current_user: User = Depends(require_admin),
 ):
     try:
-        team = await create_team(db, org_id=current_user.org_id, name=payload.name)
+        team = await create_team(db, org_id=current_user.org_id, name=payload.name, creator_user_id=current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
@@ -60,7 +65,10 @@ async def create_team_route(
         metadata={"name": team.name},
     )
 
-    return {"id": team.id, "org_id": team.org_id, "name": team.name, "member_count": 0, "member_user_ids": []}
+    return {
+        "id": team.id, "org_id": team.org_id, "name": team.name,
+        "member_count": 1, "member_user_ids": [current_user.id],
+    }
 
 
 @router.get("/{team_id}", response_model=dict)
@@ -155,7 +163,10 @@ async def remove_team_member_route(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    removed = await remove_member(db, team_id=team_id, org_id=current_user.org_id, user_id=user_id)
+    try:
+        removed = await remove_member(db, team_id=team_id, org_id=current_user.org_id, user_id=user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Membership not found")
 
@@ -167,3 +178,32 @@ async def remove_team_member_route(
         resource_id=team_id,
         metadata={"user_id": user_id},
     )
+
+
+@router.patch("/{team_id}/members/{user_id}", response_model=dict)
+async def set_team_member_role_route(
+    team_id: str,
+    user_id: str,
+    payload: TeamMemberRoleRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    try:
+        membership = await set_team_member_admin(
+            db, team_id=team_id, org_id=current_user.org_id, user_id=user_id, is_team_admin=payload.is_team_admin,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        http_status = status.HTTP_404_NOT_FOUND if detail in ("Team not found", "Membership not found") else status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=http_status, detail=detail)
+
+    await log_audit_event(
+        db=db,
+        user=current_user,
+        action=AuditEvent.TEAM_MEMBER_ROLE_CHANGED,
+        resource_type="team",
+        resource_id=team_id,
+        metadata={"user_id": user_id, "is_team_admin": payload.is_team_admin},
+    )
+
+    return {"team_id": team_id, "user_id": user_id, "is_team_admin": membership.is_team_admin}

@@ -1,0 +1,24 @@
+[
+  {
+    "model": "deepseek.v3.2",
+    "skipped": false,
+    "cases_completed": 10,
+    "completion_rate": 1.0,
+    "index_completeness": 1.0,
+    "pairwise_f1": 0.8548387096774193,
+    "group_count_match": 0.8,
+    "naming_quality": 1.0,
+    "cost_usd": 0.020946000000000003
+  },
+  {
+    "model": "amazon.nova-lite-v1:0",
+    "skipped": false,
+    "cases_completed": 10,
+    "completion_rate": 1.0,
+    "index_completeness": 0.9,
+    "pairwise_f1": 0.9444444444444444,
+    "group_count_match": 0.8,
+    "naming_quality": 1.0,
+    "cost_usd": 0.0005059999999999926
+  }
+]

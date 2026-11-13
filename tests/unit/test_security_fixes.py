@@ -56,9 +56,11 @@ class TestUserRoleEnum:
         from app.models.user import UserRole
         assert UserRole.OPERATOR.value == "OPERATOR"
 
-    def test_viewer_exists(self):
+    def test_viewer_role_removed(self):
+        # VIEWER was dropped in migration 014 (never assigned, never
+        # enforced) — the role model now only has ADMIN/OPERATOR.
         from app.models.user import UserRole
-        assert UserRole.VIEWER.value == "VIEWER"
+        assert not hasattr(UserRole, "VIEWER")
 
     def test_str_comparison(self):
         from app.models.user import UserRole
@@ -68,7 +70,7 @@ class TestUserRoleEnum:
 
     def test_values_method(self):
         from app.models.user import UserRole
-        assert UserRole.values() == {"ADMIN", "OPERATOR", "VIEWER"}
+        assert UserRole.values() == {"ADMIN", "OPERATOR"}
 
     def test_require_roles_uses_values(self):
         """require_roles must compare role values, not enum objects."""

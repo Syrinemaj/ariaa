@@ -6,20 +6,23 @@ import AppLayout from '../components/layout/AppLayout'
 import { StatusBadge } from '../components/aria/Badges'
 import { listRuns, AnalysisRun, getWorkflows, BackendWorkflow } from '../lib/registryApi'
 import {
-  createPlan, CreatePlanResponse, validateToken, planFromWorkflow, recordApproval,
-  ValidateTokenResponse,
+  createPlan, CreatePlanResponse, planFromWorkflow,
 } from '../lib/automationApi'
 import {
   uploadDataFile, suggestMapping, validateBulk, dryRunBulk,
-  executeBulk, getBulkJobProgress, getBulkReport, downloadRowErrorsCsv,
+  executeBulk, executeBulkReal, requestBulkApproval, getBulkJobProgress, cancelBulkJob, getBulkReport, downloadRowErrorsCsv, approveMapping,
   DataFileUploadResult, MappingResult, ValidationResult,
   DryRunResult, BulkExecuteResult, BulkJobProgress, BulkReport,
 } from '../lib/bulkApi'
+import { listApprovals } from '../lib/approvalsApi'
+import { Connection } from '../lib/connectionsApi'
+import ConnectionPicker from '../components/automation/ConnectionPicker'
+import { ApiError } from '../lib/api'
 import {
   Upload, Network, CheckCheck, Eye, Shield, Play, BarChart2,
   Check, ChevronLeft, ArrowRight, Layers, Inbox, BarChart3,
-  FlaskConical, Folder, Download, Info, X, Plus,
-  Lock, TriangleAlert, Loader2, Zap,
+  FlaskConical, Folder, Download, Info, X, XCircle,
+  TriangleAlert, Loader2, Zap,
 } from 'lucide-react'
 import AutomationSimpleDrawer from '../components/automation/AutomationSimpleDrawer'
 
@@ -69,36 +72,6 @@ function ToggleBig({ label, hint, checked, onChange, disabled }: {
         <p className="text-xs ink-2">{hint}</p>
       </div>
     </label>
-  )
-}
-
-type HeaderRow = { k: string; v: string }
-function KeyValueEditor({ label, rows, setRows }: { label: string; rows: HeaderRow[]; setRows: (r: HeaderRow[]) => void }) {
-  const SENSITIVE = ['authorization', 'token', 'cookie', 'api-key', 'password', 'secret']
-  return (
-    <div>
-      <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">{label}</p>
-      <div className="space-y-2">
-        {rows.map((h, i) => {
-          const s = SENSITIVE.some(k => h.k.toLowerCase().includes(k))
-          return (
-            <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2">
-              <input value={h.k} className="input !py-1.5 font-mono text-xs"
-                onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, k: e.target.value } : x))} />
-              <div className="relative">
-                <input type={s ? 'password' : 'text'} value={h.v} className="input !py-1.5 font-mono text-xs"
-                  onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, v: e.target.value } : x))} />
-                {s && <span className="absolute right-2 top-1/2 -translate-y-1/2 pill text-[9px] bg-rose-50 text-rose-700 border-rose-200"><Lock className="w-2.5 h-2.5" />hidden</span>}
-              </div>
-              <button className="btn-ghost !p-1.5" onClick={() => setRows(rows.filter((_, j) => j !== i))}><X className="w-4 h-4" /></button>
-            </div>
-          )
-        })}
-        <button onClick={() => setRows([...rows, { k: '', v: '' }])} className="btn-ghost text-xs">
-          <Plus className="w-3.5 h-3.5" /> Add
-        </button>
-      </div>
-    </div>
   )
 }
 
@@ -217,13 +190,16 @@ function StepUpload({
 }
 
 function StepMapping({
-  mapping, suggesting, onNext, onBack,
+  mapping, setMapping, suggesting, onNext, onBack,
 }: {
   mapping: MappingResult | null
+  setMapping: (m: MappingResult | null) => void
   suggesting: boolean
   onNext: () => void
   onBack: () => void
 }) {
+  const [approvingId, setApprovingId] = useState<string | null>(null)
+
   const KINDS: Record<string, string> = {
     exact: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     synonym: 'bg-sky-50 text-sky-700 border-sky-200',
@@ -233,6 +209,21 @@ function StepMapping({
 
   const exactCount = mapping?.mappings.filter(m => m.target_field && m.source !== 'missing').length ?? 0
   const missingCount = mapping?.mappings.filter(m => !m.target_field).length ?? 0
+  const needsReviewCount = mapping?.mappings.filter(m => m.target_field && m.id && !m.approved).length ?? 0
+
+  async function handleApprove(id: string) {
+    if (!mapping) return
+    setApprovingId(id)
+    try {
+      const updated = await approveMapping(id, true)
+      setMapping({
+        ...mapping,
+        mappings: mapping.mappings.map(m => m.id === id ? { ...m, approved: updated.approved } : m),
+      })
+    } finally {
+      setApprovingId(null)
+    }
+  }
 
   return (
     <div className="card pad">
@@ -244,10 +235,19 @@ function StepMapping({
         {mapping && (
           <div className="flex items-center gap-2">
             <span className="pill bg-emerald-50 text-emerald-700 border-emerald-200">{exactCount} mapped</span>
+            {needsReviewCount > 0 && <span className="pill bg-sky-50 text-sky-700 border-sky-200">{needsReviewCount} needs approval</span>}
             {missingCount > 0 && <span className="pill bg-amber-50 text-amber-700 border-amber-200">{missingCount} missing</span>}
           </div>
         )}
       </div>
+
+      {mapping && needsReviewCount > 0 && (
+        <div className="p-3 rounded-xl flex items-start gap-2 text-xs mb-4"
+          style={{ background: 'color-mix(in oklch, #0ea5e9 8%, var(--card))', color: '#0369a1', border: '1px solid color-mix(in oklch, #0ea5e9 30%, var(--line))' }}>
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <span>{needsReviewCount} mapping(s) were matched by similarity, not an exact name — click "Approve" to use them. Unapproved mappings are treated as missing during validation.</span>
+        </div>
+      )}
 
       {suggesting ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -287,10 +287,19 @@ function StepMapping({
                       </div>
                     </td>
                     <td className="px-2 py-3 text-center">
-                      {m.approved
-                        ? <Check className="w-4 h-4 inline text-emerald-600" />
-                        : <span className="text-xs ink-2 italic">—</span>
-                      }
+                      {m.approved ? (
+                        <Check className="w-4 h-4 inline text-emerald-600" />
+                      ) : m.id ? (
+                        <button
+                          onClick={() => handleApprove(m.id!)}
+                          disabled={approvingId === m.id}
+                          className="text-xs px-2 py-1 rounded-full border transition hover:opacity-80"
+                          style={{ borderColor: 'var(--brand)', color: 'var(--brand)', background: 'color-mix(in oklch, var(--brand) 6%, var(--card))', opacity: approvingId === m.id ? 0.6 : 1 }}>
+                          {approvingId === m.id ? 'Approving…' : 'Approve'}
+                        </button>
+                      ) : (
+                        <span className="text-xs ink-2 italic">—</span>
+                      )}
                     </td>
                   </tr>
                 )
@@ -502,12 +511,21 @@ function StepDryRun({
 }
 
 function StepApproval({
-  dryRunResult, planSteps, approval, setApproval, onNext, onBack,
+  dryRunResult, planSteps,
+  connectionId, setConnectionId, setSelectedConnection,
+  approvalStatus, approvalCode, pendingRunId, checkingApproval,
+  onRequestApproval, onNext, onBack,
 }: {
   dryRunResult: DryRunResult | null
   planSteps: Array<{ order: number; method: string; path: string }>
-  approval: boolean
-  setApproval: (v: boolean) => void
+  connectionId: string
+  setConnectionId: (v: string) => void
+  setSelectedConnection: (c: Connection | undefined) => void
+  approvalStatus: 'idle' | 'pending' | 'approved'
+  approvalCode: 'APPROVED' | 'NOT_REQUIRED' | null
+  pendingRunId: string | null
+  checkingApproval: boolean
+  onRequestApproval: () => void
   onNext: () => void
   onBack: () => void
 }) {
@@ -569,24 +587,42 @@ function StepApproval({
 
         <div style={{ borderLeft: '1px solid var(--line)', paddingLeft: '1.5rem' }}>
           <p className="text-sm font-bold mb-3" style={{ color: 'var(--ink)' }}>Confirm</p>
-          <label className="flex items-start gap-2 cursor-pointer mb-4">
-            <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5" />
-            <span className="text-sm" style={{ color: 'var(--ink)' }}>I have reviewed the dry-run result and authorize execution.</span>
-          </label>
-          <button onClick={() => setApproval(true)} disabled={!confirmed}
-            className={`w-full mt-4 ${approval ? 'btn-secondary' : 'btn-primary'}`}
-            style={{ opacity: confirmed ? 1 : 0.6 }}>
-            <Check className="w-4 h-4" /> {approval ? 'Approved ✓' : 'Approve run'}
-          </button>
-          {approval && (
-            <p className="text-xs text-emerald-600 mt-2 text-center">Approval recorded</p>
+          <div className="mb-4">
+            <ConnectionPicker value={connectionId} onChange={setConnectionId} onSelectConnection={setSelectedConnection} />
+          </div>
+
+          {approvalStatus === 'idle' && (
+            <>
+              <label className="flex items-start gap-2 cursor-pointer mb-4">
+                <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5" />
+                <span className="text-sm" style={{ color: 'var(--ink)' }}>I have reviewed the dry-run result and authorize execution.</span>
+              </label>
+              <button onClick={onRequestApproval} disabled={!confirmed || !connectionId || checkingApproval}
+                className="btn-primary w-full" style={{ opacity: (confirmed && connectionId) ? 1 : 0.6 }}>
+                {checkingApproval ? <><Spinner className="w-4 h-4" /> Checking…</> : <><Check className="w-4 h-4" /> Request approval</>}
+              </button>
+            </>
+          )}
+
+          {approvalStatus === 'pending' && (
+            <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', color: '#92400e', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
+              <Loader2 className="w-4 h-4 mt-0.5 flex-shrink-0 animate-spin" />
+              <span>Waiting for an admin to approve this execution{pendingRunId ? ` (run ${pendingRunId.slice(0, 8)}…)` : ''} — checking automatically every 8s.</span>
+            </div>
+          )}
+
+          {approvalStatus === 'approved' && (
+            <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #10b981 8%, var(--card))', color: '#065f46', border: '1px solid color-mix(in oklch, #10b981 30%, var(--line))' }}>
+              <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>{approvalCode === 'NOT_REQUIRED' ? 'No admin approval required for this run.' : 'Approved by an admin.'} You can proceed — execution still needs a final, separate click.</span>
+            </div>
           )}
         </div>
       </div>
 
       <div className="flex justify-between mt-6 pt-5" style={{ borderTop: '1px solid var(--line)' }}>
         <button onClick={onBack} className="btn-secondary"><ChevronLeft className="w-4 h-4" />Back</button>
-        <button onClick={onNext} disabled={!approval} className="btn-primary" style={{ opacity: approval ? 1 : 0.6 }}>
+        <button onClick={onNext} disabled={approvalStatus !== 'approved'} className="btn-primary" style={{ opacity: approvalStatus === 'approved' ? 1 : 0.6 }}>
           Proceed to execution <ArrowRight className="w-4 h-4" />
         </button>
       </div>
@@ -595,17 +631,15 @@ function StepApproval({
 }
 
 function StepExecute({
-  approval, dryRunResult,
+  dryRunResult,
   isSimulation, setIsSimulation,
   batchSize, setBatchSize,
   allowPartial, setAllowPartial,
-  baseUrl, setBaseUrl,
-  execHeaders, setExecHeaders,
-  bulkJob, jobProgress, executing,
-  tokenStatus, tokenMessage, onTestToken,
-  onExecute, onNext, onBack,
+  connectionId, selectedConnection,
+  bulkJob, jobProgress, executing, cancelling,
+  approvalStatus, pendingRunId,
+  onExecute, onCancel, onNext, onBack,
 }: {
-  approval: boolean
   dryRunResult: DryRunResult | null
   isSimulation: boolean
   setIsSimulation: (v: boolean) => void
@@ -613,24 +647,37 @@ function StepExecute({
   setBatchSize: (v: number) => void
   allowPartial: boolean
   setAllowPartial: (v: boolean) => void
-  baseUrl: string
-  setBaseUrl: (v: string) => void
-  execHeaders: HeaderRow[]
-  setExecHeaders: (r: HeaderRow[]) => void
+  connectionId: string
+  selectedConnection: Connection | undefined
   bulkJob: BulkExecuteResult | null
   jobProgress: BulkJobProgress | null
   executing: boolean
-  tokenStatus: 'idle' | 'testing' | 'valid' | 'error'
-  tokenMessage: string
-  onTestToken: () => void
+  cancelling: boolean
+  approvalStatus: 'idle' | 'pending' | 'approved'
+  pendingRunId: string | null
   onExecute: () => void
+  onCancel: () => void
   onNext: () => void
   onBack: () => void
 }) {
-  const canExecute = isSimulation || approval
+  const waitingOnAdmin = !isSimulation && approvalStatus === 'pending'
+  const adminApproved = !isSimulation && approvalStatus === 'approved'
+  // Not gated on approvalStatus === 'approved': the first real click already
+  // required that (via the Approval step's own gate), but a SUBSEQUENT real
+  // click ("Run again for real") resets approvalStatus to 'idle' once the
+  // prior run succeeds — correctly, since a fresh real run may need its own
+  // fresh sign-off. Blocking the click here on stale 'approved' state made
+  // every retry permanently disabled. The backend always re-checks on every
+  // call regardless (see _resolve_bulk_governance_and_approval in
+  // app/api/bulk.py) — if it decides a new approval is needed, handleExecute
+  // already catches that and shows the waiting tile; no need to pre-empt it
+  // here. waitingOnAdmin alone is enough to stop a second click mid-poll.
+  const canExecute = !!connectionId && !waitingOnAdmin
   const progress = jobProgress ?? null
   const pct = progress?.progress_pct ?? 0
-  const isDone = progress && ['done', 'failed', 'partial'].includes(progress.status)
+  const isDone = progress && ['done', 'failed', 'partial', 'cancelled'].includes(progress.status)
+  const canCancel = progress && ['queued', 'running'].includes(progress.status)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   return (
     <div className="space-y-4">
@@ -649,22 +696,13 @@ function StepExecute({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-4">
             <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Target API URL</p>
-              <div className="flex gap-2">
-                <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} className="input !py-2 font-mono text-xs flex-1" />
-                <button onClick={onTestToken} disabled={!baseUrl || tokenStatus === 'testing'}
-                  className="btn-secondary shrink-0 !py-1.5 !px-3 text-xs whitespace-nowrap">
-                  {tokenStatus === 'testing' ? <Spinner className="w-3.5 h-3.5" /> : 'Test'}
-                </button>
+              <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Target connection</p>
+              <div className="px-3 py-2 rounded-lg text-sm font-mono flex items-center gap-2" style={{ border: '1px solid var(--line)', color: 'var(--ink)' }}>
+                {selectedConnection?.name ?? connectionId ?? '—'}
+                <span className="ink-2 text-xs">{selectedConnection?.base_url}</span>
               </div>
-              {tokenStatus !== 'idle' && tokenStatus !== 'testing' && (
-                <p className={`mt-1.5 text-xs flex items-center gap-1 ${tokenStatus === 'valid' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {tokenStatus === 'valid' ? <Check className="w-3 h-3" /> : <TriangleAlert className="w-3 h-3" />}
-                  {tokenMessage}
-                </p>
-              )}
+              <p className="text-[10px] ink-2 mt-1">Chosen on the Approval step — any admin sign-off obtained there is tied to this connection.</p>
             </div>
-            <KeyValueEditor label="Authentication headers" rows={execHeaders} setRows={setExecHeaders} />
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[10px] font-bold tracking-widest uppercase ink-2">Rows per batch</span>
@@ -677,24 +715,38 @@ function StepExecute({
           <div className="space-y-3">
             <ToggleBig label="Simulation mode" hint="ARIA prepares the requests but does not send them" checked={isSimulation} onChange={setIsSimulation} />
             <ToggleBig label="Valid rows only" hint={`Execute only the ${dryRunResult?.valid_rows.toLocaleString() ?? '…'} valid rows`} checked={allowPartial} onChange={setAllowPartial} />
-            {!isSimulation && approval && (
+            {!isSimulation && approvalStatus === 'approved' && (
               <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
                 <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span>You are about to execute <span className="font-bold">{(dryRunResult?.estimated_api_calls ?? 0).toLocaleString()} requests</span> against <span className="font-mono">{baseUrl}</span>. Irreversible.</span>
+                <span>You are about to execute <span className="font-bold">{(dryRunResult?.estimated_api_calls ?? 0).toLocaleString()} requests</span> against <span className="font-mono">{selectedConnection?.base_url ?? 'the selected connection'}</span>. Irreversible.</span>
+              </div>
+            )}
+            {waitingOnAdmin && (
+              <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', color: '#92400e', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
+                <Loader2 className="w-4 h-4 mt-0.5 flex-shrink-0 animate-spin" />
+                <span>Waiting for an admin to approve this execution{pendingRunId ? ` (run ${pendingRunId.slice(0, 8)}…)` : ''} — checking automatically every 8s.</span>
+              </div>
+            )}
+            {adminApproved && (
+              <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #10b981 8%, var(--card))', color: '#065f46', border: '1px solid color-mix(in oklch, #10b981 30%, var(--line))' }}>
+                <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>Approved by an admin — click "Execute for real" below to run it.</span>
               </div>
             )}
           </div>
         </div>
 
         <div className="flex justify-end mt-5">
-          <button onClick={onExecute} disabled={!canExecute || executing || !!bulkJob}
+          <button onClick={onExecute} disabled={!canExecute || executing || waitingOnAdmin || (!!bulkJob && !isDone)}
             className={isSimulation ? 'btn-primary' : 'btn-danger'}
-            style={{ opacity: canExecute ? 1 : 0.6 }}>
+            style={{ opacity: (canExecute && !waitingOnAdmin) ? 1 : 0.6 }}>
             {executing && !bulkJob
               ? <><Spinner className="w-4 h-4" /> Starting…</>
-              : bulkJob
-                ? <><Check className="w-4 h-4" /> Started</>
-                : <><Play className="w-4 h-4" /> {isSimulation ? 'Run simulation' : "Start execution"}</>
+              : waitingOnAdmin
+                ? <><Spinner className="w-4 h-4" /> Waiting on admin…</>
+                : bulkJob && !isDone
+                  ? <><Check className="w-4 h-4" /> Started</>
+                  : <><Play className="w-4 h-4" /> {isSimulation ? 'Run simulation' : adminApproved ? 'Execute for real' : bulkJob ? 'Run again for real' : 'Start execution'}</>
             }
           </button>
         </div>
@@ -709,7 +761,10 @@ function StepExecute({
               </p>
               <div className="flex items-center gap-2 flex-wrap mt-1">
                 <StatusBadge s={progress?.status ?? 'queued'} />
-                {isSimulation
+                {/* progress.dry_run reflects what THIS job actually ran as —
+                    not the live isSimulation toggle, which the user may have
+                    already flipped in preparation for the next run. */}
+                {(progress ? progress.dry_run : isSimulation)
                   ? <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>
                   : <span className="pill bg-rose-50 text-rose-700 border-rose-200">Live execution</span>
                 }
@@ -742,11 +797,48 @@ function StepExecute({
             <div className="h-3 rounded-full grad-bg transition-all duration-500" style={{ width: `${pct}%` }} />
           </div>
           {!isDone && (
-            <div className="flex items-center gap-2 mt-3">
-              <Spinner className="w-4 h-4" />
-              <span className="text-xs ink-2">Updating every 3s…</span>
+            <div className="flex items-center justify-between gap-2 mt-3">
+              <div className="flex items-center gap-2">
+                <Spinner className="w-4 h-4" />
+                <span className="text-xs ink-2">
+                  {progress?.status === 'cancelling' ? 'Cancelling — finishing in-flight rows…' : 'Updating every 3s…'}
+                </span>
+              </div>
+              {canCancel && (
+                <button onClick={() => setShowCancelConfirm(true)} className="btn-secondary !py-1.5 !text-xs" disabled={cancelling}>
+                  <XCircle className="w-3.5 h-3.5" /> Cancel execution
+                </button>
+              )}
             </div>
           )}
+        </div>
+      )}
+
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowCancelConfirm(false)} />
+          <div className="relative card pad w-full max-w-[460px] shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(244,63,94,0.1)', color: '#f43f5e' }}>
+                <TriangleAlert className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-black" style={{ color: 'var(--ink)' }}>Cancel this execution?</h3>
+                <p className="text-sm ink-2 mt-1.5">
+                  Any row currently in flight will finish normally — a request already sent can't be safely
+                  pulled back. No new row or batch will start after that. Rows not yet reached stay untouched
+                  and can be resumed later.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setShowCancelConfirm(false)} className="btn-secondary">Keep running</button>
+              <button onClick={() => { setShowCancelConfirm(false); onCancel() }} className="btn-danger" disabled={cancelling}>
+                <XCircle className="w-4 h-4" /> {cancelling ? 'Cancelling…' : 'Cancel execution'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -768,15 +860,45 @@ function StepReport({
   onBack: () => void
   onViewFullReport: (automationRunId: string) => void
 }) {
+  // report.status is the AutomationRun's own status (set by
+  // app/workers/tasks/reporting.py), distinct from the job/batch statuses
+  // shown elsewhere: 'success' | 'partial_success' | 'failed' | 'cancelled' |
+  // 'running' (still finalizing — see the polling loop in handleGoReport).
+  const isFinalizing = report?.status === 'running'
+  const isHealthy = report?.status === 'success'
+  const totalRows = (report?.success_count ?? 0) + (report?.failed_count ?? 0)
+  const successRatePct = totalRows > 0 ? ((report?.success_count ?? 0) / totalRows) * 100 : 0
+
   return (
     <div className="space-y-4">
-      {loadingReport ? (
+      {loadingReport && !report ? (
         <div className="card pad flex flex-col items-center justify-center py-16 gap-3">
           <Spinner className="w-8 h-8" />
           <p className="text-sm ink-2">Loading report…</p>
         </div>
       ) : report ? (
         <>
+          {/* Health banner — mirrors the one on the Reports > Overview page */}
+          {isFinalizing ? (
+            <div className="card pad flex items-center gap-4" style={{ background: 'color-mix(in oklch, #3b82f6 6%, var(--card))', border: '1px solid color-mix(in oklch, #3b82f6 25%, var(--line))' }}>
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-sm text-blue-600"><Spinner className="w-5 h-5" /></div>
+              <p className="text-sm font-bold text-blue-700">Finalizing the report — batches are done, wrapping up the final counts…</p>
+            </div>
+          ) : isHealthy ? (
+            <div className="card pad flex items-center gap-4" style={{ background: 'color-mix(in oklch, #10b981 6%, var(--card))', border: '1px solid color-mix(in oklch, #10b981 25%, var(--line))' }}>
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-sm text-emerald-600"><CheckCheck className="w-5 h-5" /></div>
+              <p className="text-sm font-bold text-emerald-700">All {totalRows.toLocaleString()} row(s) completed successfully.</p>
+            </div>
+          ) : (
+            <div className="card pad flex items-center gap-4 flex-wrap" style={{ background: 'color-mix(in oklch, #f59e0b 6%, var(--card))', border: '1px solid color-mix(in oklch, #f59e0b 25%, var(--line))' }}>
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center flex-shrink-0 shadow-sm" style={{ color: '#b45309' }}><TriangleAlert className="w-5 h-5" /></div>
+              <p className="text-sm font-bold" style={{ color: '#b45309' }}>
+                {report.status === 'cancelled' ? 'Execution was cancelled — ' : ''}
+                {report.failed_count.toLocaleString()} of {totalRows.toLocaleString()} row(s) failed.
+              </p>
+            </div>
+          )}
+
           <div className="card overflow-hidden">
             <div className="p-5 flex items-start justify-between gap-4 flex-wrap aria-hero">
               <div>
@@ -801,10 +923,10 @@ function StepReport({
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { l: 'Success', v: report.success_count.toLocaleString(), c: 'text-emerald-600', s: `${((report.success_count / (report.success_count + report.failed_count)) * 100).toFixed(1)}%` },
-              { l: 'Failures', v: report.failed_count.toLocaleString(), c: 'text-rose-600', s: 'to retry' },
+              { l: 'Success rate', v: totalRows > 0 ? `${successRatePct.toFixed(1)}%` : '—', c: 'text-emerald-600', s: '' },
+              { l: 'Failures', v: report.failed_count.toLocaleString(), c: 'text-rose-600', s: report.failed_count > 0 ? 'to retry' : '' },
               { l: 'Total batches', v: report.batch_summary.length.toLocaleString(), c: '', s: '' },
-              { l: 'Status', v: report.status, c: report.status === 'done' ? 'text-emerald-600' : 'text-amber-600', s: '' },
+              { l: 'Status', v: report.status, c: isFinalizing ? 'text-blue-600' : isHealthy ? 'text-emerald-600' : 'text-amber-600', s: '' },
             ].map((s, i) => (
               <div key={i} className="card p-3">
                 <p className="text-[10px] font-bold tracking-widest uppercase ink-2">{s.l}</p>
@@ -825,7 +947,7 @@ function StepReport({
                   <tbody>
                     {report.batch_summary.map((b, i) => (
                       <tr key={i} className="border-t" style={{ borderColor: 'var(--line)' }}>
-                        <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ink)' }}>Batch {b.batch_index + 1}</td>
+                        <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ink)' }}>Batch {b.batch_number}</td>
                         <td className="px-3 py-2 font-mono text-xs ink-2">
                           {b.start_row != null ? `${b.start_row}–${b.end_row}` : '—'}
                         </td>
@@ -868,6 +990,32 @@ function StepReport({
               </div>
             </div>
           </div>
+
+          {report.duplicate_rows.length > 0 && (
+            <div className="card pad">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Resolved to an existing record</p>
+                  <p className="text-xs ink-2">{report.duplicate_rows.length} row(s) hit "already exists" — ARIA found the existing record and continued instead of failing.</p>
+                </div>
+              </div>
+              <div className="rounded-xl max-h-60 overflow-y-auto" style={{ border: '1px solid var(--line)' }}>
+                <table className="w-full text-sm">
+                  <thead className="aria-thead sticky top-0">
+                    <tr>{['Row', 'Note'].map(h => <th key={h} className="text-left px-3 py-2">{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {report.duplicate_rows.slice(0, 20).map((e, i) => (
+                      <tr key={i} className="border-t" style={{ borderColor: 'var(--line)' }}>
+                        <td className="px-3 py-2 font-mono text-xs ink-2">#{e.row_index}</td>
+                        <td className="px-3 py-2"><span className="pill bg-sky-50 text-sky-700 border-sky-200">{e.message}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="card pad flex flex-col items-center justify-center py-12 gap-2 ink-2">
@@ -901,7 +1049,7 @@ export default function BulkPage() {
   // Setup
   const [runs, setRuns] = useState<AnalysisRun[]>([])
   const [selectedRunId, setSelectedRunId] = useState('')
-  const [planInstruction, setPlanInstruction] = useState('Create an employee with a permanent contract, open a payroll account, and issue a badge')
+  const [planInstruction, setPlanInstruction] = useState('')
 
   // Job recovery — detect an interrupted bulk job from a previous session
   const [resumableJob, setResumableJob] = useState<{ jobId: string; workflowName: string } | null>(null)
@@ -930,24 +1078,29 @@ export default function BulkPage() {
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
   const [dryRunning, setDryRunning] = useState(false)
 
-  // Step 4: Approval
-  const [approved, setApproved] = useState(false)
+  // Step 4: Approval — real admin governance sign-off, requested from this
+  // step via POST /bulk/request-approval (never executes, even if the
+  // answer is "approved"). 'pending' = a request was sent to admins and
+  // we're polling GET /approvals for their decision (mirrors
+  // AutomationPage.tsx). 'approved' = either an admin actually said yes, or
+  // governance decided no approval was needed (see approvalCode) — the
+  // operator still has to click Execute for real themselves later, this
+  // never auto-executes the moment it's approved.
+  const [approvalStatus, setApprovalStatus] = useState<'idle' | 'pending' | 'approved'>('idle')
+  const [approvalCode, setApprovalCode] = useState<'APPROVED' | 'NOT_REQUIRED' | null>(null)
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null)
+  const [checkingApproval, setCheckingApproval] = useState(false)
+  const approvalPollRef = useRef<number | null>(null)
 
   // Step 5: Execute
   const [isSimulation, setIsSimulation] = useState(true)
-  const [baseUrl, setBaseUrl] = useState('')
-  const [execHeaders, setExecHeaders] = useState<HeaderRow[]>([
-    { k: 'Authorization', v: '' },
-  ])
+  const [connectionId, setConnectionId] = useState('')
+  const [selectedConnection, setSelectedConnection] = useState<Connection | undefined>(undefined)
   const [batchSize, setBatchSize] = useState(100)
   const [bulkJob, setBulkJob] = useState<BulkExecuteResult | null>(null)
   const [jobProgress, setJobProgress] = useState<BulkJobProgress | null>(null)
   const [executing, setExecuting] = useState(false)
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Token validation
-  const [tokenStatus, setTokenStatus] = useState<'idle' | 'testing' | 'valid' | 'error'>('idle')
-  const [tokenMessage, setTokenMessage] = useState('')
 
   // Workflow picker — plan generated without an LLM call, straight from a saved workflow
   const [loadingWorkflowPlan, setLoadingWorkflowPlan] = useState(false)
@@ -1017,33 +1170,6 @@ export default function BulkPage() {
       setApiError(e instanceof Error ? e.message : 'Error converting workflow')
     } finally {
       setLoadingWorkflowPlan(false)
-    }
-  }
-
-  async function handleTestToken() {
-    if (!baseUrl) return
-    setTokenStatus('testing')
-    setTokenMessage('')
-    try {
-      const authRow = execHeaders.find(h => h.k.toLowerCase() === 'authorization')
-      const authValue = authRow?.v ?? ''
-      let tokenType: 'bearer' | 'api_key' | 'basic' = 'bearer'
-      let tokenValue = authValue
-      if (authValue.toLowerCase().startsWith('bearer ')) {
-        tokenType = 'bearer'
-        tokenValue = authValue.slice(7).trim()
-      } else if (authValue.toLowerCase().startsWith('basic ')) {
-        tokenType = 'basic'
-        tokenValue = authValue.slice(6).trim()
-      } else if (!authValue.includes(' ') && authValue.length > 0) {
-        tokenType = 'api_key'
-      }
-      const result: ValidateTokenResponse = await validateToken(baseUrl, tokenType, tokenValue)
-      setTokenStatus(result.valid ? 'valid' : 'error')
-      setTokenMessage(result.message)
-    } catch (e) {
-      setTokenStatus('error')
-      setTokenMessage(e instanceof Error ? e.message : 'Network error')
     }
   }
 
@@ -1126,58 +1252,40 @@ export default function BulkPage() {
     }
   }
 
-  async function handleExecute() {
-    if (!uploadResult || !planResult) return
-    setExecuting(true)
-    setApiError('')
-    try {
-      const headersObj = Object.fromEntries(execHeaders.filter(h => h.k).map(h => [h.k, h.v]))
-      const result = await executeBulk(
-        planResult.plan,
-        uploadResult.data_file_id,
-        baseUrl,
-        headersObj,
-        isSimulation,
-        batchSize,
-        allowPartial,
-        approved,
-      )
-      setBulkJob(result)
-      // Persist job for recovery across page reloads
-      localStorage.setItem('aria_bulk_job', JSON.stringify({
-        jobId: result.job_id,
-        workflowName: planResult?.plan.workflow_name ?? 'Bulk run',
-      }))
+  // Extracted so both a fresh launch (handleExecute) and resuming an
+  // interrupted job (the "Resume tracking" banner) attach the same live
+  // polling loop — previously this lived only inside handleExecute's
+  // closure, so resuming set bulkJob/step but never actually polled,
+  // leaving the progress bar frozen at 0% forever.
+  function pollJobProgress(jobId: string) {
+    let pollInterval = 3000
+    const MAX_POLL_MS = 45 * 60 * 1000  // 45 min hard limit
+    const pollStartTime = Date.now()
 
-      // Persist approval record in DB when it's a real (non-simulation) run
-      if (!isSimulation && approved) {
+    const schedulePoll = () => {
+      pollingRef.current = setTimeout(async () => {
+        // Hard timeout — stop polling and show actionable error
+        if (Date.now() - pollStartTime > MAX_POLL_MS) {
+          setExecuting(false)
+          setApiError('The job appears stuck (45 min timeout). Check the worker logs or view the partial report.')
+          return
+        }
+
         try {
-          await recordApproval(result.automation_run_id, 'Approved via BulkPage')
-        } catch { /* non-blocking — execution already started */ }
-      }
-
-      // Poll for progress with exponential backoff using recursive setTimeout
-      let pollInterval = 3000
-      const MAX_POLL_MS = 45 * 60 * 1000  // 45 min hard limit
-      const pollStartTime = Date.now()
-
-      const schedulePoll = () => {
-        pollingRef.current = setTimeout(async () => {
-          // Hard timeout — stop polling and show actionable error
-          if (Date.now() - pollStartTime > MAX_POLL_MS) {
+          const progress = await getBulkJobProgress(jobId)
+          setJobProgress(progress)
+          if (['done', 'failed', 'partial', 'cancelled'].includes(progress.status)) {
+            pollingRef.current = null
             setExecuting(false)
-            setApiError('The job appears stuck (45 min timeout). Check the worker logs or view the partial report.')
-            return
-          }
-
-          try {
-            const progress = await getBulkJobProgress(result.job_id)
-            setJobProgress(progress)
-            if (['done', 'failed', 'partial'].includes(progress.status)) {
-              pollingRef.current = null
-              setExecuting(false)
-              localStorage.removeItem('aria_bulk_job')
-              setResumableJob(null)
+            localStorage.removeItem('aria_bulk_job')
+            setResumableJob(null)
+            if (progress.status === 'cancelled') {
+              toast({
+                type: 'warning',
+                message: `Execution cancelled · ${progress.completed}/${progress.total} rows had already completed`,
+                action: { label: 'Report →', onClick: () => nav(`/reports?tab=automation&run=${progress.automation_run_id}`) },
+              })
+            } else {
               const successRate = progress.total > 0
                 ? `${progress.completed}/${progress.total} succeeded`
                 : 'Completed'
@@ -1186,31 +1294,185 @@ export default function BulkPage() {
                 message: `Bulk run completed · ${successRate}`,
                 action: { label: 'Report →', onClick: () => nav(`/reports?tab=automation&run=${progress.automation_run_id}`) },
               })
-            } else {
-              pollInterval = Math.min(pollInterval * 1.3, 15000)
-              schedulePoll()
             }
-          } catch {
-            schedulePoll() // retry on transient network error
+          } else {
+            pollInterval = Math.min(pollInterval * 1.3, 15000)
+            schedulePoll()
           }
-        }, pollInterval)
+        } catch {
+          schedulePoll() // retry on transient network error
+        }
+      }, pollInterval)
+    }
+    schedulePoll()
+  }
+
+  function stopApprovalPolling() {
+    if (approvalPollRef.current !== null) {
+      window.clearInterval(approvalPollRef.current)
+      approvalPollRef.current = null
+    }
+  }
+
+  // Polls the Approvals queue (read-only — GET /approvals?status=...), never
+  // re-sends the execute call itself while waiting: the operator decides
+  // when to actually pull the trigger, after seeing the tile turn green.
+  // runId is a parameter (not read from pendingRunId state) to dodge a
+  // stale-closure bug — this is called right after setPendingRunId(), and
+  // the interval's closure would otherwise capture the pre-update value.
+  function startApprovalPolling(runId: string) {
+    stopApprovalPolling()
+    approvalPollRef.current = window.setInterval(async () => {
+      try {
+        const [approvedList, rejectedList] = await Promise.all([listApprovals('approved'), listApprovals('rejected')])
+        const rejection = rejectedList.find(a => a.automation_run_id === runId)
+        if (rejection) {
+          stopApprovalPolling()
+          setApprovalStatus('idle')
+          setPendingRunId(null)
+          setApiError(`Your request was rejected${rejection.comment ? `: ${rejection.comment}` : '.'}`)
+          return
+        }
+        if (approvedList.some(a => a.automation_run_id === runId)) {
+          stopApprovalPolling()
+          setApprovalStatus('approved') // tile turns green; operator clicks Execute again themselves
+          setApprovalCode('APPROVED')
+        }
+      } catch {
+        // transient fetch error — just try again next tick
       }
-      schedulePoll()
+    }, 8000)
+  }
+
+  useEffect(() => () => stopApprovalPolling(), [])
+
+  // Triggered from the Approval step. Checks/requests real admin sign-off
+  // via POST /bulk/request-approval — this NEVER starts execution, even
+  // when the answer is "approved": pulling the trigger stays a separate,
+  // deliberate click on the Execute step.
+  async function handleRequestApproval() {
+    if (!uploadResult || !planResult || !connectionId) return
+    setCheckingApproval(true)
+    setApiError('')
+    try {
+      const result = await requestBulkApproval(planResult.plan, uploadResult.data_file_id, connectionId)
+      stopApprovalPolling()
+      setApprovalStatus('approved')
+      setApprovalCode(result.code)
+      setPendingRunId(null)
     } catch (e) {
+      const detail = e instanceof ApiError && e.body && typeof e.body.detail === 'object'
+        ? e.body.detail as { code?: string; message?: string; automation_run_id?: string } : undefined
+      if (detail?.code === 'APPROVAL_PENDING') {
+        const runId = detail.automation_run_id ?? null
+        setApprovalStatus('pending')
+        setPendingRunId(runId)
+        if (runId) startApprovalPolling(runId)
+      } else if (detail?.code === 'APPROVAL_REJECTED') {
+        setApprovalStatus('idle')
+        setPendingRunId(null)
+        setApiError(detail.message ?? 'Your request was rejected.')
+      } else {
+        setApiError(detail?.message ?? (e instanceof Error ? e.message : 'Error requesting approval'))
+      }
+    } finally {
+      setCheckingApproval(false)
+    }
+  }
+
+  // Same call every time: the first click AND every retry after the tile
+  // turns green. For a real run, the backend (app/api/bulk.py) looks up any
+  // existing pending/approved request for this exact data_file+user before
+  // creating a new one — so this is "check the decision, and proceed once
+  // it's yes", not "submit a fresh approval request on every click".
+  async function handleExecute() {
+    if (!uploadResult || !planResult) return
+    setExecuting(true)
+    setApiError('')
+    // Starting a fresh execution (possibly a real run right after a
+    // simulation) — clear the previous job's result/progress so the status
+    // panel doesn't keep showing stale counts (or the wrong dry_run label)
+    // until the first poll of the new job comes back.
+    setBulkJob(null)
+    setJobProgress(null)
+    try {
+      const result = isSimulation
+        ? await executeBulk(planResult.plan, uploadResult.data_file_id, connectionId, true, batchSize, allowPartial, true)
+        : await executeBulkReal(planResult.plan, uploadResult.data_file_id, connectionId, batchSize, allowPartial)
+      stopApprovalPolling()
+      setApprovalStatus('idle')
+      setPendingRunId(null)
+      setBulkJob(result)
+      // Persist job for recovery across page reloads
+      localStorage.setItem('aria_bulk_job', JSON.stringify({
+        jobId: result.job_id,
+        workflowName: planResult?.plan.workflow_name ?? 'Bulk run',
+      }))
+      pollJobProgress(result.job_id)
+    } catch (e) {
+      const detail = e instanceof ApiError && e.body && typeof e.body.detail === 'object'
+        ? e.body.detail as { code?: string; message?: string; automation_run_id?: string } : undefined
+      if (detail?.code === 'APPROVAL_PENDING') {
+        const runId = detail.automation_run_id ?? null
+        setApprovalStatus('pending')
+        setPendingRunId(runId)
+        if (runId) startApprovalPolling(runId)
+        setExecuting(false)
+        return
+      }
+      if (detail?.code === 'APPROVAL_REJECTED') {
+        setApprovalStatus('idle')
+        setPendingRunId(null)
+        setApiError(detail.message ?? 'Your request was rejected.')
+        setExecuting(false)
+        return
+      }
       setApiError(e instanceof Error ? e.message : "Execution error")
       setExecuting(false)
     }
   }
 
+  const [cancelling, setCancelling] = useState(false)
+
+  async function handleCancelExecution() {
+    if (!bulkJob) return
+    setCancelling(true)
+    try {
+      await cancelBulkJob(bulkJob.job_id)
+      // Don't wait for the next 3s poll tick to reflect it — the existing
+      // loop will keep polling and pick up "cancelled" once the in-flight
+      // batch(es) actually stop, but flip the badge to "cancelling" now so
+      // the click feels immediate.
+      setJobProgress(prev => prev ? { ...prev, status: 'cancelling' } : prev)
+      toast({ type: 'warning', message: 'Cancellation requested — in-flight rows will finish, nothing new will start.' })
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Could not cancel this job')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  // Generating the report is async on the backend: the job finishing (Redis)
+  // and the AutomationRun's own status/counts being persisted (a separate
+  // Celery task, app/workers/tasks/reporting.py) aren't the same instant —
+  // this screen can be reached a moment before that task lands. Previously
+  // a single fetch would just show "running" forever, since `if (bulkReport)
+  // return` meant it was never fetched again once cached. Now: poll a few
+  // times (2s apart) while the AutomationRun itself still says "running".
   async function handleGoReport() {
     setStep(6)
-    if (bulkReport) return
+    if (bulkReport && bulkReport.status !== 'running') return
     const runId = jobProgress?.automation_run_id ?? bulkJob?.automation_run_id
     if (!runId) return
     setLoadingReport(true)
+    setApiError('')
     try {
-      const report = await getBulkReport(runId)
-      setBulkReport(report)
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const report = await getBulkReport(runId)
+        setBulkReport(report)
+        if (report.status !== 'running') break
+        await new Promise(r => setTimeout(r, 2000))
+      }
     } catch (e) {
       setApiError(e instanceof Error ? e.message : 'Error loading report')
     } finally {
@@ -1250,6 +1512,8 @@ export default function BulkPage() {
             <button onClick={() => {
               setStep(5)
               setBulkJob({ job_id: resumableJob.jobId } as BulkExecuteResult)
+              setExecuting(true)
+              pollJobProgress(resumableJob.jobId)
             }} className="btn-primary text-xs whitespace-nowrap">
               Resume tracking →
             </button>
@@ -1307,7 +1571,7 @@ export default function BulkPage() {
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Instruction</p>
               <input value={planInstruction} onChange={e => setPlanInstruction(e.target.value)}
-                className="input !py-2 text-xs" placeholder="E.g.: Create an employee with a permanent contract…" />
+                className="input !py-2 text-xs" placeholder="E.g.: Create an employee with a permanent contract…" autoComplete="off" />
             </div>
             <div className="flex gap-2">
               {workflowShortcutId && (
@@ -1355,6 +1619,26 @@ export default function BulkPage() {
                   </div>
                 ))}
               </div>
+              {planResult.required_input_fields.length > 0 && (
+                <div className="mt-3 pt-3" style={{ borderTop: '1px solid color-mix(in oklch, var(--brand) 20%, var(--line))' }}>
+                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">
+                    Columns your CSV needs
+                  </p>
+                  {/* A field a later step gets for free from an earlier
+                      step's response (e.g. employee_id after "Create
+                      Employee") never appears here — see
+                      app/automation/payload_mapper.py::required_input_fields(). */}
+                  <div className="flex flex-wrap gap-1">
+                    {planResult.required_input_fields.map(f => (
+                      <span key={f.field} className="px-1.5 py-0.5 rounded text-[11px] font-mono"
+                        title={`First needed at step ${f.first_needed_at_step}`}
+                        style={{ background: 'var(--card)', color: 'var(--ink)', border: '1px solid var(--line)' }}>
+                        {f.field} <span className="ink-2">({f.type})</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1406,7 +1690,7 @@ export default function BulkPage() {
         )}
         {step === 1 && (
           <StepMapping
-            mapping={mappingResult} suggesting={suggesting}
+            mapping={mappingResult} setMapping={setMappingResult} suggesting={suggesting}
             onNext={handleGoValidation} onBack={() => setStep(0)}
           />
         )}
@@ -1427,21 +1711,23 @@ export default function BulkPage() {
         {step === 4 && (
           <StepApproval
             dryRunResult={dryRunResult} planSteps={planSteps}
-            approval={approved} setApproval={setApproved}
+            connectionId={connectionId} setConnectionId={setConnectionId} setSelectedConnection={setSelectedConnection}
+            approvalStatus={approvalStatus} approvalCode={approvalCode} pendingRunId={pendingRunId} checkingApproval={checkingApproval}
+            onRequestApproval={handleRequestApproval}
             onNext={() => setStep(5)} onBack={() => setStep(3)}
           />
         )}
         {step === 5 && (
           <StepExecute
-            approval={approved} dryRunResult={dryRunResult}
+            dryRunResult={dryRunResult}
             isSimulation={isSimulation} setIsSimulation={setIsSimulation}
             batchSize={batchSize} setBatchSize={setBatchSize}
             allowPartial={allowPartial} setAllowPartial={setAllowPartial}
-            baseUrl={baseUrl} setBaseUrl={setBaseUrl}
-            execHeaders={execHeaders} setExecHeaders={setExecHeaders}
+            connectionId={connectionId} selectedConnection={selectedConnection}
             bulkJob={bulkJob} jobProgress={jobProgress} executing={executing}
-            tokenStatus={tokenStatus} tokenMessage={tokenMessage} onTestToken={handleTestToken}
-            onExecute={handleExecute} onNext={handleGoReport} onBack={() => setStep(4)}
+            cancelling={cancelling}
+            approvalStatus={approvalStatus} pendingRunId={pendingRunId}
+            onExecute={handleExecute} onCancel={handleCancelExecution} onNext={handleGoReport} onBack={() => setStep(4)}
           />
         )}
         {step === 6 && (

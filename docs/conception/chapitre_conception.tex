@@ -1,0 +1,547 @@
+% Chapitre Conception — ARIA (Automated Reverse-engineering and Integration Automation)
+% Fichier destiné à être inclus (\input ou \include) dans le document maître du rapport.
+% Les macros \reportimage, les colonnes tabularx L{}/Y, \rowcolor{accentlight} et les
+% macros d'introduction/conclusion (\section* + \phantomsection + \addcontentsline) sont
+% supposées définies par le fichier de style du rapport (non présent dans ce dépôt — voir
+% docs/conception/INVENTAIRE_CODE.md, section 12). Aucune macro n'est redéfinie ici.
+
+\chapter{Conception}
+
+\section*{Introduction}
+\phantomsection
+\addcontentsline{toc}{section}{Introduction}
+
+Le chapitre précédent a identifié les besoins fonctionnels et non fonctionnels d'ARIA : découvrir automatiquement les points d'accès d'une API à partir d'un trafic capturé, les rendre interrogeables en langage naturel, en déduire des plans d'automatisation exécutables, et encadrer leur exécution par une gouvernance explicite du risque. Ce chapitre présente la conception retenue pour répondre à ces besoins : l'architecture générale du système, les choix technologiques qui la sous-tendent, la modélisation UML des structures et des comportements, la conception de la base de données, celle du module d'intelligence artificielle, et enfin les mécanismes de sécurité et de gouvernance qui traversent l'ensemble de la plateforme.
+
+% [INVENTÉ-1] Démarche méthodologique (Scrum / CRISP-DM) : aucun artefact de gestion
+% de projet (sprints, backlog daté, rapport CRISP-DM) n'a été trouvé dans ce dépôt ;
+% cette description reconstitue une démarche plausible à partir des itérations
+% visibles dans les commentaires du code (corrections successives documentées).
+La démarche suivie combine deux logiques complémentaires. Le développement logiciel proprement dit (backend, frontend, infrastructure) a été conduit de façon itérative et incrémentale, dans un esprit Scrum : chaque module du pipeline (nettoyage du trafic, recherche sémantique, génération de plan, gouvernance, exécution) a été conçu, implémenté puis affiné en plusieurs passes successives, les commentaires du code source conservant la trace des corrections apportées à chaque itération. La partie intelligence artificielle du projet — construction du pipeline de compréhension du trafic et de génération de plans — a quant à elle suivi une démarche proche de CRISP-DM (compréhension du besoin métier, préparation et exploration des données de trafic, modélisation par règles puis par modèle de langage, évaluation chiffrée des choix de modèles et de seuils, déploiement dans le pipeline de production), avec des cycles de recalibration documentés directement dans le code lorsqu'une mesure a remis en cause un choix initial.
+
+Le chapitre est organisé en huit sections : l'architecture générale du système (\ref{sec:archi-generale}), l'architecture détaillée du backend et du frontend (\ref{sec:archi-detaillee}), les choix technologiques (\ref{sec:choix-techno}), la modélisation UML (\ref{sec:uml}), la conception de la base de données (\ref{sec:bdd}), la conception du module d'intelligence artificielle (\ref{sec:module-ia}), la sécurité et la gouvernance (\ref{sec:securite-gouvernance}), et la traçabilité entre besoins et conception (\ref{sec:tracabilite}).
+
+\section{Architecture générale du système}
+\label{sec:archi-generale}
+
+\subsection{Architecture globale}
+
+ARIA est structuré en trois processus applicatifs distincts, partageant un même système de gestion de base de données et un même serveur Redis : une API HTTP synchrone, un ou plusieurs workers asynchrones, et une application frontend. La figure~\ref{fig:archi-globale} présente cette architecture et les protocoles de communication entre composants.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_architecture_globale.png}
+  \caption{Architecture globale d'ARIA}
+  \label{fig:archi-globale}
+\end{figure}
+
+L'API FastAPI constitue le point d'entrée synchrone de la plateforme : authentification, consultation du registre d'endpoints, recherche sémantique, soumission de plans, et déclenchement des traitements longs. Ces derniers (analyse d'un fichier HAR, exécution en masse, nettoyage planifié) sont délégués à des workers Celery via des files Redis, afin que l'API ne bloque jamais sur une opération dont la durée dépend d'un service externe (modèle de langage, système cible). Le frontend React communique exclusivement avec l'API par requêtes HTTP/JSON authentifiées par jeton. Deux fournisseurs AWS Bedrock sont sollicités : un modèle de complétion structurée pour toutes les tâches de compréhension et de génération, et un modèle d'embedding dédié à l'indexation et à la recherche sémantique des points d'accès.
+
+Une particularité de l'architecture de déploiement, visible dans le code applicatif du point d'entrée API, mérite d'être signalée dès ce niveau : en environnement de production, le frontend compilé est servi directement par l'API elle-même (montage de fichiers statiques avec redirection de toute route inconnue vers la page d'accueil de l'application monopage), et non par un service séparé. Cela simplifie le déploiement à deux images de conteneur (API, worker) plutôt que trois.
+
+\subsection{Architecture logique}
+
+L'architecture logique distingue quatre couches de responsabilité, communes au backend et transverses aux modules métier :
+
+\begin{table}[H]
+  \centering
+  \caption{Couches de l'architecture logique}
+  \label{tab:couches-logiques}
+  \begin{tabularx}{\textwidth}{L{4cm}Y}
+    \rowcolor{accentlight}
+    Couche & Responsabilité \\
+    \hline
+    Présentation & Pages et composants React, consommant l'API par des clients HTTP dédiés par domaine fonctionnel (un module par ressource plutôt qu'un client générique unique). \\
+    \hline
+    Exposition (routeurs) & Validation des entrées par schémas Pydantic, authentification et autorisation par dépendances FastAPI, délégation à la couche de service. Dix-sept routeurs, un par domaine fonctionnel. \\
+    \hline
+    Service / domaine métier & Logique applicative organisée par domaine (ingestion, normalisation, recherche sémantique, planification, gouvernance, exécution, connexions) plutôt que par une couche générique unique : chaque domaine regroupe ses propres fonctions de traitement, directement au-dessus de l'accès aux données. \\
+    \hline
+    Persistance & Modèles ORM SQLAlchemy, accès asynchrone à PostgreSQL depuis l'API, files Redis pour la coordination asynchrone. \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+Cette organisation par domaine métier, plutôt qu'une couche \texttt{repository} générique séparée de la couche de service, a été retenue parce que chaque domaine (par exemple la gouvernance ou l'idempotence) combine systématiquement une règle de décision pure et un accès aux données qui la nourrit ; séparer artificiellement les deux aurait dispersé une logique cohérente entre deux fichiers sans bénéfice de réutilisation réel, aucun des modules de domaine n'étant partagé par un autre contexte applicatif.
+
+\subsection{Architecture physique}
+
+L'environnement de développement reproduit l'ensemble de la topologie applicative dans des conteneurs Docker orchestrés par Docker Compose : API, worker, base de données PostgreSQL dotée de l'extension pgvector, Redis, frontend (serveur de développement Vite), et une pile de supervision (Prometheus, Grafana). Le dépôt complet est monté en volume dans les conteneurs API et worker, afin que toute modification du code source soit prise en compte sans reconstruction d'image — un choix de confort de développement, incompatible avec un déploiement par image figée et volontairement réservé à cet environnement.
+
+\subsection{Architecture de déploiement}
+
+Le déploiement cible repose sur Azure Container Apps. La chaîne d'intégration et de déploiement continu construit deux images (API, worker) à partir de deux Dockerfiles de production distincts, les pousse vers un registre de conteneurs Azure, puis met à jour deux applications conteneurisées correspondantes. La figure~\ref{fig:archi-deploiement} détaille cette chaîne et la topologie de déploiement.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_deploiement_azure.png}
+  \caption{Architecture de déploiement sur Azure Container Apps}
+  \label{fig:archi-deploiement}
+\end{figure}
+
+Le déploiement est déclenché automatiquement à chaque intégration sur la branche principale : connexion au registre de conteneurs, construction et publication des deux images taguées à la fois par l'empreinte du commit et par une étiquette de dernière version, puis mise à jour des deux applications conteneurisées Azure correspondantes. Une vérification de bon fonctionnement interroge l'URL publique de l'API après déploiement. L'application conteneurisée de l'API expose un point d'entrée public avec mise à l'échelle automatique entre un et trois réplicas ; celle du worker ne reçoit pas de trafic HTTP entrant et peut monter jusqu'à deux réplicas, cohérent avec une charge dominée par le traitement de tâches de fond plutôt que par la réponse à des requêtes utilisateur.
+
+\section{Architecture détaillée}
+\label{sec:archi-detaillee}
+
+\subsection{Architecture du backend}
+
+Le backend est découpé en modules à responsabilité unique, organisés sous un répertoire applicatif commun. Le tableau~\ref{tab:modules-backend} présente les modules principaux et leur rôle, du routeur jusqu'à la persistance.
+
+\begin{longtable}{L{4cm}Y}
+  \caption{Principaux modules du backend} \label{tab:modules-backend} \\
+  \rowcolor{accentlight}
+  Module & Rôle \\
+  \hline
+  \endfirsthead
+  \rowcolor{accentlight}
+  Module & Rôle \\
+  \hline
+  \endhead
+  \texttt{app/api/*} & Dix-sept routeurs FastAPI exposant 98 routes, groupés par domaine fonctionnel (authentification, utilisateurs, équipes, import, registre, OpenAPI, RAG, automatisation, rapports, exécution en masse, approbations, audit, gouvernance, connexions, maintenance, notifications, suivi de tâches, observabilité IA). \\ \hline
+  \texttt{app/auth} & Émission et validation des jetons JWT, hachage des mots de passe, dépendances d'autorisation par rôle. \\ \hline
+  \texttt{app/ingestion} & Parsing du fichier HAR, filtrage dur, score heuristique et score de contenu métier, arbitrage par modèle de langage sur la zone d'incertitude. \\ \hline
+  \texttt{app/normalization} & Détection de paramètres d'URL par motifs, détection statistique inter-requêtes, regroupement par modèle de langage, nommage des paramètres. \\ \hline
+  \texttt{app/schema\_inference} & Inférence récursive des schémas de requête et de réponse, fusion de schémas sur plusieurs exemples, inférence du type d'authentification. \\ \hline
+  \texttt{app/ai} & Client générique vers le fournisseur de modèle de langage, enrichissement sémantique des points d'accès. \\ \hline
+  \texttt{app/rag} & Construction du texte d'embedding, stockage et cache vectoriels, recherche sémantique, jugement de pertinence. \\ \hline
+  \texttt{app/workflows} & Regroupement des points d'accès en workflows métier, détection de dépendances, ordonnancement des étapes. \\ \hline
+  \texttt{app/planner} & Analyse d'intention métier, sélection et génération de plan, détection de dépendances et tri topologique, validation structurelle du plan. \\ \hline
+  \texttt{app/governance} & Moteur de décision de politique d'exécution, calcul du score de risque d'un plan. \\ \hline
+  \texttt{app/approval} & Garde d'approbation empêchant toute exécution réelle non approuvée lorsque la gouvernance l'exige. \\ \hline
+  \texttt{app/automation} & Exécution d'un plan (simulation, résolution de paramètres, appel HTTP réel). \\ \hline
+  \texttt{app/bulk\_validation}, \texttt{app/bulk\_execution} & Validation d'un fichier CSV/Excel contre un plan, exécution par lots, résolution de conflits. \\ \hline
+  \texttt{app/idempotency} & Génération de clé d'idempotence et contrainte de non-conflit en base. \\ \hline
+  \texttt{app/resilience} & Disjoncteur par point d'accès cible, état partagé dans Redis. \\ \hline
+  \texttt{app/connections} & Gestion des connexions vers les systèmes cibles, chiffrement des secrets. \\ \hline
+  \texttt{app/security} & Protection contre la falsification de requête côté serveur, anti-traversée de chemin, masquage des données sensibles, isolement multi-organisation. \\ \hline
+  \texttt{app/audit}, \texttt{app/notifications} & Journal d'audit des actions sensibles, notifications utilisateur. \\ \hline
+  \texttt{app/core} & Configuration centralisée, limitation de débit, cache applicatif. \\ \hline
+  \texttt{app/observability}, \texttt{app/llm\_observability} & Métriques Prometheus, suivi du coût et de la latence des appels au modèle de langage. \\ \hline
+\end{longtable}
+
+\subsection{Traitements asynchrones}
+
+Les traitements dont la durée dépend d'un service externe — appel à un modèle de langage, appel HTTP vers un système cible — sont systématiquement délégués à des workers Celery, afin de ne jamais bloquer un thread de l'API sur une latence externe. Cinq files logiques sont conçues, chacune dimensionnée selon la nature de la charge qu'elle porte (tableau~\ref{tab:queues-celery}).
+
+\begin{table}[H]
+  \centering
+  \caption{Files Celery et dimensionnement}
+  \label{tab:queues-celery}
+  \begin{tabularx}{\textwidth}{L{3cm}L{3cm}Y}
+    \rowcolor{accentlight}
+    File & Concurrence conçue & Nature de la charge \\
+    \hline
+    \texttt{ingestion} & 4 workers $\times$ 2 & Mixte CPU/IO/appel au modèle de langage (nettoyage et normalisation d'un HAR). \\
+    \hline
+    \texttt{embedding} & 2 workers $\times$ 1 & CPU-bound, modèle d'embedding local partagé en singleton lorsque le fournisseur local est utilisé. \\
+    \hline
+    \texttt{execution} & 8 workers $\times$ 10 & IO-bound (appels HTTP vers le système cible, accès base de données) — concurrence élevée justifiée par l'attente réseau dominante. \\
+    \hline
+    \texttt{reporting} & 2 workers $\times$ 2 & Agrégation SQL légère pour la production des rapports d'exécution. \\
+    \hline
+    \texttt{maintenance} & 1 worker $\times$ 1 & Tâche planifiée de basse priorité (nettoyage quotidien des fichiers téléversés expirés). \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+Une tâche planifiée (nettoyage quotidien des fichiers expirés, déclenchée une fois par jour) complète ce dispositif et nécessite un processus Celery Beat dédié, prévu par la configuration du projet. Les paramètres de fiabilité retenus — accusé de réception tardif, remise en file en cas de perte du worker, préfetch limité à une tâche à la fois — visent à garantir qu'une tâche interrompue (panne du worker, redémarrage) n'est jamais silencieusement perdue, au prix d'une légère réduction du débit par rapport à un préfetch plus agressif.
+
+\subsection{Architecture du frontend}
+
+Le frontend est une application monopage React, organisée en pages (un fichier par route), composants partagés, contextes React (authentification, run courant, thème, notifications), et clients HTTP regroupés par domaine fonctionnel plutôt que par un client générique unique. Chaque page suit le même flux : une action utilisateur déclenche un appel du client HTTP du domaine concerné, qui effectue la requête authentifiée vers l'API et retourne un résultat typé à la page, celle-ci gérant elle-même son état de chargement et d'erreur. Le contrôle d'accès par rôle est appliqué à la fois côté client (composant de garde sur les routes sensibles) et côté serveur (dépendances FastAPI), le second étant la frontière de sécurité réelle — le premier n'a qu'un rôle d'ergonomie, en évitant d'afficher une page que l'utilisateur ne pourra de toute façon pas utiliser.
+
+\section{Choix technologiques}
+\label{sec:choix-techno}
+
+\subsection{Critères de sélection}
+
+Les choix technologiques d'ARIA ont été guidés par quatre critères, dérivés directement des besoins non fonctionnels identifiés au chapitre précédent : la capacité à traiter des volumes de plusieurs milliers d'opérations sans bloquer l'interface (scalabilité et traitement asynchrone), la nécessité de combiner recherche structurée et recherche par similarité sémantique sur la même base de données (cohérence transactionnelle entre les deux), la compatibilité avec une API strictement typée côté serveur et strictement typée côté client (fiabilité des contrats d'interface), et la maîtrise du coût d'appel à un modèle de langage sur un pipeline qui en sollicite un à de nombreuses étapes.
+
+\subsection{Tableau technologie / rôle / justification}
+
+\begin{longtable}{L{3cm}L{3.5cm}Y}
+  \caption{Technologies retenues et justification} \label{tab:techno-role} \\
+  \rowcolor{accentlight}
+  Technologie & Rôle & Justification \\
+  \hline
+  \endfirsthead
+  \rowcolor{accentlight}
+  Technologie & Rôle & Justification \\
+  \hline
+  \endhead
+  FastAPI & Framework API backend & Typage des entrées/sorties par Pydantic, support natif de l'asynchrone (nécessaire pour l'accès concurrent à la base de données et aux appels au modèle de langage sans bloquer le serveur), génération automatique de la documentation interactive. \\ \hline
+  PostgreSQL + pgvector & Base de données relationnelle et vectorielle & Permet de stocker dans le même système transactionnel les entités métier relationnelles (utilisateurs, plans, exécutions) et les vecteurs d'embedding des points d'accès, évitant la synchronisation entre deux bases distinctes. \\ \hline
+  SQLAlchemy (async) & ORM & Accès asynchrone cohérent avec le reste de la pile FastAPI, portabilité du modèle de données. \\ \hline
+  Celery + Redis & Files de tâches asynchrones & Découplage des traitements longs (ingestion, exécution) du cycle requête/réponse HTTP ; Redis joue également le rôle de cache applicatif et de verrou distribué partagé entre workers. \\ \hline
+  AWS Bedrock (Nova Lite) & Fournisseur de complétion par modèle de langage & Accès à plusieurs familles de modèles derrière une interface unique (API Converse), avec forçage de sortie structurée — propriété exploitée systématiquement pour éviter tout analyseur syntaxique de réponse libre côté application. \\ \hline
+  Cohere Embed Multilingual v3 & Modèle d'embedding & Support multilingue natif, pertinent pour un corpus et des requêtes utilisateur en français comme en anglais. \\ \hline
+  React + TypeScript + Vite & Frontend & Typage statique côté client cohérent avec le typage Pydantic côté serveur, temps de construction réduit en développement. \\ \hline
+  Docker / Docker Compose & Conteneurisation & Parité entre environnement de développement et environnement de déploiement, isolation des dépendances par service. \\ \hline
+  Azure Container Apps & Hébergement de production & Mise à l'échelle automatique par nombre de réplicas sans gestion directe de machines virtuelles, intégration native avec le registre de conteneurs Azure déjà utilisé par la chaîne de déploiement. \\ \hline
+\end{longtable}
+
+\subsection{Étude comparative des alternatives}
+
+% [INVENTÉ-2] Argumentaire comparatif FastAPI/Django/Flask : aucune justification
+% écrite de ce choix n'a été trouvée dans le dépôt (pas de ADR, pas de commentaire
+% de configuration) ; argumentaire reconstitué à partir des propriétés objectives
+% des trois frameworks, cohérent avec le choix réellement fait.
+\textbf{FastAPI contre Django ou Flask.} Django impose une structure complète (ORM propre, administration intégrée, formulaires) dont la majorité n'est pas utile à une API strictement orientée service ; Flask, à l'inverse, ne fournit nativement ni validation de schéma ni support asynchrone de premier ordre, qu'il faudrait ajouter par des extensions tierces. FastAPI a été retenu pour son typage natif par Pydantic (directement réutilisable pour les schémas de plan et de requête du module IA) et son support asynchrone natif, sans dépendance supplémentaire à faire cohabiter.
+
+% [INVENTÉ-3] Argumentaire comparatif pgvector/Qdrant/Pinecone : aucune trace écrite
+% de cette comparaison n'existe dans le dépôt ; argumentaire reconstitué à partir
+% des propriétés objectives de pgvector effectivement utilisées (table relationnelle
+% + vecteur dans le même SGBD, volume modeste par organisation).
+\textbf{pgvector contre une base vectorielle dédiée (Qdrant, Pinecone).} Une base vectorielle dédiée offre des mécanismes de recherche plus riches (filtrage hybride avancé, réplication spécialisée) mais introduit un second système à maintenir, à synchroniser avec les entités relationnelles, et une latence réseau supplémentaire entre les deux bases. pgvector a été retenu parce que le volume de vecteurs par organisation (quelques dizaines à quelques centaines d'endpoints par analyse) ne justifie pas l'infrastructure d'une base vectorielle séparée, et parce que la jointure directe entre un vecteur et ses métadonnées relationnelles (domaine métier, schéma, risque) s'exprime alors en une seule requête SQL plutôt qu'en une agrégation applicative entre deux systèmes.
+
+% [INVENTÉ-4] Argumentaire comparatif Celery/RQ : aucune trace écrite de cette
+% comparaison n'existe dans le dépôt ; argumentaire reconstitué à partir des
+% propriétés objectives de Celery effectivement exploitées (files multiples,
+% Celery Beat).
+\textbf{Celery contre RQ.} RQ (Redis Queue) est plus simple à mettre en œuvre mais ne propose pas nativement de files multiples avec routage par type de tâche, ni de planification périodique intégrée équivalente à Celery Beat. Celery a été retenu pour permettre la séparation des cinq files logiques par nature de charge (section~\ref{sec:archi-detaillee}) et la tâche planifiée de nettoyage, sans dépendre d'un ordonnanceur système externe.
+
+\textbf{AWS Bedrock Nova Lite contre d'autres modèles.} Le choix du modèle de complétion par défaut s'appuie sur une évaluation comparative chiffrée (coût, latence, qualité pondérée) détaillée au chapitre Évaluation ; elle n'est pas reproduite ici pour ne pas mélanger un résultat expérimental à un choix de conception. Du point de vue de la conception, le critère déterminant a été la compatibilité avec le forçage de sortie structurée de l'API Converse de Bedrock (sortie garantie conforme à un schéma JSON, sans validation syntaxique applicative après coup) : un modèle incompatible avec ce mécanisme (ne supportant pas le forçage d'appel d'outil sur cette variante d'API) a été écarté pour cette seule raison, indépendamment de sa qualité de réponse.
+
+\textbf{Cohere Embed Multilingual v3 contre une alternative.} Un modèle d'embedding anglophone uniquement pénaliserait structurellement les requêtes en français, majoritaires pour une partie du public cible d'ARIA. Une alternative multilingue équivalente en dimension (1024) existe chez le même fournisseur cloud et constitue un repli documenté en configuration, ne nécessitant aucune migration de schéma de base de données en cas de bascule.
+
+\section{Modélisation UML}
+\label{sec:uml}
+
+\subsection{Diagramme de classes}
+
+Le diagramme de classes (figure~\ref{fig:diagramme-classes}) présente les entités persistées et leurs relations, organisées autour de quatre axes : l'identité et l'organisation multi-tenant, le registre d'endpoints issu de l'analyse d'un trafic capturé, le cycle complet d'un plan d'automatisation (de sa génération à son exécution et à son éventuelle approbation), et la gouvernance.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_classes.png}
+  \caption{Diagramme de classes simplifié d'ARIA}
+  \label{fig:diagramme-classes}
+\end{figure}
+
+Le tableau~\ref{tab:entites-principales} décrit les entités principales du diagramme.
+
+\begin{longtable}{L{3.2cm}Y}
+  \caption{Entités principales} \label{tab:entites-principales} \\
+  \rowcolor{accentlight}
+  Entité & Description \\
+  \hline
+  \endfirsthead
+  \rowcolor{accentlight}
+  Entité & Description \\
+  \hline
+  \endhead
+  \texttt{Organization} / \texttt{User} & Tenant racine et comptes utilisateurs ; deux rôles exactement, administrateur et opérateur. \\ \hline
+  \texttt{AnalysisRun} & Un run d'ingestion et d'analyse d'un fichier HAR. \\ \hline
+  \texttt{Endpoint} / \texttt{EndpointSchema} / \texttt{EndpointEmbedding} & Un point d'accès normalisé, son schéma inféré, et son vecteur d'embedding indexé. \\ \hline
+  \texttt{WorkflowModel} / \texttt{WorkflowStepModel} & Un workflow métier détecté et ses étapes ordonnées. \\ \hline
+  \texttt{DataFile} / \texttt{DataRow} & Un fichier CSV/Excel importé pour une exécution en masse et ses lignes individuelles. \\ \hline
+  \texttt{Connection} / \texttt{ConnectionOperator} & Une connexion chiffrée vers un système cible et les opérateurs autorisés à l'utiliser. \\ \hline
+  \texttt{AutomationRun} / \texttt{AutomationStepLog} & Une exécution (simple ou en masse) d'un plan, et le journal détaillé de chacune de ses étapes. \\ \hline
+  \texttt{AutomationApproval} & Une demande d'approbation administrative et sa décision. \\ \hline
+  \texttt{GovernancePolicy} / \texttt{ForbiddenEndpointRule} & La politique de gouvernance d'une organisation (seuils de risque, politiques par environnement) et ses règles d'interdiction explicites. \\ \hline
+  \texttt{AuditLog} & Le journal d'audit des actions sensibles. \\ \hline
+\end{longtable}
+
+\subsection{Diagrammes de séquence}
+
+Cinq diagrammes de séquence illustrent les scénarios transverses les plus représentatifs de la plateforme : l'authentification, l'import et l'analyse d'un fichier HAR, la génération d'un plan d'automatisation, l'exécution en masse sous gouvernance, et le workflow d'approbation.
+
+\textbf{Authentification JWT} (figure~\ref{fig:seq-jwt}). La connexion produit un jeton d'accès de courte durée et un jeton de rafraîchissement de longue durée ; chaque requête authentifiée ultérieure est validée par une dépendance commune qui vérifie, dans l'ordre, la validité cryptographique du jeton, sa non-révocation explicite (liste de révocation par identifiant de jeton), et l'absence d'invalidation en masse consécutive à un changement de rôle ou à une désactivation de compte, avant de réutiliser un profil utilisateur mis en cache pour éviter une lecture base de données à chaque requête.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_sequenceJWT.png}
+  \caption{Séquence d'authentification JWT}
+  \label{fig:seq-jwt}
+\end{figure}
+
+\textbf{Import et analyse d'un fichier HAR} (figure~\ref{fig:seq-har}). L'import est traité de façon asynchrone : l'API ne fait que parser le fichier et déposer une tâche, le traitement proprement dit (filtrage, scoring, normalisation, persistance) se déroulant dans un worker, interrogé ensuite par le frontend via un mécanisme de suivi de tâche.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_sequenceHAR.png}
+  \caption{Séquence d'import et d'analyse d'un fichier HAR}
+  \label{fig:seq-har}
+\end{figure}
+
+\textbf{Génération d'un plan} (figure~\ref{fig:seq-plan}). Une instruction en langage naturel est d'abord réduite à une intention structurée et assortie d'un indice de confiance ; en deçà d'un seuil, le plan est rejeté avant toute recherche. Au-delà, une recherche sémantique double (intention directe et dépendances implicites) alimente un jugement de pertinence systématique, puis une sélection de plan ancrée strictement dans les candidats réellement retournés par la recherche — une contrainte vérifiée en code, empêchant toute référence à un point d'accès qui n'existerait pas dans l'ensemble récupéré. Le tri topologique final garantit que l'ordre d'exécution respecte les dépendances réelles entre étapes.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_sequencePlan.png}
+  \caption{Séquence de génération d'un plan d'automatisation}
+  \label{fig:seq-plan}
+\end{figure}
+
+\textbf{Exécution en masse sous gouvernance} (figure~\ref{fig:seq-bulk-gouvernance}). La politique de gouvernance (section~\ref{sec:securite-gouvernance}) est évaluée avant toute création d'exécution ; si elle l'exige, ou si l'opérateur n'a pas le rôle administrateur, une approbation est requise avant tout traitement réel. Le traitement lui-même est réparti en lots, chaque appel passant par un disjoncteur par point d'accès cible et par une vérification d'idempotence avant d'atteindre le système cible.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_sequenceBulkGouvernance.png}
+  \caption{Séquence d'exécution en masse sous gouvernance}
+  \label{fig:seq-bulk-gouvernance}
+\end{figure}
+
+\textbf{Workflow d'approbation} (figure~\ref{fig:seq-approbation}). Une exécution nécessitant une approbation reste en attente jusqu'à la décision explicite d'un administrateur ; la politique de gouvernance est réévaluée une seconde fois juste avant l'exécution réelle, au cas où elle aurait changé entre la soumission et la décision d'approbation.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_sequenceApprobation.png}
+  \caption{Séquence du workflow d'approbation}
+  \label{fig:seq-approbation}
+\end{figure}
+
+\subsection{Diagramme d'activité}
+
+La figure~\ref{fig:activite-har} détaille, sous forme d'activités, l'enchaînement complet des traitements appliqués à une capture HAR, du filtrage dur jusqu'à la persistance des points d'accès enrichis — une vue complémentaire du diagramme de séquence de la figure~\ref{fig:seq-har}, centrée cette fois sur la logique de décision interne à chaque étape plutôt que sur les échanges entre composants.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.85\textwidth]{images/Diagramme_activiteHAR.png}
+  \caption{Diagramme d'activité — analyse d'une capture HAR}
+  \label{fig:activite-har}
+\end{figure}
+
+\subsection{Diagramme d'états}
+
+La figure~\ref{fig:etats-plan} modélise le cycle de vie d'une exécution d'automatisation, à partir des valeurs de statut effectivement assignées par le code applicatif plutôt que d'un cycle théorique : création, éventuelle mise en attente d'approbation, exécution, puis issue finale distinguant un succès complet, un succès partiel, un échec ou une annulation.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.75\textwidth]{images/Diagramme_etatsPlan.png}
+  \caption{Diagramme d'états d'une exécution d'automatisation}
+  \label{fig:etats-plan}
+\end{figure}
+
+\section{Conception de la base de données}
+\label{sec:bdd}
+
+\subsection{Entités et relations clés}
+
+Le modèle de données compte vingt-sept tables, toutes rattachées — directement ou par transitivité — à une organisation, condition du cloisonnement multi-tenant exigé par les besoins non fonctionnels. Trois chaînes de relations structurent l'essentiel du modèle : la chaîne d'analyse (une organisation possède des runs d'analyse, chacun possédant des points d'accès, eux-mêmes porteurs d'un schéma et d'un embedding), la chaîne d'automatisation (un run d'analyse donne lieu à des exécutions, chacune journalisée étape par étape et éventuellement soumise à approbation), et la chaîne de gouvernance (une politique et des règles d'interdiction, toutes deux propres à une organisation, évaluées contre chaque plan avant son exécution). Le tableau détaillé des vingt-sept tables et de leurs rôles, déjà établi lors de l'audit du dépôt, est repris sans reformulation à l'annexe technique du rapport et n'est pas dupliqué ici pour éviter toute redondance avec le diagramme de classes (figure~\ref{fig:diagramme-classes}).
+
+\subsection{Stockage vectoriel}
+
+Le vecteur d'embedding de chaque point d'accès est stocké dans une colonne dédiée de type vecteur, de dimension égale à celle du modèle d'embedding configuré (1024 pour le fournisseur par défaut). Cette colonne porte un index approximatif de type HNSW (\emph{Hierarchical Navigable Small World}), déclaré directement au niveau du modèle ORM afin que les outils d'inspection de schéma le voient sans avoir à consulter la migration qui le crée. Les paramètres retenus sont un nombre de connexions par nœud de seize et un paramètre de qualité de construction du graphe de soixante-quatre — un compromis entre la qualité de la recherche approximative et l'empreinte mémoire de l'index, préféré à un index exact dont le coût croît linéairement avec le nombre de points d'accès indexés. La mesure de similarité est la distance cosinus, cohérente avec la nature normalisée des vecteurs produits par le modèle d'embedding retenu. La création de l'index est effectuée sans verrou de table, afin qu'elle n'interrompe pas la disponibilité de la table pendant la migration.
+
+\section{Conception du module d'intelligence artificielle}
+\label{sec:module-ia}
+
+\subsection{Architecture du module}
+
+Le module d'intelligence artificielle d'ARIA n'est pas un bloc monolithique mais une chaîne de neuf étapes, chacune combinant, dans une proportion différente, des règles déterministes et un appel à un modèle de langage. Le principe de conception transversal est de ne solliciter le modèle de langage que là où une règle fixe ne peut raisonnablement trancher, et de toujours prévoir un comportement de repli explicite (rejet, zone d'incertitude, confiance basse) plutôt qu'un échec silencieux.
+
+\subsection{Pipeline}
+
+Le tableau~\ref{tab:pipeline-ia} et la figure~\ref{fig:pipeline-ia} présentent les neuf étapes du pipeline, de l'ingestion d'un trafic brut jusqu'à l'exécution d'un plan.
+
+\begin{figure}[H]
+  \centering
+  \reportimage[0.95\textwidth]{images/Diagramme_pipelineIA.png}
+  \caption{Pipeline du module d'intelligence artificielle}
+  \label{fig:pipeline-ia}
+\end{figure}
+
+\begin{longtable}{L{1cm}L{3.5cm}Y}
+  \caption{Étapes du pipeline IA} \label{tab:pipeline-ia} \\
+  \rowcolor{accentlight}
+  \# & Étape & Mécanisme dominant \\
+  \hline
+  \endfirsthead
+  \rowcolor{accentlight}
+  \# & Étape & Mécanisme dominant \\
+  \hline
+  \endhead
+  1 & Nettoyage du trafic & Règles déterministes, modèle de langage réservé à la zone d'incertitude du score combiné. \\ \hline
+  2 & Normalisation des URL & Motifs, puis statistique inter-requêtes, puis modèle de langage en dernier recours, groupé par point d'accès. \\ \hline
+  3 & Analyse et enrichissement & Inférence de schéma par règles, enrichissement sémantique par modèle de langage. \\ \hline
+  4 & Indexation & Construction déterministe du texte d'embedding, appel au modèle d'embedding, cache à deux niveaux. \\ \hline
+  5 & Recherche sémantique & Recherche vectorielle déterministe, jugement de pertinence systématique par modèle de langage. \\ \hline
+  6 & Compréhension d'intention & Modèle de langage exclusivement, sortie structurée et contrainte par schéma. \\ \hline
+  7 & Génération de plan & Sélection par modèle de langage ancrée dans des candidats déterministes, ordonnancement déterministe (tri topologique). \\ \hline
+  8 & Validation et gouvernance & Règles déterministes exclusivement. \\ \hline
+  9 & Exécution & Déterministe, aucun appel au modèle de langage. \\ \hline
+\end{longtable}
+
+\subsection{Analyse du trafic et construction du catalogue}
+
+Le nettoyage d'une capture HAR applique d'abord un filtrage dur sans intelligence artificielle (ressources statiques, domaines de télémétrie connus, méthodes sans portée métier, chemins d'infrastructure, requêtes annulées par le navigateur), puis calcule pour chaque entrée restante un score combiné : un score heuristique fondé sur la méthode HTTP, la présence de contenu structuré, un indice lexical de chemin d'API, et le succès de la réponse ; et un score de charge utile fondé sur la présence de mots-clés métier dans le chemin et le corps de la requête ou de la réponse. Seules les entrées dont le score combiné tombe dans une zone intermédiaire sont soumises à un arbitrage par modèle de langage ; au-delà de cette zone, la décision des règles seules suffit, sans coût ni latence d'appel externe. La calibration précise des seuils et des poids de cette formule, de même que sa validation chiffrée, relèvent du chapitre Évaluation et ne sont pas reproduites ici.
+
+Les points d'accès retenus sont ensuite normalisés : chaque segment de chemin est examiné pour déterminer s'il représente un identifiant variable plutôt qu'un littéral fixe, par une cascade de trois mécanismes de confiance croissante en coût — motifs d'expression régulière pour les formats connus, comparaison statistique entre requêtes de même forme pour les formats non anticipés, et regroupement par modèle de langage, en dernier recours, lorsque les deux mécanismes précédents ne tranchent pas avec une confiance suffisante. Ce dernier mécanisme traite en un seul appel toutes les URL sœurs d'un même point d'accès plutôt qu'un segment isolé, afin d'exploiter le signal le plus fiable pour reconnaître un identifiant non standard : le fait que sa valeur varie d'une requête à l'autre par ailleurs identique — un signal invisible à un modèle interrogé sur un segment hors contexte.
+
+Chaque point d'accès normalisé est enfin caractérisé par inférence de schéma (type JSON de chaque champ observé, fusion de plusieurs exemples, inférence du type d'authentification) et par enrichissement sémantique (domaine métier, action, résumé, étiquettes, indice de confiance), avant d'être assemblé en un document OpenAPI consultable.
+
+\subsection{Recherche sémantique et RAG}
+
+Chaque point d'accès est représenté par un vecteur construit à partir d'un texte combinant son résumé généré, son domaine et son action métier, l'intention de sa méthode HTTP exprimée en langage naturel, et les noms de ses champs de requête et de réponse — un texte pensé pour la recherche, distinct d'une simple concaténation de la documentation technique brute. L'indexation et la recherche emploient une représentation asymétrique du même modèle d'embedding : les points d'accès sont vectorisés comme des documents, la requête utilisateur comme une question, deux représentations optimisées différemment par le modèle pour leur rôle respectif.
+
+La recherche elle-même s'exprime en une seule requête SQL : tri par distance cosinus calculée directement par l'extension vectorielle de PostgreSQL, limitée aux cinq meilleurs résultats par défaut, sans calcul de similarité côté applicatif. Un score de similarité par défaut de 0,35 filtre les correspondances trop faibles pour être pertinentes. Parce qu'une recherche par similarité vectorielle retourne systématiquement ses plus proches voisins même lorsque aucun ne répond réellement à la demande, chaque résultat est soumis à un second appel au modèle de langage qui juge, pour chaque candidat, s'il réalise effectivement l'action demandée et quels éléments explicitement nommés dans la requête ne trouvent pas de correspondance dans les champs réels du point d'accès — une annotation explicite plutôt qu'un simple rejet silencieux.
+
+\subsection{Compréhension des intentions et génération du plan}
+
+Une instruction en langage naturel est d'abord réduite, par un appel unique au modèle de langage, à une intention structurée : action, domaine métier, entités concernées, quantité estimée, et un indice de confiance explicitement calibré par paliers (instruction incompréhensible, vague, partielle, ou claire et actionnable). Un seuil de rejet précoce interrompt le traitement avant toute recherche ou tout second appel lorsque la confiance mesurée lui est inférieure, évitant un coût de traitement sur une instruction déjà jugée inexploitable.
+
+Pour une intention suffisamment confiante, deux recherches sémantiques sont menées en parallèle — l'une sur l'intention directement exprimée, l'autre sur les dépendances implicites généralement associées à ce type d'opération (configuration préalable, notification consécutive) — puis fusionnées par point d'accès en conservant le meilleur score. L'ensemble des candidats ainsi réunis est soumis à un second appel au modèle de langage, chargé de sélectionner le sous-ensemble réellement pertinent, d'identifier les étapes implicites manquantes, et, lorsqu'une source de données tabulaire est fournie, d'établir la correspondance entre colonnes et paramètres d'API.
+
+\subsection{Format du plan d'automatisation}
+
+Le plan généré est une structure typée, dont le schéma — simplifié et commenté — est présenté ci-dessous.
+
+\begin{lstlisting}[language=json, caption={Schéma simplifié d'un plan d'automatisation}, label={lst:schema-plan}]
+{
+  "run_id": "string",
+  "instruction": "string",
+  "intent": {
+    "intent": "string",
+    "business_domain": "string",
+    "entities": ["string"],
+    "confidence": 0.92
+  },
+  "workflow_name": "string",
+  "requires_approval": true,
+  "dry_run_default": true,
+  "steps": [
+    {
+      "order": 1,
+      "canonical_key": "string",
+      "method": "POST",
+      "path": "/employees",
+      "business_domain": "string",
+      "action": "string",
+      "depends_on": [],
+      "risk_level": "medium",
+      "field_mapping": {
+        "prenom": "first_name",
+        "type_contrat": null
+      }
+    }
+  ]
+}
+\end{lstlisting}
+
+Chaque étape porte son propre niveau de risque (faible, moyen ou élevé, dérivé de la méthode HTTP et du volume d'opérations concerné), la liste des étapes dont elle dépend, et, lorsqu'une source de données tabulaire est fournie, la correspondance entre une colonne source et soit un paramètre cible direct, soit une règle conditionnelle dérivée d'un autre champ de la même ligne. Le plan tout entier porte un indicateur de simulation par défaut activé, garantissant qu'aucune exécution réelle ne peut avoir lieu sans un passage explicite à un mode d'exécution réelle.
+
+\subsection{Validation du plan}
+
+Avant d'être proposé à l'exécution, un plan est validé sur trois axes. D'abord un contrôle de référence, vérifié en code et non simplement demandé au modèle de langage par consigne de formulation : aucune étape du plan ne peut porter une clé de point d'accès absente de l'ensemble réellement retourné par la recherche sémantique, ce qui élimine structurellement le risque qu'un modèle de langage propose un point d'accès plausible mais inexistant. Ensuite un contrôle structurel des dépendances déclarées entre étapes, construites à partir des schémas réels : une étape qui produit un champ identifiant dans sa réponse rend dépendantes d'elle toutes les étapes ultérieures dont un segment de chemin porte ce même nom de paramètre.
+
+Enfin, ces dépendances sont résolues par un tri topologique (algorithme de Kahn, stable, les égalités étant départagées par l'ordre d'origine des étapes) qui réordonne les étapes afin que chaque dépendance apparaisse avant son dépendant, et qui signale explicitement — sans jamais échouer silencieusement — toute dépendance circulaire détectée, un cas qui ne devrait structurellement jamais se produire puisqu'un point d'accès ne peut dépendre d'un identifiant qu'il produit lui-même, mais que le système traite néanmoins comme une erreur bloquante plutôt que comme une impossibilité supposée. Une dépendance déclarée vers une étape absente du plan n'est pas traitée comme une erreur silencieuse non plus : elle est remontée comme un problème de validation visible, distinct d'un cycle.
+
+\subsection{Limites de conception du module}
+
+Le regroupement des points d'accès en workflows s'appuie, pour l'ordonnancement de ses étapes, sur un mécanisme d'ordonnancement séquentiel assisté par modèle de langage, plutôt que sur le graphe de dépendances et l'exécution parallèle par lots indépendants qui ont été conçus pour cet usage dans le module de workflows ; ce second mécanisme, complet et testé isolément, n'est actuellement sollicité par aucun chemin d'exécution de la plateforme. Il constitue une extension de conception prête à être branchée plutôt qu'une fonctionnalité actuellement opérationnelle, et n'est donc pas présenté ici comme le mécanisme réel d'exécution des workflows détectés — seul le tri topologique des étapes d'un plan d'automatisation (section~\ref{sec:module-ia}, sous-section précédente) est le mécanisme de dépendance réellement exploité à l'exécution.
+
+Le score de charge utile du nettoyage HAR recherche une correspondance de mot-clé métier n'importe où dans une valeur aplatie, et non spécifiquement comme nom de champ ; un mot-clé métier apparaissant par coïncidence dans un chemin ou une valeur sans rapport avec une action métier réelle peut ainsi être compté à tort. La recherche sémantique repose sur un corpus de points d'accès dont la taille, par organisation, reste de l'ordre de quelques dizaines à quelques centaines d'entrées, ce qui borne la portée de toute optimisation fine de l'index vectoriel.
+
+\section{Sécurité et gouvernance}
+\label{sec:securite-gouvernance}
+
+\subsection{Authentification et autorisation}
+
+L'authentification repose sur des jetons JWT signés par un algorithme symétrique, avec un jeton d'accès de courte durée de vie (trente minutes) et un jeton de rafraîchissement de longue durée (trente jours), conservés côté client dans un espace de stockage isolé par onglet de navigateur plutôt que partagé, afin que deux sessions distinctes du même utilisateur n'interfèrent jamais entre elles. La validité d'un jeton d'accès est vérifiée à trois niveaux à chaque requête : validité cryptographique et d'expiration, absence sur une liste de révocation explicite tenue en mémoire partagée (déconnexion volontaire), et absence d'invalidation en masse consécutive à un changement de rôle ou à une désactivation de compte — ce troisième contrôle garantissant qu'un jeton émis avant une telle modification ne reste pas valide jusqu'à son expiration naturelle.
+
+Deux rôles existent, administrateur et opérateur, sans rôle intermédiaire. Le tableau~\ref{tab:matrice-roles} résume la matrice d'accès telle qu'appliquée par les dépendances d'autorisation du backend.
+
+\begin{table}[H]
+  \centering
+  \caption{Matrice rôles $\times$ permissions (synthèse)}
+  \label{tab:matrice-roles}
+  \begin{tabularx}{\textwidth}{L{6cm}YY}
+    \rowcolor{accentlight}
+    Domaine fonctionnel & Opérateur & Administrateur \\
+    \hline
+    Import HAR, recherche, workflows, automatisation simple, exécution en masse & Oui & Oui \\
+    \hline
+    Approbation d'une automatisation, gestion des utilisateurs, gestion des connexions, gouvernance, journal d'audit & Non & Oui \\
+    \hline
+    Exécution en masse réelle sans approbation préalable & Jamais (approbation systématiquement requise) & Seulement si la politique de gouvernance l'autorise \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\subsection{Protection des données et des échanges}
+
+Le secret associé à une connexion vers un système cible est chiffré au repos par un schéma symétrique, et n'est déchiffré qu'à l'intérieur du worker d'exécution, immédiatement avant l'appel réel — jamais dans une réponse d'API, un journal, ou un argument de tâche asynchrone. Toute résolution d'adresse réseau associée à une connexion est validée contre une liste de réseaux interdits (adresses privées, boucle locale, points de métadonnées cloud) puis épinglée pour la durée de la connexion HTTP, afin qu'une résolution DNS ultérieure ne puisse pas contourner la validation initiale par une substitution d'adresse après coup. Les données sensibles (jetons d'autorisation, mots de passe, clés d'API) sont masquées avant toute journalisation du détail d'une exécution. La limitation de débit s'appuie sur un compteur partagé dans Redis entre toutes les instances du backend, avec des limites différenciées par sensibilité de route (authentification, import de fichier, déclenchement d'exécution réelle, et une limite par défaut pour le reste du trafic).
+
+\subsection{Modèle de risque}
+
+Chaque étape d'un plan reçoit un niveau de risque qualitatif (faible, moyen, élevé), dérivé de sa méthode HTTP et du volume d'opérations qu'elle représente. Ce niveau est converti en un score numérique par un barème fixe, puis le risque du plan tout entier est défini comme le maximum des scores de ses étapes :
+
+\[
+R_{\text{plan}} = \max_{i} R(s_i)
+\]
+
+ce choix — un maximum plutôt qu'une moyenne — garantit qu'une seule étape à risque élevé ne soit jamais diluée par un ensemble d'étapes anodines dans le reste du plan. Le tableau~\ref{tab:niveau-decision} relie le score obtenu aux seuils de décision configurables par organisation.
+
+\begin{table}[H]
+  \centering
+  \caption{Du score de risque à la décision de gouvernance}
+  \label{tab:niveau-decision}
+  \begin{tabularx}{\textwidth}{L{6cm}Y}
+    \rowcolor{accentlight}
+    Condition sur le score & Décision \\
+    \hline
+    $R_{\text{plan}} \leq$ seuil bas (défaut~: 1) & Autorisation directe \\
+    \hline
+    seuil bas $< R_{\text{plan}} \leq$ seuil haut (défaut~: 10) & Approbation administrative requise \\
+    \hline
+    $R_{\text{plan}} >$ seuil haut & Blocage \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\subsection{Politiques de gouvernance et workflow d'approbation}
+
+Le moteur de gouvernance rend l'une de trois décisions — autorisation, exigence d'approbation, ou blocage — en évaluant successivement trois familles de règles, dans un ordre fixe : des règles d'endpoints explicitement interdits par motif de chemin et de méthode, propres à chaque organisation ; une politique par environnement cible (test, préproduction, production), déclinée en quatre modes allant de l'accès complet à l'interdiction totale, l'absence de politique configurée pour un environnement étant elle-même traitée comme un blocage plutôt que comme une autorisation implicite ; et enfin le seuil de risque numérique décrit ci-dessus. La décision retenue est la plus sévère des trois évaluations, et un blocage ne peut jamais être rétrogradé par une approbation, quelle que soit l'autorité qui l'accorderait — une garantie structurelle plutôt qu'une simple convention d'interface.
+
+Cette politique est évaluée deux fois pour chaque exécution réelle : une première fois à la soumission du plan, une seconde fois juste avant l'exécution réelle proprement dite, afin qu'une politique modifiée par un administrateur dans l'intervalle — potentiellement plusieurs minutes ou heures, le temps qu'une approbation soit traitée — soit effectivement prise en compte. Le workflow d'approbation illustré en figure~\ref{fig:seq-approbation} découle directement de cette double évaluation : une exécution dont la politique exige une approbation reste en attente, visible dans la liste des approbations en souffrance, jusqu'à la décision explicite d'un administrateur ; un rejet met fin au cycle de vie de l'exécution sans qu'aucun appel réel n'ait eu lieu. Pour l'exécution en masse spécifiquement, une règle additionnelle impose qu'un opérateur obtienne systématiquement une approbation, indépendamment du score de risque calculé — une seule décision couvrant alors potentiellement plusieurs milliers de lignes, le rayon d'impact d'une exécution en masse étant jugé structurellement plus large qu'une automatisation simple.
+
+\subsection{Traçabilité et journalisation}
+
+Toute mutation sensible — création ou révocation d'une connexion, décision d'approbation, modification d'une politique de gouvernance — est consignée dans un journal d'audit distinct, consultable par les administrateurs. Le détail de chaque étape d'une exécution est également journalisé, après masquage systématique des champs sensibles de la charge utile, afin que le journal reste exploitable pour le diagnostic sans jamais exposer un secret en clair.
+
+\subsection{Limites et perspectives de sécurité}
+
+Les politiques par environnement démarrent, par défaut, en accès complet pour les trois environnements (test, préproduction, production) : aucune protection de la production n'est garantie tant qu'une organisation ne configure pas explicitement une politique plus restrictive. Le type de connexion correspondant à un flux d'autorisation par identifiants client ne réalise, en l'état de la conception actuelle, aucun échange de jeton réel auprès d'un serveur d'autorisation ; le secret saisi par l'administrateur est utilisé directement comme jeton porteur, sans renouvellement automatique à expiration — un périmètre volontairement restreint à ce stade, documenté comme tel plutôt que comme une implémentation complète du protocole. Enfin, aucun mécanisme de masquage des données sensibles n'intervient au moment où un fichier HAR brut est importé et persisté : le masquage ne s'applique qu'au moment de la journalisation du détail d'une exécution, pas à la capture de trafic elle-même, qui peut donc contenir des jetons de session ou des données personnelles conservés sous leur forme d'origine. Ce dernier point constitue une limite de conception à traiter avant tout déploiement destiné à manipuler des données de production réellement sensibles.
+
+\section{Traçabilité besoins vers conception}
+\label{sec:tracabilite}
+
+Le tableau~\ref{tab:tracabilite} relie chaque groupe de besoins fonctionnels et non fonctionnels identifié au chapitre précédent au mécanisme de conception qui y répond, et à la section de ce chapitre qui le détaille.
+
+\begin{longtable}{L{4cm}L{4.5cm}Y}
+  \caption{Traçabilité besoins $\rightarrow$ conception} \label{tab:tracabilite} \\
+  \rowcolor{accentlight}
+  Besoin & Composant / mécanisme & Section \\
+  \hline
+  \endfirsthead
+  \rowcolor{accentlight}
+  Besoin & Composant / mécanisme & Section \\
+  \hline
+  \endhead
+  Découverte et nettoyage du trafic HAR & Pipeline d'ingestion (\texttt{app/ingestion}, \texttt{app/normalization}) & \ref{sec:module-ia} \\ \hline
+  Analyse et documentation des points d'accès & Inférence de schéma, enrichissement sémantique, génération OpenAPI & \ref{sec:module-ia} \\ \hline
+  Recherche sémantique honnête & Recherche vectorielle + jugement de pertinence systématique (\texttt{app/rag}) & \ref{sec:module-ia} \\ \hline
+  Workflows (consultation, édition manuelle) & Clustering de points d'accès, modèle \texttt{WorkflowModel}/\texttt{WorkflowStepModel} & \ref{sec:uml}, \ref{sec:module-ia} \\ \hline
+  Génération de plan et automatisation simple & \texttt{app/planner}, simulation obligatoire, garde d'approbation & \ref{sec:module-ia}, \ref{sec:securite-gouvernance} \\ \hline
+  Exécution en masse avec reprise et rapport & \texttt{app/bulk\_validation}, \texttt{app/bulk\_execution}, idempotence, disjoncteur & \ref{sec:uml} (séquence bulk) \\ \hline
+  Gouvernance (seuils, politiques, règles interdites) & \texttt{app/governance} & \ref{sec:securite-gouvernance} \\ \hline
+  Connexions (CRUD, assignation, test) & \texttt{app/connections}, \texttt{Connection}/\texttt{ConnectionOperator} & \ref{sec:bdd}, \ref{sec:securite-gouvernance} \\ \hline
+  Administration et traçabilité & \texttt{app/audit}, gestion des utilisateurs et des rôles & \ref{sec:securite-gouvernance} \\ \hline
+  Authentification à jeton de durée limitée (non fonctionnel) & JWT, expiration 30 minutes, liste de révocation & \ref{sec:securite-gouvernance} \\ \hline
+  Protection contre la falsification de requête côté serveur (non fonctionnel) & Validation d'adresse + épinglage DNS & \ref{sec:securite-gouvernance} \\ \hline
+  Confidentialité des secrets (non fonctionnel) & Chiffrement symétrique, déchiffrement au worker uniquement & \ref{sec:securite-gouvernance} \\ \hline
+  Scalabilité des volumes importants (non fonctionnel) & Celery, files dimensionnées par nature de charge & \ref{sec:archi-detaillee} \\ \hline
+  Absence de duplication d'opération (non fonctionnel) & Clé d'idempotence, contrainte de non-conflit atomique & \ref{sec:uml} (séquence bulk) \\ \hline
+  Isolation des pannes partielles (non fonctionnel) & Disjoncteur par point d'accès cible & \ref{sec:uml} (séquence bulk) \\ \hline
+  Isolement multi-organisation (non fonctionnel) & Rattachement systématique à une organisation sur chaque entité & \ref{sec:bdd} \\ \hline
+\end{longtable}
+
+\section*{Conclusion}
+\phantomsection
+\addcontentsline{toc}{section}{Conclusion}
+
+Ce chapitre a présenté la conception d'ARIA à quatre niveaux complémentaires : une architecture générale séparant nettement un traitement synchrone léger (l'API) d'un traitement asynchrone lourd (les workers), une modélisation UML reliant les structures de données aux comportements transverses de la plateforme, un module d'intelligence artificielle conçu comme une chaîne d'étapes combinant systématiquement règles déterministes et appel ciblé à un modèle de langage, et un socle de sécurité et de gouvernance traversant l'ensemble du système plutôt que localisé à un seul point de contrôle. Les limites de conception explicitement identifiées — politiques d'environnement ouvertes par défaut, absence de masquage des données sensibles à l'ingestion, mécanisme de parallélisation des workflows conçu mais non branché — ne remettent pas en cause cette architecture mais en délimitent le périmètre actuel, et constituent autant de pistes d'évolution pour la suite du projet.
+
+Le chapitre suivant, Réalisation, décrit comment cette conception a été effectivement implémentée : le détail des algorithmes, les difficultés techniques rencontrées et leurs corrections, et les résultats de l'évaluation chiffrée des choix de modèles et de seuils laissés en suspens dans ce chapitre.

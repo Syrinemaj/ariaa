@@ -12,7 +12,7 @@ plans d'exécution pilotés par LLM à partir d'instructions en langage naturel.
 | API | FastAPI (Python 3.10+) |
 | Tâches asynchrones | Celery + Redis |
 | Base de données | PostgreSQL + pgvector (recherche sémantique / RAG) |
-| LLM | Groq (`llama-3.3-70b-versatile`, primaire) — voir `app/llm_observability/pricing.py` pour la comparaison de coûts avec Amazon Bedrock (Claude) |
+| LLM | AWS Bedrock (`amazon.nova-lite-v1:0`, Converse API — voir `app/llm_observability/pricing.py` pour la comparaison de coûts entre modèles Bedrock) |
 | Embeddings | Modèle local (`BAAI/bge-small-en`, sentence-transformers) |
 | Frontend | React + Vite |
 | Observabilité | Prometheus + Grafana |
@@ -21,7 +21,7 @@ plans d'exécution pilotés par LLM à partir d'instructions en langage naturel.
 
 ```bash
 cp .env.example .env
-# éditer .env : au minimum GROQ_API_KEY, POSTGRES_PASSWORD, JWT_SECRET_KEY
+# éditer .env : au minimum AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, POSTGRES_PASSWORD, JWT_SECRET_KEY
 
 docker compose up -d
 ```
@@ -44,9 +44,10 @@ docker compose exec api alembic upgrade head
 
 Toutes les variables sont documentées dans `.env.example`. Points clés :
 
-- `AI_PROVIDER` — `groq` (par défaut) ou `azure`. Voir `app/core/config.py`.
-- `GROQ_API_KEY` / `GROQ_API_KEY_2` / `GROQ_API_KEY_3` — cascade de clés Groq
-  en cas de rate limit (pas de fallback externe au-delà).
+- `AI_PROVIDER` — toujours `bedrock` (seul fournisseur). Voir `app/core/config.py`.
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` — credentials
+  Bedrock, résolus classiquement par boto3 (env vars / `~/.aws/credentials` / IAM role).
+- `BEDROCK_MODEL` — modèle Bedrock actif (défaut : `amazon.nova-lite-v1:0`).
 - `DATABASE_URL`, `REDIS_URL` — dérivent les URLs scoped (broker/backend/app)
   si non définies explicitement.
 
@@ -54,7 +55,7 @@ Toutes les variables sont documentées dans `.env.example`. Points clés :
 
 ```
 app/                  Backend FastAPI — un sous-package par domaine métier
-  ai/                   Clients LLM (Groq, Azure)
+  ai/                   Client LLM (AWS Bedrock)
   ingestion/             Parsing HAR, filtrage bruit
   normalization/         Canonicalisation des endpoints
   schema_inference/      Inférence de schémas request/response
@@ -83,10 +84,9 @@ pytest
 ## Observabilité — usage & coûts LLM
 
 - `GET /llm/summary` — totaux tokens/coût (aujourd'hui + lifetime)
-- `GET /llm/compare-models` — projette l'usage réel sur Groq vs. les modèles
-  Claude via Bedrock, pour évaluer un changement de provider
+- `GET /llm/compare-models` — projette l'usage réel sur les autres modèles
+  Bedrock disponibles, pour évaluer un changement de modèle
 - Dashboards Grafana : `infrastructure/grafana/provisioning/dashboards/`
-  (un dashboard par provider + une vue globale)
 
 ## Diagrammes
 

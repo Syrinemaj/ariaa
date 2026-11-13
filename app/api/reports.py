@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -8,18 +8,20 @@ from app.auth.dependencies import require_admin, require_admin_or_operator
 from app.core.pagination import PaginationParams
 from app.db.session import get_sync_db
 from app.models.automation import AutomationRun
-from app.models.team_member import TeamMember
 from app.models.user import User
 from app.reports.service import (
     get_audit_logs_paginated,
     get_automation_report,
     get_automation_runs_paginated,
     get_daily_automation_trend,
+    get_endpoints_risk,
+    get_endpoints_summary,
     get_global_summary,
     get_kpi_trends,
     get_reports_for_analysis_run,
 )
-from app.security.tenancy import team_visibility_clause
+from app.security.tenancy import owner_visibility_clause
+from app.teams.service import resolve_single_team_id_sync
 
 
 class AutomationRunUpdateIn(BaseModel):
@@ -28,11 +30,19 @@ class AutomationRunUpdateIn(BaseModel):
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-def _resolve_team_ids(db: Session, current_user: User) -> Optional[List[str]]:
-    """None = ADMIN, unrestricted. A list (possibly empty) scopes an OPERATOR."""
+def _resolve_visibility(current_user: User, db: Session) -> tuple[Optional[str], Optional[str]]:
+    """(owner_id, team_id) pair for report/run queries.
+    ADMIN: (None, None) — unrestricted, sees the whole org.
+    OPERATOR in exactly one team: (None, team_id) — team-wide, "members of a
+    team see the same activity, analyzed by anyone in the team."
+    OPERATOR in 0 or 2+ teams: (current_user.id, None) — own resources only,
+    the pre-existing fallback (no single team to scope to)."""
     if current_user.role == "ADMIN":
-        return None
-    return [row[0] for row in db.query(TeamMember.team_id).filter(TeamMember.user_id == current_user.id).all()]
+        return None, None
+    team_id = resolve_single_team_id_sync(db, current_user.id)
+    if team_id:
+        return None, team_id
+    return current_user.id, None
 
 
 @router.get("/automation/{automation_run_id}")
@@ -53,8 +63,9 @@ def get_analysis_run_report(
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    owner_id, team_id = _resolve_visibility(current_user, db)
     return get_reports_for_analysis_run(
-        db, analysis_run_id, org_id=current_user.org_id, team_ids=_resolve_team_ids(db, current_user)
+        db, analysis_run_id, org_id=current_user.org_id, owner_id=owner_id, team_id=team_id
     ).model_dump()
 
 
@@ -63,7 +74,29 @@ def get_summary(
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
-    return get_global_summary(db, org_id=current_user.org_id, team_ids=_resolve_team_ids(db, current_user))
+    owner_id, team_id = _resolve_visibility(current_user, db)
+    return get_global_summary(db, org_id=current_user.org_id, owner_id=owner_id, team_id=team_id)
+
+
+@router.get("/endpoints/summary")
+def get_endpoints_summary_route(
+    db: Session = Depends(get_sync_db),
+    current_user: User = Depends(require_admin_or_operator),
+):
+    owner_id, team_id = _resolve_visibility(current_user, db)
+    return get_endpoints_summary(db, org_id=current_user.org_id, owner_id=owner_id, team_id=team_id)
+
+
+@router.get("/endpoints/risk")
+def get_endpoints_risk_route(
+    limit: int = Query(default=5, ge=1, le=50),
+    db: Session = Depends(get_sync_db),
+    current_user: User = Depends(require_admin_or_operator),
+):
+    owner_id, team_id = _resolve_visibility(current_user, db)
+    return get_endpoints_risk(
+        db, org_id=current_user.org_id, owner_id=owner_id, team_id=team_id, limit=limit
+    )
 
 
 @router.get("/kpi-trends")
@@ -72,8 +105,9 @@ def get_kpi_trends_route(
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    owner_id, team_id = _resolve_visibility(current_user, db)
     return get_kpi_trends(
-        db, org_id=current_user.org_id, window_days=window_days, team_ids=_resolve_team_ids(db, current_user)
+        db, org_id=current_user.org_id, window_days=window_days, owner_id=owner_id, team_id=team_id
     )
 
 
@@ -83,8 +117,9 @@ def get_daily_trend(
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    owner_id, team_id = _resolve_visibility(current_user, db)
     return get_daily_automation_trend(
-        db, org_id=current_user.org_id, days=days, team_ids=_resolve_team_ids(db, current_user)
+        db, org_id=current_user.org_id, days=days, owner_id=owner_id, team_id=team_id
     )
 
 
@@ -92,17 +127,21 @@ def get_daily_trend(
 def list_automation_runs(
     analysis_run_id: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
+    source: Optional[str] = Query(default=None, description="'simple' or 'bulk'"),
     pagination: PaginationParams = Depends(),
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin_or_operator),
 ):
+    owner_id, team_id = _resolve_visibility(current_user, db)
     return get_automation_runs_paginated(
         db=db,
         pagination=pagination,
         org_id=current_user.org_id,
         analysis_run_id=analysis_run_id,
         status=status,
-        team_ids=_resolve_team_ids(db, current_user),
+        source=source,
+        owner_id=owner_id,
+        team_id=team_id,
     )
 
 
@@ -116,7 +155,7 @@ def update_automation_run(
     run = db.query(AutomationRun).filter(
         AutomationRun.id == run_id,
         AutomationRun.org_id == current_user.org_id,
-        team_visibility_clause(AutomationRun, current_user, _resolve_team_ids(db, current_user) or []),
+        owner_visibility_clause(AutomationRun, current_user),
     ).first()
     if not run:
         raise HTTPException(status_code=404, detail="Automation run not found")
@@ -137,7 +176,7 @@ def delete_automation_run(
     run = db.query(AutomationRun).filter(
         AutomationRun.id == run_id,
         AutomationRun.org_id == current_user.org_id,
-        team_visibility_clause(AutomationRun, current_user, _resolve_team_ids(db, current_user) or []),
+        owner_visibility_clause(AutomationRun, current_user),
     ).first()
     if not run:
         raise HTTPException(status_code=404, detail="Automation run not found")
@@ -151,6 +190,7 @@ def delete_automation_run(
 def list_audit_logs(
     action: Optional[str] = Query(default=None),
     resource_type: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Query(default=None),
     pagination: PaginationParams = Depends(),
     db: Session = Depends(get_sync_db),
     current_user: User = Depends(require_admin),
@@ -161,4 +201,5 @@ def list_audit_logs(
         org_id=current_user.org_id,
         action=action,
         resource_type=resource_type,
+        user_id=user_id,
     )

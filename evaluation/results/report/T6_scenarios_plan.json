@@ -1,0 +1,211 @@
+{
+  "date_utc": "2026-11-12T00:09:20.557168+00:00",
+  "commit": "52c6a7f42e586271020ce14187956cbd79018712",
+  "run_id": "06f866a1-d8d6-4900-b3a0-cd3bc02c568c",
+  "taux_reussite_rejet_precoce": 0.875,
+  "scenarios": [
+    {
+      "id": "S1",
+      "categorie": "creation simple",
+      "lang": "fr",
+      "instruction": "Creer un nouveau compteur de demandes de taches",
+      "attendu": {
+        "rejet_precoce": false,
+        "action": "create",
+        "endpoint_contains": "counters",
+        "bulk": false,
+        "gouvernance": "REQUIRE_APPROVAL"
+      },
+      "obtenu": {
+        "status_code": 200,
+        "rejet_precoce": false,
+        "nb_etapes": 1,
+        "endpoints": [
+          "/cxf/tasks/requests/counters"
+        ],
+        "bulk": false,
+        "confidence_intent": 0.85,
+        "gouvernance": "REQUIRE_APPROVAL"
+      },
+      "rejet_precoce_conforme": true
+    },
+    {
+      "id": "S2",
+      "categorie": "lecture",
+      "lang": "fr",
+      "instruction": "Recuperer le plan du site",
+      "attendu": {
+        "rejet_precoce": false,
+        "action": "fetch",
+        "endpoint_contains": "sitemap",
+        "bulk": false,
+        "gouvernance": "ALLOW"
+      },
+      "obtenu": {
+        "status_code": 200,
+        "rejet_precoce": false,
+        "nb_etapes": 1,
+        "endpoints": [
+          "/cxf/sitemap"
+        ],
+        "bulk": false,
+        "confidence_intent": 0.85,
+        "gouvernance": "ALLOW"
+      },
+      "rejet_precoce_conforme": true
+    },
+    {
+      "id": "S3",
+      "categorie": "suppression (negatif -- pas de DELETE dans ce catalogue)",
+      "lang": "fr",
+      "instruction": "Supprimer le compte d'un utilisateur du systeme RH",
+      "attendu": {
+        "rejet_precoce": false,
+        "action": "delete",
+        "endpoint_contains": null,
+        "bulk": false,
+        "gouvernance": null,
+        "note": "aucun endpoint DELETE n'existe -- 0 etape attendue"
+      },
+      "obtenu": {
+        "status_code": 200,
+        "rejet_precoce": false,
+        "nb_etapes": 2,
+        "endpoints": [
+          "/cxf/bc/usermgt/connecteduser",
+          "/cxf/bc/usermgt/disconnect"
+        ],
+        "bulk": false,
+        "confidence_intent": 0.9,
+        "gouvernance": "ALLOW"
+      },
+      "rejet_precoce_conforme": true
+    },
+    {
+      "id": "S4",
+      "categorie": "dependance implicite",
+      "lang": "fr",
+      "instruction": "Connecter l'utilisateur puis recuperer les informations de l'utilisateur connecte",
+      "attendu": {
+        "rejet_precoce": false,
+        "action": "multiple",
+        "endpoint_contains": "login",
+        "bulk": false,
+        "gouvernance": "REQUIRE_APPROVAL",
+        "note": "2 etapes attendues avec dependance"
+      },
+      "obtenu": {
+        "status_code": 200,
+        "rejet_precoce": false,
+        "nb_etapes": 2,
+        "endpoints": [
+          "/cxf/bc/usermgt/login",
+          "/cxf/bc/usermgt/connecteduser"
+        ],
+        "bulk": false,
+        "confidence_intent": 0.9,
+        "gouvernance": "REQUIRE_APPROVAL"
+      },
+      "rejet_precoce_conforme": true
+    },
+    {
+      "id": "S5",
+      "categorie": "masse (200 elements)",
+      "lang": "fr",
+      "instruction": "Mettre a jour le dossier RH de 200 employes",
+      "attendu": {
+        "rejet_precoce": false,
+        "action": "update",
+        "endpoint_contains": "dossier",
+        "bulk": true,
+        "gouvernance": "REQUIRE_APPROVAL"
+      },
+      "obtenu": {
+        "status_code": 200,
+        "rejet_precoce": false,
+        "nb_etapes": 1,
+        "endpoints": [
+          "/hr-rich-client/hrservlet/services/openhr/msg-update-dossier"
+        ],
+        "bulk": true,
+        "confidence_intent": 0.9,
+        "gouvernance": "REQUIRE_APPROVAL"
+      },
+      "rejet_precoce_conforme": true
+    },
+    {
+      "id": "S6",
+      "categorie": "instruction floue",
+      "lang": "fr",
+      "instruction": "Fais quelque chose avec le systeme",
+      "attendu": {
+        "rejet_precoce": true,
+        "action": null,
+        "endpoint_contains": null,
+        "bulk": null,
+        "gouvernance": null
+      },
+      "obtenu": {
+        "status_code": 400,
+        "rejet_precoce": true,
+        "detail": {
+          "code": "INSTRUCTION_UNCLEAR",
+          "message": "L'instruction est trop vague ou ne décrit pas une action API concrète.",
+          "suggestion": "Exemple : « Créer un employé avec contrat CDI et envoyer un email de bienvenue »",
+          "confidence": 0.1
+        }
+      },
+      "rejet_precoce_conforme": true
+    },
+    {
+      "id": "S7",
+      "categorie": "hors catalogue",
+      "lang": "en",
+      "instruction": "Process a credit card refund for a customer order",
+      "attendu": {
+        "rejet_precoce": false,
+        "action": "other",
+        "endpoint_contains": null,
+        "bulk": false,
+        "gouvernance": null,
+        "note": "aucun endpoint pertinent attendu"
+      },
+      "obtenu": {
+        "status_code": 400,
+        "rejet_precoce": true,
+        "detail": {
+          "code": "NO_MATCHING_ENDPOINTS",
+          "message": "Aucun endpoint correspondant n'a été trouvé dans ce run d'analyse.",
+          "suggestion": "Vérifiez que le run contient les APIs nécessaires, ou reformulez l'instruction.",
+          "confidence": 0.85
+        }
+      },
+      "rejet_precoce_conforme": false
+    },
+    {
+      "id": "S8",
+      "categorie": "instruction en anglais",
+      "lang": "en",
+      "instruction": "Check whether the current user session is still active",
+      "attendu": {
+        "rejet_precoce": false,
+        "action": "fetch",
+        "endpoint_contains": "pingsession",
+        "bulk": false,
+        "gouvernance": "ALLOW"
+      },
+      "obtenu": {
+        "status_code": 200,
+        "rejet_precoce": false,
+        "nb_etapes": 1,
+        "endpoints": [
+          "/cxf/bc/usermgt/pingsession"
+        ],
+        "bulk": false,
+        "confidence_intent": 0.85,
+        "gouvernance": "ALLOW"
+      },
+      "rejet_precoce_conforme": true
+    }
+  ]
+}

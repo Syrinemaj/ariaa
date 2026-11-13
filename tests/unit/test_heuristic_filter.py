@@ -61,7 +61,14 @@ class TestComputeHeuristicScore:
             response_headers={"content-type": "application/json"},
         )
         score = compute_heuristic_score(entry)
-        assert score >= 0.9
+        # Weights recalibrated against the golden dataset (see
+        # compute_heuristic_score's docstring): structure alone now tops out
+        # at 0.75 here (0.25 method + 0.25 content + 0.15 URL hint + 0.10
+        # status), comfortably above HIGH_THRESHOLD=0.70 so this clear-cut
+        # case is still kept_by_rules — but no longer >=0.9, since structure
+        # alone should never be indistinguishable from a near-certain case
+        # with real payload corroboration on top.
+        assert score >= 0.70
 
     def test_get_html_no_hint(self):
         entry = make_entry(method="GET", path="/about", status=200)

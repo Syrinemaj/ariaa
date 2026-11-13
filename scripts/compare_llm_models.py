@@ -1,7 +1,7 @@
 """
 Print what our actual (lifetime) LLM token usage would cost under every
-priced model — the current Groq model vs. the Amazon Bedrock Claude
-candidates (Haiku 4.5 / Sonnet 5 / Opus 4.8) — cheapest first.
+priced Bedrock model — current model vs. the other Nova/Claude/DeepSeek
+candidates — cheapest first.
 
 Run from the project root:
     python -m scripts.compare_llm_models

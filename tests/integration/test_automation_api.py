@@ -1,10 +1,70 @@
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
 from app.automation.models import AutomationExecutionResult, StepExecutionResult
+from app.models.governance import DEFAULT_ENVIRONMENT_POLICIES
 from app.planner.models import AutomationPlan, BusinessIntent, PlanStep
+
+
+def _mock_connection(environment="test", auth_type="api_key", status="active"):
+    conn = MagicMock()
+    conn.id = "conn-mock-1"
+    conn.base_url = "https://api.example.com"
+    conn.environment = environment
+    conn.auth_type = auth_type
+    conn.status = status
+    return conn
+
+
+def _mock_policy(low=1, high=10):
+    policy = MagicMock()
+    policy.risk_threshold_low = low
+    policy.risk_threshold_high = high
+    policy.environment_policies = dict(DEFAULT_ENVIRONMENT_POLICIES)
+    return policy
+
+
+@contextmanager
+def patched_connection_and_governance(connection=None, forbidden_rules=None):
+    """/automation/execute now resolves a Connection (instead of trusting a
+    client-supplied base_url/auth_headers) and runs it through the
+    governance policy engine on every non-dry-run call — every test below
+    needs these mocked regardless of what it's actually asserting about."""
+    with (
+        patch(
+            "app.api.automation.connection_service.get_connection",
+            new=AsyncMock(return_value=connection or _mock_connection()),
+        ),
+        patch(
+            "app.api.automation.connection_service.user_can_use_connection", new=AsyncMock(return_value=True)
+        ),
+        patch(
+            "app.api.automation.connection_service.get_decrypted_secret_for_execution",
+            return_value="mock-decrypted-secret",
+        ),
+        patch("app.api.automation.connection_service.build_auth_headers", return_value={}),
+        patch(
+            "app.api.automation.governance_service.get_or_create_policy",
+            new=AsyncMock(return_value=_mock_policy()),
+        ),
+        patch(
+            "app.api.automation.governance_service.list_forbidden_rules",
+            new=AsyncMock(return_value=forbidden_rules or []),
+        ),
+        # Pre-existing gaps in this mocked-db test setup, unrelated to
+        # connections/governance: resolve_single_team_id(db, ...) and
+        # log_audit_event(db=db, ...) are both awaited directly against the
+        # route's `db`, which the global `client` fixture's get_db override
+        # sets to a plain (non-async) MagicMock — any real await on it
+        # raises "object MagicMock can't be used in 'await' expression",
+        # regardless of whether execute_automation itself is mocked.
+        patch("app.api.automation.resolve_single_team_id", new=AsyncMock(return_value=None)),
+        patch("app.api.automation.log_audit_event", new=AsyncMock()),
+    ):
+        yield
 
 
 def make_plan_payload(requires_approval=True, method="GET"):
@@ -62,6 +122,21 @@ def _mock_http_response(status_code: int) -> MagicMock:
 
 
 class TestValidateToken:
+    @pytest.fixture(autouse=True)
+    def _reset_rate_limiter(self):
+        # /automation/validate-token is rate-limited (app/core/rate_limit.py,
+        # settings.RATE_LIMIT_AUTH, shared Redis-backed counter keyed on the
+        # caller — "testclient" for every call made through TestClient). This
+        # class has more test methods than the limit allows, so without a
+        # reset the N+1-th test in a run gets a 429 instead of exercising its
+        # own scenario — not a bug in the route, just missing test isolation
+        # from a limiter that's deliberately shared across workers in
+        # production. Reset before each test rather than after, so a failed
+        # test doesn't leave the counter dirty for the next one.
+        from app.core.rate_limit import limiter
+        limiter.reset()
+        yield
+
     BASE_PAYLOAD = {
         "base_url": "https://api.example.com",
         "token_type": "bearer",
@@ -250,6 +325,19 @@ class TestCreatePlan:
         assert response.status_code == 404
 
     def test_creates_plan_for_valid_run(self, client):
+        from app.db.session import get_db
+        from app.main import app
+
+        # This path logs an audit event, which does `await db.flush()` — not
+        # awaitable on the plain MagicMock the global `client` fixture
+        # normally injects (same workaround already used by
+        # TestExecutePlan.test_governance_block_returns_403_before_execute_automation_is_called
+        # above, for the same reason).
+        mock_db = MagicMock()
+        mock_db.flush = AsyncMock()
+        original_get_db = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = lambda: (yield mock_db)
+
         mock_run = MagicMock()
         mock_plan = AutomationPlan(
             run_id="run-123",
@@ -261,20 +349,36 @@ class TestCreatePlan:
                 confidence=0.9,
             ),
             workflow_name="user-flow",
-            steps=[],
+            # A plan with no steps is correctly rejected with 400
+            # NO_MATCHING_ENDPOINTS by the route (app/api/automation.py) —
+            # this test exercises the success path, so it needs at least
+            # one real step, not an empty list.
+            steps=[
+                PlanStep(
+                    order=1,
+                    endpoint_id="endpoint-1",
+                    method="GET",
+                    path="/users",
+                    canonical_key="GET /users",
+                ),
+            ],
         )
         mock_validation = MagicMock()
         mock_validation.is_valid = True
         mock_validation.issues = []
         mock_validation.model_dump.return_value = {"is_valid": True, "issues": []}
 
-        with patch("app.api.automation.get_run_by_id", return_value=mock_run), \
-             patch("app.api.automation.create_plan_from_instruction",
-                   return_value=(mock_plan, mock_validation)):
-            response = client.post(
-                "/automation/plan",
-                json={"run_id": "run-123", "instruction": "list users"},
-            )
+        try:
+            with patch("app.api.automation.get_run_by_id", return_value=mock_run), \
+                 patch("app.api.automation.create_plan_from_instruction",
+                       return_value=(mock_plan, mock_validation)):
+                response = client.post(
+                    "/automation/plan",
+                    json={"run_id": "run-123", "instruction": "list users"},
+                )
+        finally:
+            if original_get_db is not None:
+                app.dependency_overrides[get_db] = original_get_db
 
         assert response.status_code == 200
         data = response.json()
@@ -288,13 +392,16 @@ class TestExecutePlan:
         mock_run.id = "automation-run-1"
         mock_result = make_execution_result(dry_run=True)
 
-        with patch("app.api.automation.execute_automation",
-                   new_callable=AsyncMock,
-                   return_value=(mock_run, mock_result)):
+        with patched_connection_and_governance(), patch(
+            "app.api.automation.execute_automation",
+            new_callable=AsyncMock,
+            return_value=(mock_run, mock_result),
+        ):
             response = client.post(
                 "/automation/execute",
                 json={
                     "plan": make_plan_payload(requires_approval=True),
+                    "connection_id": "conn-mock-1",
                     "dry_run": True,
                     "approval_granted": False,
                 },
@@ -309,13 +416,16 @@ class TestExecutePlan:
     def test_real_execution_without_approval_returns_403(self, client):
         from app.security.execution_guard import ExecutionGuardError
 
-        with patch("app.api.automation.execute_automation",
-                   new_callable=AsyncMock,
-                   side_effect=ExecutionGuardError("Real execution requires explicit approval.")):
+        with patched_connection_and_governance(), patch(
+            "app.api.automation.execute_automation",
+            new_callable=AsyncMock,
+            side_effect=ExecutionGuardError("Real execution requires explicit approval."),
+        ):
             response = client.post(
                 "/automation/execute",
                 json={
                     "plan": make_plan_payload(requires_approval=True),
+                    "connection_id": "conn-mock-1",
                     "dry_run": False,
                     "approval_granted": False,
                 },
@@ -327,16 +437,139 @@ class TestExecutePlan:
     def test_delete_without_allow_returns_403(self, client):
         from app.security.execution_guard import ExecutionGuardError
 
-        with patch("app.api.automation.execute_automation",
-                   new_callable=AsyncMock,
-                   side_effect=ExecutionGuardError("Method DELETE is forbidden by default.")):
+        with patched_connection_and_governance(), patch(
+            "app.api.automation.execute_automation",
+            new_callable=AsyncMock,
+            side_effect=ExecutionGuardError("Method DELETE is forbidden by default."),
+        ):
             response = client.post(
                 "/automation/execute",
                 json={
                     "plan": make_plan_payload(requires_approval=False, method="DELETE"),
+                    "connection_id": "conn-mock-1",
                     "dry_run": False,
                     "approval_granted": True,
                 },
             )
 
         assert response.status_code == 403
+
+    def test_missing_connection_returns_404(self, client):
+        with patch(
+            "app.api.automation.connection_service.get_connection", new=AsyncMock(return_value=None)
+        ):
+            response = client.post(
+                "/automation/execute",
+                json={
+                    "plan": make_plan_payload(),
+                    "connection_id": "does-not-exist",
+                    "dry_run": True,
+                },
+            )
+        assert response.status_code == 404
+
+    def test_unassigned_connection_returns_403(self, client):
+        with (
+            patch(
+                "app.api.automation.connection_service.get_connection",
+                new=AsyncMock(return_value=_mock_connection()),
+            ),
+            patch(
+                "app.api.automation.connection_service.user_can_use_connection",
+                new=AsyncMock(return_value=False),
+            ),
+        ):
+            response = client.post(
+                "/automation/execute",
+                json={
+                    "plan": make_plan_payload(),
+                    "connection_id": "conn-mock-1",
+                    "dry_run": True,
+                },
+            )
+        assert response.status_code == 403
+
+    def test_operator_allow_decision_skips_approval_flow(self, client):
+        """Core Feature 1 behavior: an OPERATOR whose plan governance rates
+        ALLOW (low risk, full_access environment) executes directly — no
+        pending-approval round trip, unlike the pre-governance behavior
+        where ANY non-dry-run operator call always required approval."""
+        from app.auth.dependencies import get_current_user, require_admin_or_operator
+        from app.main import app
+        from app.models.user import UserRole
+
+        mock_operator = MagicMock()
+        mock_operator.id = "mock-operator-id"
+        mock_operator.org_id = "mock-org-id"
+        mock_operator.role = UserRole.OPERATOR
+
+        mock_run = MagicMock()
+        mock_run.id = "automation-run-2"
+        mock_result = make_execution_result(dry_run=False, status="completed")
+
+        original_get_current_user = app.dependency_overrides.get(get_current_user)
+        original_require_admin_or_operator = app.dependency_overrides.get(require_admin_or_operator)
+        app.dependency_overrides[get_current_user] = lambda: mock_operator
+        app.dependency_overrides[require_admin_or_operator] = lambda: mock_operator
+        try:
+            with patched_connection_and_governance(), patch(
+                "app.api.automation.execute_automation",
+                new_callable=AsyncMock,
+                return_value=(mock_run, mock_result),
+            ) as mock_execute:
+                response = client.post(
+                    "/automation/execute",
+                    json={
+                        "plan": make_plan_payload(requires_approval=False),
+                        "connection_id": "conn-mock-1",
+                        "dry_run": False,
+                        "approval_granted": False,
+                    },
+                )
+        finally:
+            if original_get_current_user is not None:
+                app.dependency_overrides[get_current_user] = original_get_current_user
+            if original_require_admin_or_operator is not None:
+                app.dependency_overrides[require_admin_or_operator] = original_require_admin_or_operator
+
+        assert response.status_code == 200, response.json()
+        # approval_granted was forced True by the ALLOW decision, not by
+        # the (false) client-sent value.
+        assert mock_execute.call_args.kwargs["approval_granted"] is True
+
+    def test_governance_block_returns_403_before_execute_automation_is_called(self, client):
+        from app.db.session import get_db
+        from app.main import app
+
+        # A BLOCK commits the audit-log write before raising (get_db() rolls
+        # back on any exception, which would otherwise silently drop it —
+        # see the comment at that call site) — needs db.commit() to be
+        # awaitable, unlike the plain MagicMock the global `client` fixture
+        # normally injects.
+        mock_db = MagicMock()
+        mock_db.commit = AsyncMock()
+        original_get_db = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = lambda: (yield mock_db)
+
+        forbidden_rule = MagicMock(method="GET", path_pattern="/api/users")
+        try:
+            with patched_connection_and_governance(forbidden_rules=[forbidden_rule]), patch(
+                "app.api.automation.execute_automation", new_callable=AsyncMock
+            ) as mock_execute:
+                response = client.post(
+                    "/automation/execute",
+                    json={
+                        "plan": make_plan_payload(),
+                        "connection_id": "conn-mock-1",
+                        "dry_run": False,
+                        "approval_granted": True,
+                    },
+                )
+        finally:
+            if original_get_db is not None:
+                app.dependency_overrides[get_db] = original_get_db
+
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "GOVERNANCE_BLOCKED"
+        mock_execute.assert_not_awaited()
+        mock_db.commit.assert_awaited()

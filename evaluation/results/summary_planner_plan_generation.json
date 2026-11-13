@@ -1,0 +1,22 @@
+[
+  {
+    "model": "deepseek.v3.2",
+    "skipped": false,
+    "cases_completed": 50,
+    "completion_rate": 1.0,
+    "hit_rate": 0.9117647058823529,
+    "mrr": 0.6862745098039216,
+    "mapping_coverage": 1.0,
+    "cost_usd": 0.5867120000000003
+  },
+  {
+    "model": "amazon.nova-lite-v1:0",
+    "skipped": false,
+    "cases_completed": 50,
+    "completion_rate": 1.0,
+    "hit_rate": 0.9411764705882353,
+    "mrr": 0.6823529411764705,
+    "mapping_coverage": 1.0,
+    "cost_usd": 0.015785
+  }
+]

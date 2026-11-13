@@ -1,9 +1,15 @@
+import unicodedata
 from typing import Any, Dict, List
 
 
 def normalize_field_name(value: str) -> str:
     value = value.strip()
     value = value.replace("-", "_").replace(" ", "_")
+    value = value.replace("'", "").replace("’", "")
+    # Strip accents (e.g. "Date début" -> "date_debut") so French CSV headers
+    # match ASCII target field names instead of silently falling to "missing".
+    value = unicodedata.normalize("NFKD", value)
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
     return value.lower()
 
 

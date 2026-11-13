@@ -1,0 +1,22 @@
+{
+  "label": "100",
+  "data_file_id": "bd658c1f-5bfa-407a-97e9-97a9ff36512d",
+  "validation": {
+    "validation_run_id": "be29b71a-42aa-4501-861d-4344285ce966",
+    "data_file_id": "bd658c1f-5bfa-407a-97e9-97a9ff36512d",
+    "total_rows": 100,
+    "valid_rows": 100,
+    "invalid_rows": 0,
+    "ready_for_execution": true,
+    "can_execute_partial": true,
+    "errors": []
+  },
+  "dry_run_status": 400,
+  "t_dry_run_s": 0.2,
+  "execute_first_call": {
+    "status": 400,
+    "body": {
+      "detail": "Hostname 'localhost' is explicitly forbidden"
+    }
+  }
+}

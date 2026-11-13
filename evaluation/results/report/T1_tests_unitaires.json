@@ -1,0 +1,72 @@
+{
+  "date_utc": "2026-11-11T23:33:07.172030+00:00",
+  "commit": "52c6a7f42e586271020ce14187956cbd79018712",
+  "commande": "pytest tests/unit --cov=app --cov-report=term-missing --cov-report=json:evaluation/results/report/t1_coverage.json --junitxml=evaluation/results/report/t1_junit.xml -q",
+  "tests_total": 475,
+  "tests_reussis": 444,
+  "tests_ignores": 31,
+  "tests_echoues": 0,
+  "couverture_globale_pct": 41.3,
+  "modules": [
+    {
+      "module": "ingestion",
+      "lignes_couvertes": 98,
+      "lignes_totales": 261,
+      "couverture_pct": 37.5
+    },
+    {
+      "module": "normalization",
+      "lignes_couvertes": 591,
+      "lignes_totales": 768,
+      "couverture_pct": 77.0
+    },
+    {
+      "module": "rag",
+      "lignes_couvertes": 137,
+      "lignes_totales": 323,
+      "couverture_pct": 42.4
+    },
+    {
+      "module": "planner",
+      "lignes_couvertes": 231,
+      "lignes_totales": 309,
+      "couverture_pct": 74.8
+    },
+    {
+      "module": "governance",
+      "lignes_couvertes": 91,
+      "lignes_totales": 146,
+      "couverture_pct": 62.3
+    },
+    {
+      "module": "approval",
+      "lignes_couvertes": 0,
+      "lignes_totales": 31,
+      "couverture_pct": 0.0
+    },
+    {
+      "module": "automation",
+      "lignes_couvertes": 136,
+      "lignes_totales": 336,
+      "couverture_pct": 40.5
+    },
+    {
+      "module": "bulk_execution",
+      "lignes_couvertes": 104,
+      "lignes_totales": 296,
+      "couverture_pct": 35.1
+    },
+    {
+      "module": "security",
+      "lignes_couvertes": 133,
+      "lignes_totales": 286,
+      "couverture_pct": 46.5
+    },
+    {
+      "module": "connections",
+      "lignes_couvertes": 60,
+      "lignes_totales": 185,
+      "couverture_pct": 32.4
+    }
+  ]
+}

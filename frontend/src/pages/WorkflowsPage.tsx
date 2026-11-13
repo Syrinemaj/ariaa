@@ -443,13 +443,13 @@ export default function WorkflowsPage() {
           <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Workflow name *</p>
           <input value={draftName}
             onChange={e => { setDraftName(e.target.value); setIsDirty(true) }}
-            className="input" placeholder="e.g. employee_onboarding" />
+            className="input" placeholder="e.g. employee_onboarding" autoComplete="off" />
         </div>
         <div>
           <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Business domain</p>
           <input value={draftDomain}
             onChange={e => { setDraftDomain(e.target.value); setIsDirty(true) }}
-            className="input" placeholder="e.g. HR, Finance, Auth…" />
+            className="input" placeholder="e.g. HR, Finance, Auth…" autoComplete="off" />
         </div>
       </div>
 
@@ -529,10 +529,11 @@ export default function WorkflowsPage() {
                 value={epSearch}
                 onFocus={() => setShowEpList(true)}
                 onChange={e => { setEpSearch(e.target.value); setShowEpList(true) }}
+                autoComplete="off"
               />
             </div>
             {showEpList && filteredEps.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 mt-1 rounded-xl overflow-hidden"
+              <div className="absolute z-20 left-0 right-0 mt-1 rounded-2xl overflow-hidden"
                 style={{ background: 'var(--card)', border: '1px solid var(--line)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', maxHeight: 220, overflowY: 'auto' }}>
                 {filteredEps.slice(0, 30).map(ep => (
                   <button key={ep.canonical_key}
@@ -769,6 +770,7 @@ export default function WorkflowsPage() {
                     placeholder="Search workflows…"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
+                    autoComplete="off"
                   />
                 </div>
               )}

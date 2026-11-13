@@ -3,6 +3,7 @@ import AppLayout from '../components/layout/AppLayout'
 import { MethodBadge, SeverityBadge, StatusBadge } from '../components/aria/Badges'
 import { Approval, Method, Risk } from '../lib/aria-data'
 import { listApprovals, approveApproval, rejectApproval, BackendApproval } from '../lib/approvalsApi'
+import { ApiError } from '../lib/api'
 import { Filter, TriangleAlert, Check, X, CheckCheck } from 'lucide-react'
 
 // Map backend approval → UI Approval shape
@@ -27,6 +28,8 @@ export default function ApprovalsPage() {
   const [loading, setLoading]   = useState(true)
   const [modal, setModal]       = useState<{ kind: 'approve' | 'reject'; a: Approval; idx: number } | null>(null)
   const [comment, setComment]   = useState('')
+  const [processingId, setProcessingId] = useState<string | null>(null)
+  const [modalError, setModalError]     = useState('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -40,15 +43,41 @@ export default function ApprovalsPage() {
   useEffect(() => { load() }, [load])
 
   const approve = async (id: string) => {
-    try { await approveApproval(id, comment || undefined) } catch { /* silent */ }
-    setModal(null)
-    void load()
+    setProcessingId(id)
+    setModalError('')
+    try {
+      await approveApproval(id, comment || undefined)
+      setModal(null)
+      void load()
+    } catch (err) {
+      setModalError(
+        err instanceof ApiError
+          ? (err.status === 409 ? 'This approval was already processed by someone else.' : err.message)
+          : 'Error processing approval. Please try again.'
+      )
+      void load() // refresh — the underlying status may have changed regardless
+    } finally {
+      setProcessingId(null)
+    }
   }
 
   const reject = async (id: string) => {
-    try { await rejectApproval(id, comment || 'Rejected') } catch { /* silent */ }
-    setModal(null)
-    void load()
+    setProcessingId(id)
+    setModalError('')
+    try {
+      await rejectApproval(id, comment || 'Rejected')
+      setModal(null)
+      void load()
+    } catch (err) {
+      setModalError(
+        err instanceof ApiError
+          ? (err.status === 409 ? 'This approval was already processed by someone else.' : err.message)
+          : 'Error processing approval. Please try again.'
+      )
+      void load()
+    } finally {
+      setProcessingId(null)
+    }
   }
 
   const riskBg    = (r: string) => r === 'critical' ? 'color-mix(in oklch, #f43f5e 10%, var(--card))' : r === 'high' ? 'color-mix(in oklch, #f97316 10%, var(--card))' : 'color-mix(in oklch, #f59e0b 10%, var(--card))'
@@ -121,8 +150,8 @@ export default function ApprovalsPage() {
                 </div>
 
                 <div className="flex items-center gap-2 mt-5">
-                  <button onClick={() => { setComment(''); setModal({ kind: 'reject', a, idx }) }} className="btn-secondary flex-1 justify-center"><X className="w-4 h-4" /> Reject</button>
-                  <button onClick={() => { setComment('Reviewed dry-run. Looks good.'); setModal({ kind: 'approve', a, idx }) }} className="btn-primary flex-1 justify-center"><Check className="w-4 h-4" /> Approve</button>
+                  <button onClick={() => { setComment(''); setModalError(''); setModal({ kind: 'reject', a, idx }) }} className="btn-secondary flex-1 justify-center"><X className="w-4 h-4" /> Reject</button>
+                  <button onClick={() => { setComment('Reviewed dry-run. Looks good.'); setModalError(''); setModal({ kind: 'approve', a, idx }) }} className="btn-primary flex-1 justify-center"><Check className="w-4 h-4" /> Approve</button>
                 </div>
               </div>
             </div>
@@ -204,11 +233,22 @@ export default function ApprovalsPage() {
               <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Comment</p>
               <textarea rows={3} value={comment} onChange={e => setComment(e.target.value)} className="input resize-none" placeholder="Optional reason…" />
             </div>
+            {modalError && (
+              <div className="rounded-xl px-3 py-2 text-sm mb-3" style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444' }}>
+                {modalError}
+              </div>
+            )}
             <div className="flex gap-2 justify-end mt-4">
-              <button onClick={() => setModal(null)} className="btn-secondary">Cancel</button>
+              <button onClick={() => setModal(null)} className="btn-secondary" disabled={processingId === modal.a.id}>Cancel</button>
               {modal.kind === 'approve'
-                ? <button onClick={() => void approve(modal.a.id)} className="btn-primary"><Check className="w-4 h-4" /> Confirm approval</button>
-                : <button onClick={() => void reject(modal.a.id)} className="btn-danger"><X className="w-4 h-4" /> Confirm rejection</button>}
+                // modal.a.run is the AutomationRun id the backend route expects
+                // (POST /approvals/{automation_run_id}/approve) — modal.a.id is
+                // the AutomationApproval's own id, a different row entirely.
+                // Sending that one always 404s ("Automation run not found"),
+                // which the catch-all error message below was masking as a
+                // generic "try again" with no hint of the real cause.
+                ? <button onClick={() => void approve(modal.a.run)} className="btn-primary" disabled={processingId === modal.a.id}><Check className="w-4 h-4" /> Confirm approval</button>
+                : <button onClick={() => void reject(modal.a.run)} className="btn-danger" disabled={processingId === modal.a.id}><X className="w-4 h-4" /> Confirm rejection</button>}
             </div>
           </div>
         </div>

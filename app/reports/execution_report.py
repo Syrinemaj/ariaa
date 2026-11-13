@@ -24,6 +24,7 @@ def build_automation_report(db: Session, automation_run_id: str) -> AutomationEx
             request_payload=log.request_payload,
             response_payload=log.response_payload,
             error_message=log.error_message,
+            created_at=log.created_at.isoformat() if log.created_at else None,
         )
         for log in logs
     ]

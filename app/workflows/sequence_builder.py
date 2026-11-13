@@ -133,7 +133,7 @@ def reorder_steps_sync(
     """
     Reorder workflow steps into the correct business execution sequence.
 
-    Uses a sync LLM call (GroqClient.structured_chat) — call via asyncio.to_thread
+    Uses a sync LLM call (BedrockClient.structured_chat) — call via asyncio.to_thread
     if invoked from an async context.
 
     Returns steps unchanged when:

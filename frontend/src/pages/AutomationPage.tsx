@@ -1,17 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import { StatusBadge } from '../components/aria/Badges'
-import { listRuns, AnalysisRun, getWorkflows, BackendWorkflow } from '../lib/registryApi'
+import { listRuns, AnalysisRun } from '../lib/registryApi'
 import {
-  createPlan, executePlan, planFromWorkflow,
+  createPlan, executePlan,
   BackendPlanStep, CreatePlanResponse, ExecutePlanResponse,
 } from '../lib/automationApi'
 import { ApiError } from '../lib/api'
-import { FlaskConical, Layers, Sparkles, Play, Lock, Unlock, ChevronDown, Plus, X, TriangleAlert, AlertCircle, Loader2 } from 'lucide-react'
+import { Connection } from '../lib/connectionsApi'
+import { listApprovals } from '../lib/approvalsApi'
+import ConnectionPicker from '../components/automation/ConnectionPicker'
+import {
+  FlaskConical, Layers, Sparkles, Play, Lock, Unlock, ChevronDown, TriangleAlert,
+  AlertCircle, X, ShieldCheck, RefreshCw, CheckCircle2,
+} from 'lucide-react'
 
-function Spinner({ className = 'w-4 h-4' }: { className?: string }) {
-  return <Loader2 className={`${className} animate-spin`} />
+// Non-interactive status tile — replaces the old self-check "Approved" toggle
+// in the slot next to "Simulation mode". An operator ticking their own
+// "Approved" box never meant anything real: governance decides server-side
+// regardless of what the client sends (app/api/automation.py), so the old
+// toggle was purely decorative and could mislead someone into thinking they
+// had authorized their own risky action. This only ever displays real state.
+function StatusTile({ icon, label, hint, tone }: { icon: React.ReactNode; label: string; hint: string; tone: 'muted' | 'pending' | 'approved' }) {
+  const palette = tone === 'pending'
+    ? { border: '#f59e0b', bg: 'color-mix(in oklch, #f59e0b 6%, var(--card))', color: '#92400e' }
+    : tone === 'approved'
+      ? { border: '#10b981', bg: 'color-mix(in oklch, #10b981 6%, var(--card))', color: '#047857' }
+      : { border: 'var(--line)', bg: 'var(--card)', color: 'var(--ink-2)' }
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-xl border" style={{ borderColor: palette.border, background: palette.bg }}>
+      <div className="flex-shrink-0 mt-0.5" style={{ color: palette.color }}>{icon}</div>
+      <div>
+        <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>{label}</p>
+        <p className="text-xs" style={{ color: palette.color }}>{hint}</p>
+      </div>
+    </div>
+  )
 }
 
 function MethodBadge({ m }: { m: string }) {
@@ -36,32 +61,6 @@ function ToggleBig({ label, hint, checked, onChange, disabled }: { label: string
         <p className="text-xs ink-2">{hint}</p>
       </div>
     </label>
-  )
-}
-
-type HeaderRow = { k: string; v: string }
-function KeyValueEditor({ label, rows, setRows }: { label: string; rows: HeaderRow[]; setRows: (r: HeaderRow[]) => void }) {
-  const SENSITIVE = ['authorization', 'token', 'cookie', 'api-key', 'password', 'secret']
-  return (
-    <div>
-      <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">{label}</p>
-      <div className="space-y-2">
-        {rows.map((h, i) => {
-          const s = SENSITIVE.some(k => h.k.toLowerCase().includes(k))
-          return (
-            <div key={i} className="grid grid-cols-[1fr_2fr_auto] gap-2">
-              <input value={h.k} className="input !py-1.5 font-mono text-xs" onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, k: e.target.value } : x))} />
-              <div className="relative">
-                <input type={s ? 'password' : 'text'} value={h.v} className="input !py-1.5 font-mono text-xs" onChange={e => setRows(rows.map((x, j) => j === i ? { ...x, v: e.target.value } : x))} />
-                {s && <span className="absolute right-2 top-1/2 -translate-y-1/2 pill text-[9px] bg-rose-50 text-rose-700 border-rose-200"><Lock className="w-2.5 h-2.5" />hidden</span>}
-              </div>
-              <button className="btn-ghost !p-1.5" onClick={() => setRows(rows.filter((_, j) => j !== i))}><X className="w-4 h-4" /></button>
-            </div>
-          )
-        })}
-        <button onClick={() => setRows([...rows, { k: '', v: '' }])} className="btn-ghost text-xs"><Plus className="w-3.5 h-3.5" /> Add</button>
-      </div>
-    </div>
   )
 }
 
@@ -105,14 +104,6 @@ function PlanStep({ step }: { step: BackendPlanStep }) {
     </li>
   )
 }
-
-const INSTRUCTION_EXAMPLES = [
-  'Create employee Bob Martin with a permanent contract and send a welcome email',
-  'Open a payroll account and calculate the salary for January',
-  'Retrieve the list of active employees in the Engineering department',
-  'Update the position and salary of an existing employee',
-  'Create a user with the OPERATOR role and activate their access',
-]
 
 type ScoreLevel = 'low' | 'medium' | 'good'
 const ACTION_WORDS = [
@@ -161,10 +152,7 @@ export default function AutomationPage() {
 
   const [runs, setRuns]                       = useState<AnalysisRun[]>([])
   const [selectedRunId, setSelectedRunId]     = useState('')
-  const [workflows, setWorkflows]             = useState<BackendWorkflow[]>([])
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState('')
-  const [loadingWorkflowPlan, setLoadingWorkflowPlan] = useState(false)
-  const [instruction, setInstruction]         = useState('Create an employee named Bob with a permanent contract, open a payroll account, and send a welcome email')
+  const [instruction, setInstruction]         = useState('')
   const [searchLevel, setSearchLevel]         = useState<'precise' | 'balanced' | 'wide'>('balanced')
   const [generating, setGenerating]           = useState(false)
   const [executing, setExecuting]             = useState(false)
@@ -172,19 +160,23 @@ export default function AutomationPage() {
   const [executionResult, setExecutionResult] = useState<ExecutePlanResponse | null>(null)
   const [apiError, setApiError]               = useState('')
   const [dryRun, setDryRun]                   = useState(true)
-  const [approved, setApproved]               = useState(false)
-  const [baseUrl, setBaseUrl]                 = useState('https://hr-api.northwind.io')
-  const [headers, setHeaders]                 = useState<HeaderRow[]>([
-    { k: 'Authorization', v: 'Bearer eyJhbGciOiJIUzI1NiJ9.payload.sign' },
-    { k: 'X-Tenant', v: 'northwind' },
-  ])
-  const [inputRows, setInputRows] = useState('[\n  { "firstName":"Bob", "lastName":"Hartman", "email":"bob@northwind.io",\n    "department":"Engineering", "contract_type":"CDI", "salary_eur":68000 }\n]')
+  // 'pending' = an approval request was sent and we're polling for the
+  // admin's decision (see startPolling below). 'approved' = the admin said
+  // yes — the tile turns green and waits for the operator to click
+  // "Execute for real" themselves; it does NOT auto-execute, by design (the
+  // operator gets a deliberate last look before the real call goes out).
+  const [approvalStatus, setApprovalStatus]   = useState<'idle' | 'pending' | 'approved'>('idle')
+  const [pendingRunId, setPendingRunId]       = useState<string | null>(null)
+  const [resultModal, setResultModal]         = useState<{ kind: 'success' | 'failure'; result: ExecutePlanResponse } | null>(null)
+  const [connectionId, setConnectionId]       = useState('')
+  const [selectedConnection, setSelectedConnection] = useState<Connection | undefined>(undefined)
+  const [inputRows, setInputRows] = useState('')
   const [planError, setPlanError]               = useState('')
   const [planSuggestion, setPlanSuggestion]     = useState('')
-  const [instructionFocused, setInstructionFocused] = useState(false)
+  const pollRef = useRef<number | null>(null)
 
   const topK = searchLevel === 'precise' ? 5 : searchLevel === 'wide' ? 12 : 8
-  const canExecute = !!planResult && (dryRun || approved)
+  const canExecute = !!planResult && !!connectionId && approvalStatus !== 'pending'
   const steps = planResult?.plan.steps ?? []
   const instructionError = validateInstruction(instruction)
   const instructionScore = scoreInstruction(instruction)
@@ -198,13 +190,14 @@ export default function AutomationPage() {
     }).catch(() => {})
   }, [])
 
-  // Reload the workflow picker whenever the analysis run changes — workflows
-  // are scoped to the run they were detected/saved in.
-  useEffect(() => {
-    if (!selectedRunId) { setWorkflows([]); return }
-    setSelectedWorkflowId('')
-    getWorkflows(selectedRunId).then(setWorkflows).catch(() => setWorkflows([]))
-  }, [selectedRunId])
+  useEffect(() => () => stopPolling(), []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function stopPolling() {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
 
   async function handleGeneratePlan() {
     if (!selectedRunId || instructionError) return
@@ -218,7 +211,7 @@ export default function AutomationPage() {
       const result = await createPlan(selectedRunId, instruction, topK)
       setPlanResult(result)
     } catch (e) {
-      if (e instanceof ApiError && e.status === 400 && e.body) {
+      if (e instanceof ApiError && e.body) {
         const d = (e.body as { detail?: { code?: string; message?: string; suggestion?: string } }).detail
         if (d && typeof d === 'object') {
           setPlanError(d.message ?? 'Invalid instruction or no matching endpoint.')
@@ -232,43 +225,100 @@ export default function AutomationPage() {
     }
   }
 
-  async function handleUseWorkflow() {
-    if (!selectedWorkflowId) return
-    setLoadingWorkflowPlan(true)
-    setApiError('')
-    setPlanError('')
-    setPlanSuggestion('')
-    setPlanResult(null)
-    setExecutionResult(null)
+  // Fires the exact same /automation/execute call every time — on the first
+  // click AND on every poll tick while waiting for admin approval. The
+  // backend (app/api/automation.py) is what makes this safe to repeat: it
+  // looks up any existing "pending_approval" run for this same plan+user
+  // before creating a new one, so retrying is really "check whether the
+  // admin has decided yet", not "submit a new request every time".
+  // approval_granted is always sent as true — the server ignores it and
+  // decides for itself via governance policy either way, so the client no
+  // longer pretends to make that call itself.
+  // forceDryRun lets a caller override the current toggle instead of reading
+  // it — needed by "Send for approval" below, which must send dry_run=false
+  // even if the Simulation mode toggle is still on (the operator just ran a
+  // simulation and is now asking to turn that into a real request, without
+  // first having to flip the toggle themselves).
+  async function callExecute(forceDryRun?: boolean): Promise<ExecutePlanResponse> {
+    if (!planResult) throw new Error('No plan')
+    let parsedRows: Record<string, unknown>[] = []
     try {
-      const result = await planFromWorkflow(selectedWorkflowId)
-      setPlanResult(result)
-    } catch (e) {
-      setApiError(e instanceof Error ? e.message : 'Error converting workflow')
-    } finally {
-      setLoadingWorkflowPlan(false)
-    }
+      const parsed = JSON.parse(inputRows) as unknown
+      parsedRows = Array.isArray(parsed) ? parsed as Record<string, unknown>[] : [parsed as Record<string, unknown>]
+    } catch { parsedRows = [] }
+    return executePlan(planResult.plan, parsedRows, connectionId, forceDryRun ?? dryRun, true)
   }
 
-  async function handleExecute() {
-    if (!planResult || !canExecute) return
+  function onExecutionSettled(result: ExecutePlanResponse) {
+    stopPolling()
+    setApprovalStatus('idle')
+    setPendingRunId(null)
+    setExecutionResult(result)
+    setResultModal({ kind: result.failed_count > 0 ? 'failure' : 'success', result })
+  }
+
+  // Polls the Approvals queue (read-only — GET /approvals?status=...), not
+  // /automation/execute: that endpoint EXECUTES for real the moment it sees
+  // an approved run, which is exactly what we don't want here. The operator
+  // decides when to actually pull the trigger, after seeing the tile turn
+  // green — this only ever checks the decision, never acts on it.
+  // runId is taken as a parameter rather than read from the pendingRunId
+  // state to avoid a stale-closure bug: this function is called right after
+  // setPendingRunId(), and the interval's closure would otherwise capture
+  // whatever pendingRunId was at render time (still null), not the value
+  // just set.
+  function startPolling(runId: string) {
+    stopPolling()
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const [approved, rejected] = await Promise.all([listApprovals('approved'), listApprovals('rejected')])
+        const rejection = rejected.find(a => a.automation_run_id === runId)
+        if (rejection) {
+          stopPolling()
+          setApprovalStatus('idle')
+          setPendingRunId(null)
+          setApiError(`Your request was rejected${rejection.comment ? `: ${rejection.comment}` : '.'}`)
+          return
+        }
+        if (approved.some(a => a.automation_run_id === runId)) {
+          stopPolling()
+          setApprovalStatus('approved') // tile turns green; operator clicks Execute for real themselves
+        }
+      } catch {
+        // transient fetch error — just try again next tick
+      }
+    }, 8000)
+  }
+
+  async function runExecution(forceDryRun?: boolean) {
+    if (!planResult || !connectionId) return
+    if (forceDryRun === false) setDryRun(false) // reflect reality in the toggle too
     setExecuting(true)
     setApiError('')
     try {
-      const headersObj = Object.fromEntries(headers.filter(h => h.k).map(h => [h.k, h.v]))
-      let parsedRows: Record<string, unknown>[] = []
-      try {
-        const parsed = JSON.parse(inputRows) as unknown
-        parsedRows = Array.isArray(parsed) ? parsed as Record<string, unknown>[] : [parsed as Record<string, unknown>]
-      } catch { parsedRows = [] }
-      const result = await executePlan(planResult.plan, parsedRows, baseUrl, headersObj, dryRun, approved)
-      setExecutionResult(result)
+      const result = await callExecute(forceDryRun)
+      onExecutionSettled(result)
     } catch (e) {
+      const detail = e instanceof ApiError && e.body && typeof e.body.detail === 'object'
+        ? e.body.detail as { code?: string; message?: string; automation_run_id?: string } : undefined
+      if (detail?.code === 'APPROVAL_PENDING') {
+        const runId = detail.automation_run_id ?? null
+        setApprovalStatus('pending')
+        setPendingRunId(runId)
+        if (runId) startPolling(runId)
+        return
+      }
       setApiError(e instanceof Error ? e.message : "Error during execution")
     } finally {
       setExecuting(false)
     }
   }
+
+  const handleExecute = () => runExecution()
+  // Follow-up action shown after a successful simulation: turns that exact
+  // same plan/input into a real request without the operator having to
+  // manually flip "Simulation mode" off first.
+  const handleSendForApproval = () => runExecution(false)
 
   return (
     <AppLayout>
@@ -292,13 +342,6 @@ export default function AutomationPage() {
             </div>
           </div>
         </div>
-
-        {apiError && (
-          <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
-            <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <span>{apiError}</span>
-          </div>
-        )}
 
         {planError && (
           <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f59e0b 8%, var(--card))', color: '#92400e', border: '1px solid color-mix(in oklch, #f59e0b 30%, var(--line))' }}>
@@ -324,30 +367,11 @@ export default function AutomationPage() {
                   </select>
                 </div>
               )}
-              {workflows.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Existing workflow (optional)</p>
-                  <select value={selectedWorkflowId} onChange={e => setSelectedWorkflowId(e.target.value)}
-                    className="input !py-1.5 text-xs w-full">
-                    <option value="">— Write an instruction instead —</option>
-                    {workflows.map(w => <option key={w.id} value={w.id}>{w.name} · {w.steps.length} steps</option>)}
-                  </select>
-                  {selectedWorkflowId && (
-                    <button onClick={handleUseWorkflow} disabled={loadingWorkflowPlan}
-                      className="btn-secondary text-xs mt-2 w-full justify-center"
-                      title="Convert the selected workflow to a plan without an AI call">
-                      {loadingWorkflowPlan ? <><Spinner /> Converting…</> : <><Layers className="w-3.5 h-3.5" /> Use this workflow</>}
-                    </button>
-                  )}
-                </div>
-              )}
               <div>
                 <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Instruction</p>
                 <textarea
                   value={instruction}
                   onChange={e => { setInstruction(e.target.value); setPlanError(''); setPlanSuggestion('') }}
-                  onFocus={() => setInstructionFocused(true)}
-                  onBlur={() => setInstructionFocused(false)}
                   rows={3}
                   className="input resize-none"
                   placeholder="Describe the action to automate…"
@@ -369,19 +393,6 @@ export default function AutomationPage() {
                 )}
                 {instruction.trim().length > 0 && instructionError && (
                   <p className="mt-1 text-xs" style={{ color: '#f43f5e' }}>{instructionError}</p>
-                )}
-                {(instructionFocused || instruction.trim().length === 0) && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="text-xs ink-2 self-center">Examples:</span>
-                    {INSTRUCTION_EXAMPLES.map(ex => (
-                      <button key={ex} type="button"
-                        onMouseDown={e => { e.preventDefault(); setInstruction(ex); setPlanError(''); setPlanSuggestion('') }}
-                        className="text-xs px-2.5 py-1 rounded-full border transition hover:opacity-80"
-                        style={{ borderColor: 'var(--brand)', color: 'var(--brand)', background: 'color-mix(in oklch, var(--brand) 6%, var(--card))' }}>
-                        {ex.length > 38 ? ex.slice(0, 38) + '…' : ex}
-                      </button>
-                    ))}
-                  </div>
                 )}
               </div>
               <div>
@@ -415,29 +426,63 @@ export default function AutomationPage() {
             </div>
             <p className="text-xs ink-2 mb-4">The instruction will be sent to the target API if you disable simulation.</p>
             <div className="space-y-3">
-              <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Target API URL</p>
-                <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} className="input !py-2 font-mono text-xs" placeholder="https://hr-api.company.com" />
-              </div>
-              <KeyValueEditor label="Authentication headers" rows={headers} setRows={setHeaders} />
+              <ConnectionPicker value={connectionId} onChange={setConnectionId} onSelectConnection={setSelectedConnection} />
+              {planResult && planResult.required_input_fields.length > 0 && (
+                <div className="p-3 rounded-xl" style={{ background: 'color-mix(in oklch, var(--brand) 4%, var(--card))', border: '1px solid var(--line)' }}>
+                  <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-2">Fields your input JSON needs</p>
+                  {/* Grouped by the step that first needs them — a field a
+                      later step gets for free from an earlier step's
+                      response (e.g. employee_id after "Create Employee")
+                      never appears here. See app/automation/payload_mapper.py
+                      ::required_input_fields() for how this is computed. */}
+                  {Array.from(new Set(planResult.required_input_fields.map(f => f.first_needed_at_step))).map(stepOrder => (
+                    <div key={stepOrder} className="flex items-start gap-2 mb-1.5 last:mb-0">
+                      <span className="text-[10px] font-mono ink-2 mt-0.5 flex-shrink-0">Step {stepOrder}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {planResult.required_input_fields.filter(f => f.first_needed_at_step === stepOrder).map(f => (
+                          <span key={f.field} className="px-1.5 py-0.5 rounded text-[11px] font-mono"
+                            style={{ background: 'color-mix(in oklch, var(--ink) 5%, var(--card))', color: 'var(--ink)', border: '1px solid var(--line)' }}>
+                            {f.field} <span className="ink-2">({f.type})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div>
                 <p className="text-[10px] font-bold tracking-widest uppercase ink-2 mb-1.5">Input data (JSON) · optional</p>
-                <textarea value={inputRows} onChange={e => setInputRows(e.target.value)} rows={4} className="input resize-none font-mono text-xs" />
+                <textarea value={inputRows} onChange={e => setInputRows(e.target.value)} rows={4} className="input resize-none font-mono text-xs"
+                  placeholder='[{ "field": "value" }]' />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <ToggleBig label="Simulation mode" hint="ARIA prepares the requests without sending them" checked={dryRun} onChange={v => { setDryRun(v); if (v) setApproved(false) }} />
-                <ToggleBig label="Approved" hint={dryRun ? 'Not required in simulation' : "Required for live execution"} disabled={dryRun} checked={approved} onChange={setApproved} />
+                <ToggleBig label="Simulation mode" hint="ARIA prepares the requests without sending them" checked={dryRun}
+                  onChange={v => { setDryRun(v); if (v) { stopPolling(); setApprovalStatus('idle'); setPendingRunId(null) } }} />
+                {approvalStatus === 'pending' ? (
+                  <StatusTile icon={<RefreshCw className="w-4 h-4 animate-spin" />} tone="pending"
+                    label="Pending admin approval"
+                    hint={`Waiting for a decision — checking automatically${pendingRunId ? ` (run ${pendingRunId.slice(0, 8)}…)` : ''}`} />
+                ) : approvalStatus === 'approved' ? (
+                  <StatusTile icon={<CheckCircle2 className="w-4 h-4" />} tone="approved"
+                    label="Approved"
+                    hint="An admin approved this request — click Execute for real to run it" />
+                ) : (
+                  <StatusTile icon={<ShieldCheck className="w-4 h-4" />} tone="muted"
+                    label="Approval"
+                    hint={dryRun ? 'Not required in simulation' : "Requested automatically from an admin if your org's policy requires it"} />
+                )}
               </div>
               {!dryRun && (
                 <div className="p-3 rounded-xl flex items-start gap-2 text-xs" style={{ background: 'color-mix(in oklch, #f43f5e 8%, var(--card))', color: '#9f1239', border: '1px solid color-mix(in oklch, #f43f5e 30%, var(--line))' }}>
                   <TriangleAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>Live execution will send POST/PUT requests to <span className="font-mono">{baseUrl}</span>. This cannot be undone.</span>
+                  <span>Live execution will send POST/PUT requests to <span className="font-mono">{selectedConnection?.base_url ?? 'the selected connection'}</span>. This cannot be undone.</span>
                 </div>
               )}
               <div className="flex justify-end">
                 <button onClick={handleExecute} disabled={!canExecute || executing}
                   className={dryRun ? 'btn-primary' : 'btn-danger'} style={{ opacity: canExecute && !executing ? 1 : 0.6 }}>
-                  <Play className="w-4 h-4" /> {executing ? 'Executing…' : dryRun ? 'Run simulation' : 'Execute for real'}
+                  <Play className="w-4 h-4" />
+                  {approvalStatus === 'pending' ? 'Waiting for approval…' : executing ? 'Executing…' : dryRun ? 'Run simulation' : 'Execute for real'}
                 </button>
               </div>
             </div>
@@ -484,7 +529,12 @@ export default function AutomationPage() {
               <div>
                 <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>Result — Simple Automation</p>
                 <div className="flex items-center gap-2 flex-wrap mt-1">
-                  <StatusBadge s={executionResult.status === 'completed' ? 'completed' : executionResult.status === 'failed' ? 'failed' : 'running'} />
+                  {/* Backend only ever returns status="success" | "partial_failure" | "failed"
+                      (app/automation/models.py::AutomationExecutionResult) — never "completed".
+                      Comparing against 'completed' always failed, so a partial_failure run
+                      (the common case: at least one real step error) fell through to the
+                      'running' default forever, even once the call had long finished. */}
+                  <StatusBadge s={executionResult.status === 'success' ? 'completed' : 'failed'} />
                   {executionResult.dry_run && <span className="pill bg-sky-50 text-sky-700 border-sky-200">Simulation</span>}
                 </div>
               </div>
@@ -498,22 +548,123 @@ export default function AutomationPage() {
               <table className="w-full text-sm">
                 <thead className="aria-thead"><tr>{['Step', 'Method', 'Path', 'Status', 'Code', 'Risk'].map(h => <th key={h} className="text-left px-3 py-2">{h}</th>)}</tr></thead>
                 <tbody>
-                  {steps.map(s => (
-                    <tr key={s.order} className="border-t" style={{ borderColor: 'var(--line)' }}>
-                      <td className="px-3 py-2 font-mono text-xs ink-2">{s.order}</td>
-                      <td className="px-3 py-2"><MethodBadge m={s.method} /></td>
-                      <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ink)' }}>{s.path}</td>
-                      <td className="px-3 py-2"><StatusBadge s="completed" /></td>
-                      <td className="px-3 py-2 text-right font-mono text-xs text-emerald-600 font-bold">{s.method === 'POST' ? '201' : '200'}</td>
-                      <td className="px-3 py-2"><SeverityBadge s={s.risk_level} /></td>
-                    </tr>
-                  ))}
+                  {/* Real per-step outcomes from the backend (executionResult.result.results)
+                      — this used to iterate the PLAN's steps instead and hardcode every row
+                      as "completed" / 201, regardless of what actually happened. Risk level
+                      isn't on the execution result, so it's looked up from the plan by
+                      step_order purely for display. */}
+                  {executionResult.result.results.map(r => {
+                    const planStep = steps.find(s => s.order === r.step_order)
+                    const ok = r.status === 'success' || r.status === 'dry_run'
+                    return (
+                      <tr key={r.step_order} className="border-t align-top" style={{ borderColor: 'var(--line)' }}>
+                        <td className="px-3 py-2 font-mono text-xs ink-2">{r.step_order}</td>
+                        <td className="px-3 py-2"><MethodBadge m={r.method} /></td>
+                        <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--ink)' }}>
+                          {r.path}
+                          {!ok && r.error_message && (
+                            <p className="mt-1 text-xs font-sans" style={{ color: '#e11d48' }}>{r.error_message}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2"><StatusBadge s={ok ? 'completed' : 'failed'} /></td>
+                        <td className="px-3 py-2 text-right font-mono text-xs font-bold" style={{ color: ok ? '#059669' : '#e11d48' }}>
+                          {r.status_code ?? '—'}
+                        </td>
+                        <td className="px-3 py-2">{planStep && <SeverityBadge s={planStep.risk_level} />}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
+            {executionResult.dry_run && approvalStatus === 'idle' && (
+              <div className="flex items-center justify-between gap-3 mt-4 p-3 rounded-xl" style={{ background: 'color-mix(in oklch, var(--brand) 4%, var(--card))', border: '1px solid var(--line)' }}>
+                <p className="text-xs ink-2">Simulation looks good? Turn it into a real request — sent to an admin for approval if your org's policy requires it.</p>
+                <button onClick={handleSendForApproval} disabled={executing} className="btn-primary flex-shrink-0" style={{ opacity: executing ? 0.6 : 1 }}>
+                  <ShieldCheck className="w-4 h-4" /> Send for approval
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Execution blocked/error — popup instead of an inline banner */}
+      {apiError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setApiError('')} />
+          <div className="relative card pad w-full max-w-[480px] shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(244,63,94,0.1)', color: '#f43f5e' }}>
+                <TriangleAlert className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-black" style={{ color: 'var(--ink)' }}>
+                  {apiError.toLowerCase().includes('governance policy')
+                    ? 'Blocked by governance policy'
+                    : apiError.toLowerCase().includes('rejected')
+                      ? 'Request rejected'
+                      : apiError.toLowerCase().includes('approval')
+                        ? 'Approval required'
+                        : 'Execution error'}
+                </h3>
+                <p className="text-sm ink-2 mt-1.5 whitespace-pre-wrap">{apiError}</p>
+              </div>
+              <button onClick={() => setApiError('')} className="btn-ghost !p-1.5 flex-shrink-0"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button onClick={() => setApiError('')} className="btn-primary">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Execution outcome — success or failure, shown once a real (or
+          simulated) run actually settles, including after an admin approves
+          a pending request and the auto-poll gets the real result back. */}
+      {resultModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setResultModal(null)} />
+          <div className="relative card pad w-full max-w-[480px] shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={resultModal.kind === 'success'
+                  ? { background: 'rgba(16,185,129,0.1)', color: '#059669' }
+                  : { background: 'rgba(244,63,94,0.1)', color: '#f43f5e' }}>
+                {resultModal.kind === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <TriangleAlert className="w-5 h-5" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-black" style={{ color: 'var(--ink)' }}>
+                  {resultModal.kind === 'success' ? 'Execution succeeded' : 'Execution failed'}
+                  {resultModal.result.dry_run && ' (simulation)'}
+                </h3>
+                <p className="text-sm ink-2 mt-1.5">
+                  {resultModal.result.success_count}/{resultModal.result.total_steps} step(s) succeeded.
+                </p>
+                {resultModal.kind === 'failure' && (
+                  <div className="mt-2 space-y-1">
+                    {resultModal.result.result.results.filter(r => r.status === 'failed').map(r => (
+                      <p key={r.step_order} className="text-xs" style={{ color: '#e11d48' }}>
+                        Step {r.step_order} ({r.method} {r.path}): {r.error_message ?? `HTTP ${r.status_code ?? '—'}`}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => setResultModal(null)} className="btn-ghost !p-1.5 flex-shrink-0"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setResultModal(null)} className="btn-secondary">Close</button>
+              {resultModal.kind === 'success' && resultModal.result.dry_run && (
+                <button onClick={() => { setResultModal(null); handleSendForApproval() }} className="btn-primary">
+                  <ShieldCheck className="w-4 h-4" /> Send for approval
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

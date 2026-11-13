@@ -1,13 +1,9 @@
 """
 Prometheus metrics for ARIA.
 
-LLM metrics carry a `provider` label ("azure" | "groq") so Grafana can
-build separate dashboards per AI backend without duplicating counter names.
-
-New in this version:
-  aria_llm_embedding_fallback_total  — incremented every time GroqClient
-    returns a zero vector because Groq has no embedding endpoint. Visible
-    in the Groq dashboard as an indicator of degraded RAG quality.
+LLM metrics carry a `provider` label (always "bedrock" — kept as a label
+rather than hardcoded so a future second provider wouldn't need a metrics
+schema change).
 """
 from __future__ import annotations
 
@@ -175,11 +171,6 @@ def record_llm_tokens(
     llm_cost_total.labels(
         task_name=task_name, model_name=model_name, provider=provider
     ).inc(estimated_cost)
-
-
-def record_embedding_fallback(provider: str = "groq") -> None:
-    """Increment the zero-vector fallback counter (called by GroqClient)."""
-    llm_embedding_fallback_total.labels(provider=provider).inc()
 
 
 def record_bulk_batch(status: str) -> None:

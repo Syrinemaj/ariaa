@@ -46,6 +46,13 @@ def patched_connection_and_governance(connection=None, forbidden_rules=None):
             return_value="mock-decrypted-secret",
         ),
         patch("app.api.automation.connection_service.build_auth_headers", return_value={}),
+        # validate_target_url() does a real DNS lookup as part of SSRF
+        # protection (app/api/automation.py) before execute_automation is
+        # even reached — _mock_connection()'s base_url (api.example.com)
+        # has no DNS records in sandboxed/CI network environments, so this
+        # must be mocked like everything else here to keep these tests
+        # isolated from network conditions.
+        patch("app.api.automation.validate_target_url", return_value=None),
         patch(
             "app.api.automation.governance_service.get_or_create_policy",
             new=AsyncMock(return_value=_mock_policy()),
